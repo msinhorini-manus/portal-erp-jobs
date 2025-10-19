@@ -8,31 +8,43 @@ const AuthContext = createContext({});
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Mudado para false para não bloquear
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
-    // Check if user is logged in on mount
-    checkAuth();
+    // Check if user is logged in on mount - mas não bloqueia renderização
+    setTimeout(() => checkAuth(), 0);
   }, []);
 
   const checkAuth = () => {
-    const token = localStorage.getItem('authToken');
-    const userType = localStorage.getItem('userType');
-    const userId = localStorage.getItem('userId');
-    const userData = localStorage.getItem(`${userType}Data`);
-
-    if (token && userId && userData) {
-      try {
-        setUser(JSON.parse(userData));
-        setIsAuthenticated(true);
-      } catch (error) {
-        console.error('Error parsing user data:', error);
-        logout();
+    try {
+      // Verificar se estamos no browser antes de acessar localStorage
+      if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+        return;
       }
-    }
 
-    setLoading(false);
+      const token = localStorage.getItem('authToken');
+      const userType = localStorage.getItem('userType');
+      const userId = localStorage.getItem('userId');
+      const userData = localStorage.getItem(`${userType}Data`);
+
+      if (token && userId && userData) {
+        try {
+          const parsedData = JSON.parse(userData);
+          setUser(parsedData);
+          setIsAuthenticated(true);
+        } catch (error) {
+          console.error('Error parsing user data:', error);
+          // Limpar dados corrompidos
+          localStorage.removeItem('authToken');
+          localStorage.removeItem('userType');
+          localStorage.removeItem('userId');
+          localStorage.removeItem(`${userType}Data`);
+        }
+      }
+    } catch (error) {
+      console.error('Error checking auth:', error);
+    }
   };
 
   const login = async (credentials, type = 'company') => {
@@ -42,10 +54,12 @@ export function AuthProvider({ children }) {
         : await authAPI.loginCandidate(credentials);
 
       // Save to localStorage
-      localStorage.setItem('authToken', response.access_token);
-      localStorage.setItem('userType', type);
-      localStorage.setItem('userId', response.user.id);
-      localStorage.setItem(`${type}Data`, JSON.stringify(response.user));
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('authToken', response.access_token);
+        localStorage.setItem('userType', type);
+        localStorage.setItem('userId', response.user.id);
+        localStorage.setItem(`${type}Data`, JSON.stringify(response.user));
+      }
 
       setUser(response.user);
       setIsAuthenticated(true);
@@ -64,7 +78,7 @@ export function AuthProvider({ children }) {
         : await authAPI.registerCandidate(data);
 
       // Auto-login after registration
-      if (response.access_token) {
+      if (response.access_token && typeof localStorage !== 'undefined') {
         localStorage.setItem('authToken', response.access_token);
         localStorage.setItem('userType', type);
         localStorage.setItem('userId', response.user.id);
@@ -82,9 +96,21 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
-    authAPI.logout();
-    setUser(null);
-    setIsAuthenticated(false);
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const userType = localStorage.getItem('userType');
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('userType');
+        localStorage.removeItem('userId');
+        if (userType) {
+          localStorage.removeItem(`${userType}Data`);
+        }
+      }
+      setUser(null);
+      setIsAuthenticated(false);
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
 
   const value = {

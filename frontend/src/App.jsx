@@ -1,8 +1,8 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import './App.css'
-import './i18n'
-import { AuthProvider } from './contexts/AuthContext'
-import ProtectedRoute from './components/ProtectedRoute'
+// import './i18n'  // TODO: Reativar após resolver problema
+// import { AuthProvider } from './contexts/AuthContext'  // TODO: Reativar após resolver problema
+// import ProtectedRoute from './components/ProtectedRoute'  // TODO: Reativar após resolver problema
 
 // Pages
 import HomePage from './pages/HomePage'
@@ -12,21 +12,14 @@ import CompanySearchPage from './pages/CompanySearchPage'
 import JobDetailPage from './pages/JobDetailPage'
 import CompanyRegisterPage from './pages/CompanyRegisterPage'
 import CompanyLoginPage from './pages/CompanyLoginPage'
-import CompanyDashboardPage from './pages/CompanyDashboardPage'
-import PostJobPage from './pages/PostJobPage'
-import MyJobsPage from './pages/MyJobsPage'
-import AdminDashboard from './pages/admin/AdminDashboard'
-import AdminTags from './pages/admin/AdminTags'
-import AdminAreas from './pages/admin/AdminAreas'
-import AdminLevels from './pages/admin/AdminLevels'
-import AdminModalities from './pages/admin/AdminModalities'
-import AdminTechnologies from './pages/admin/AdminTechnologies'
-import AdminSoftwares from './pages/admin/AdminSoftwares'
-import CompanyUsersPage from './pages/CompanyUsersPage'
-import ResumeBuilderPage from './pages/ResumeBuilderPage'
+// import CompanyDashboardPage from './pages/CompanyDashboardPage'  // Protected
+// import PostJobPage from './pages/PostJobPage'  // Protected
+// import MyJobsPage from './pages/MyJobsPage'  // Protected
+// import CompanyUsersPage from './pages/CompanyUsersPage'  // Protected
+// import ResumeBuilderPage from './pages/ResumeBuilderPage'  // Protected
 import CandidateRegisterPage from './pages/CandidateRegisterPage'
 import CandidateLoginPage from './pages/CandidateLoginPage'
-import CandidateDashboardPage from './pages/CandidateDashboardPage'
+// import CandidateDashboardPage from './pages/CandidateDashboardPage'  // Protected
 import CompaniesPage from './pages/CompaniesPage'
 import AreasPage from './pages/AreasPage'
 import TechnologiesPage from './pages/TechnologiesPage'
@@ -37,104 +30,35 @@ import CompanyDetailPage from './pages/CompanyDetailPage'
 
 function App() {
   return (
-    <AuthProvider>
-      <Router>
-        <div className="min-h-screen bg-background">
-          <Routes>
-            {/* Public Routes */}
-            <Route path="/" element={<HomePage />} />
-            <Route path="/vagas" element={<JobSearchPage />} />
-            <Route path="/empresas" element={<CompaniesPage />} />
-            <Route path="/empresas/:id" element={<CompanyDetailPage />} />
-            <Route path="/areas" element={<AreasPage />} />
-            <Route path="/tecnologias" element={<TechnologiesPage />} />
-            <Route path="/salarios" element={<SalariesPage />} />
-            <Route path="/conteudo" element={<ContentPage />} />
-            <Route path="/conteudo/:id" element={<ArticlePage />} />
-            <Route path="/vagas/:id" element={<JobDetailPage />} />
-            <Route path="/candidato/:id" element={<CandidateProfilePage />} />
-            <Route path="/buscar-candidatos" element={<CompanySearchPage />} />
-            
-            {/* Company Routes - Public */}
-            <Route path="/empresa/cadastro" element={<CompanyRegisterPage />} />
-            <Route path="/empresa/login" element={<CompanyLoginPage />} />
-            
-            {/* Company Routes - Protected */}
-            <Route 
-              path="/empresa/dashboard" 
-              element={
-                <ProtectedRoute requiredType="company">
-                  <CompanyDashboardPage />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/empresa/publicar-vaga" 
-              element={
-                <ProtectedRoute requiredType="company">
-                  <PostJobPage />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/empresa/vagas" 
-              element={
-                <ProtectedRoute requiredType="company">
-                  <MyJobsPage />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/empresa/vagas/:id/editar" 
-              element={
-                <ProtectedRoute requiredType="company">
-                  <PostJobPage />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/empresa/usuarios" 
-              element={
-                <ProtectedRoute requiredType="company">
-                  <CompanyUsersPage />
-                </ProtectedRoute>
-              } 
-            />
-            
-            {/* Candidate Routes - Public */}
-            <Route path="/candidato/cadastro" element={<CandidateRegisterPage />} />
-            <Route path="/candidato/login" element={<CandidateLoginPage />} />
-            
-            {/* Candidate Routes - Protected */}
-            <Route 
-              path="/candidato/dashboard" 
-              element={
-                <ProtectedRoute requiredType="candidate">
-                  <CandidateDashboardPage />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/candidato/curriculo" 
-              element={
-                <ProtectedRoute requiredType="candidate">
-                  <ResumeBuilderPage />
-                </ProtectedRoute>
-              } 
-            />
-            
-            {/* Admin Routes - TODO: Add admin authentication */}
-            <Route path="/admin" element={<AdminDashboard />} />
-            <Route path="/admin/tags" element={<AdminTags />} />
-            <Route path="/admin/areas" element={<AdminAreas />} />
-            <Route path="/admin/niveis" element={<AdminLevels />} />
-            <Route path="/admin/modalidades" element={<AdminModalities />} />
-            <Route path="/admin/tecnologias" element={<AdminTechnologies />} />
-            <Route path="/admin/softwares" element={<AdminSoftwares />} />
-          </Routes>
-        </div>
-      </Router>
-    </AuthProvider>
+    <Router>
+      <div className="min-h-screen bg-background">
+        <Routes>
+          {/* Public Routes */}
+          <Route path="/" element={<HomePage />} />
+          <Route path="/vagas" element={<JobSearchPage />} />
+          <Route path="/empresas" element={<CompaniesPage />} />
+          <Route path="/empresas/:id" element={<CompanyDetailPage />} />
+          <Route path="/areas" element={<AreasPage />} />
+          <Route path="/tecnologias" element={<TechnologiesPage />} />
+          <Route path="/salarios" element={<SalariesPage />} />
+          <Route path="/conteudo" element={<ContentPage />} />
+          <Route path="/conteudo/:id" element={<ArticlePage />} />
+          <Route path="/vagas/:id" element={<JobDetailPage />} />
+          <Route path="/candidato/:id" element={<CandidateProfilePage />} />
+          <Route path="/buscar-candidatos" element={<CompanySearchPage />} />
+          
+          {/* Company Routes - Public */}
+          <Route path="/empresa/cadastro" element={<CompanyRegisterPage />} />
+          <Route path="/empresa/login" element={<CompanyLoginPage />} />
+          
+          {/* Candidate Routes - Public */}
+          <Route path="/candidato/cadastro" element={<CandidateRegisterPage />} />
+          <Route path="/candidato/login" element={<CandidateLoginPage />} />
+          
+          {/* TODO: Adicionar rotas protegidas após resolver AuthProvider */}
+        </Routes>
+      </div>
+    </Router>
   )
 }
 
