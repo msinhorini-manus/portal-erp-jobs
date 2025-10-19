@@ -1,9 +1,0 @@
-[phases.setup]
-nixPkgs = ['python311', 'postgresql']
-
-[phases.install]
-cmds = ['cd backend/portal_erp_jobs_api && pip install -r requirements.txt']
-
-[start]
-cmd = 'cd backend/portal_erp_jobs_api && gunicorn --bind 0.0.0.0:$PORT --workers 4 --timeout 120 src.main:app'
-

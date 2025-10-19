@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
-cd backend/portal_erp_jobs_api
+cd portal_erp_jobs_api
 pip install --upgrade pip
 pip install -r requirements.txt
 pip install gunicorn
