@@ -1,0 +1,332 @@
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '@/contexts/AuthContext'
+import { ArrowRight, User, Mail, Lock, Phone, MapPin } from 'lucide-react'
+
+export default function CandidateRegisterPage() {
+  const navigate = useNavigate()
+  const { register } = useAuth()
+  const [formData, setFormData] = useState({
+    fullName: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+    phone: '',
+    city: '',
+    state: ''
+  })
+  const [errors, setErrors] = useState({})
+
+  const handleChange = (e) => {
+    const { name, value } = e.target
+    setFormData(prev => ({ ...prev, [name]: value }))
+    // Limpar erro do campo ao digitar
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: '' }))
+    }
+  }
+
+  const validate = () => {
+    const newErrors = {}
+
+    if (!formData.fullName.trim()) {
+      newErrors.fullName = 'Nome completo é obrigatório'
+    }
+
+    if (!formData.email.trim()) {
+      newErrors.email = 'Email é obrigatório'
+    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+      newErrors.email = 'Email inválido'
+    }
+
+    if (!formData.password) {
+      newErrors.password = 'Senha é obrigatória'
+    } else if (formData.password.length < 6) {
+      newErrors.password = 'Senha deve ter no mínimo 6 caracteres'
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      newErrors.confirmPassword = 'As senhas não coincidem'
+    }
+
+    if (!formData.phone.trim()) {
+      newErrors.phone = 'Telefone é obrigatório'
+    }
+
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    
+    if (validate()) {
+      // Registrar candidato via API
+      const result = await register({
+        name: formData.fullName,
+        email: formData.email,
+        password: formData.password,
+        phone: formData.phone,
+        city: formData.city,
+        state: formData.state
+      }, 'candidate')
+      
+      if (result.success) {
+        // Redirecionar para o dashboard do candidato
+        navigate('/candidato/dashboard')
+      } else {
+        alert('Erro ao criar conta: ' + (result.error || 'Tente novamente'))
+      }
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-[#004E89] to-[#1A659E]">
+      {/* Header */}
+      <header className="bg-[#1C2E3D] shadow-lg">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-[#FF6B35] rounded-lg flex items-center justify-center">
+                <span className="text-white font-bold text-xl">P</span>
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-white">
+                  PORTAL <span className="text-[#4CAF50]">ERP</span> JOBS
+                </h1>
+                <p className="text-xs text-gray-300">Software Careers</p>
+              </div>
+            </div>
+            <button
+              onClick={() => navigate('/')}
+              className="text-white hover:text-[#FF6B35] transition-colors"
+            >
+              Voltar para Home
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
+          <div className="grid md:grid-cols-2">
+            {/* Left Side - Info */}
+            <div className="bg-gradient-to-br from-[#FF6B35] to-[#ff8c5a] p-8 text-white">
+              <h2 className="text-3xl font-bold mb-4">Cadastre seu CV Grátis!</h2>
+              <p className="text-lg mb-6 opacity-90">
+                Crie seu currículo profissional em minutos e conecte-se com as melhores oportunidades do setor de software.
+              </p>
+              
+              <div className="space-y-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0 mt-1">
+                    <span className="text-xl">✓</span>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-lg">Construtor de Currículo</h3>
+                    <p className="text-sm opacity-90">Interface intuitiva com preview em tempo real</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0 mt-1">
+                    <span className="text-xl">✓</span>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-lg">Vagas Personalizadas</h3>
+                    <p className="text-sm opacity-90">Receba oportunidades compatíveis com seu perfil</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0 mt-1">
+                    <span className="text-xl">✓</span>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-lg">100% Grátis</h3>
+                    <p className="text-sm opacity-90">Sem custos, sem pegadinhas</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-8 pt-8 border-t border-white/20">
+                <p className="text-sm opacity-75">
+                  Junte-se a mais de <span className="font-bold">100.000+</span> profissionais cadastrados
+                </p>
+              </div>
+            </div>
+
+            {/* Right Side - Form */}
+            <div className="p-8">
+              <h3 className="text-2xl font-bold text-gray-900 mb-6">Criar Conta</h3>
+              
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {/* Nome Completo */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Nome Completo *
+                  </label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                      type="text"
+                      name="fullName"
+                      value={formData.fullName}
+                      onChange={handleChange}
+                      className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#FF6B35] focus:border-transparent ${
+                        errors.fullName ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      placeholder="João Silva"
+                    />
+                  </div>
+                  {errors.fullName && <p className="text-red-500 text-xs mt-1">{errors.fullName}</p>}
+                </div>
+
+                {/* Email */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Email *
+                  </label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                      type="email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleChange}
+                      className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#FF6B35] focus:border-transparent ${
+                        errors.email ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      placeholder="joao@email.com"
+                    />
+                  </div>
+                  {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
+                </div>
+
+                {/* Telefone */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Telefone *
+                  </label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                      type="tel"
+                      name="phone"
+                      value={formData.phone}
+                      onChange={handleChange}
+                      className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#FF6B35] focus:border-transparent ${
+                        errors.phone ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      placeholder="(11) 98765-4321"
+                    />
+                  </div>
+                  {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone}</p>}
+                </div>
+
+                {/* Cidade e Estado */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Cidade
+                    </label>
+                    <div className="relative">
+                      <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <input
+                        type="text"
+                        name="city"
+                        value={formData.city}
+                        onChange={handleChange}
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] focus:border-transparent"
+                        placeholder="São Paulo"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Estado
+                    </label>
+                    <input
+                      type="text"
+                      name="state"
+                      value={formData.state}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] focus:border-transparent"
+                      placeholder="SP"
+                      maxLength={2}
+                    />
+                  </div>
+                </div>
+
+                {/* Senha */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Senha *
+                  </label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                      type="password"
+                      name="password"
+                      value={formData.password}
+                      onChange={handleChange}
+                      className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#FF6B35] focus:border-transparent ${
+                        errors.password ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      placeholder="Mínimo 6 caracteres"
+                    />
+                  </div>
+                  {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password}</p>}
+                </div>
+
+                {/* Confirmar Senha */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Confirmar Senha *
+                  </label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                      type="password"
+                      name="confirmPassword"
+                      value={formData.confirmPassword}
+                      onChange={handleChange}
+                      className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#FF6B35] focus:border-transparent ${
+                        errors.confirmPassword ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      placeholder="Digite a senha novamente"
+                    />
+                  </div>
+                  {errors.confirmPassword && <p className="text-red-500 text-xs mt-1">{errors.confirmPassword}</p>}
+                </div>
+
+                {/* Submit Button */}
+                <button
+                  type="submit"
+                  className="w-full bg-[#FF6B35] text-white py-3 rounded-lg font-semibold hover:bg-[#ff5722] transition-colors flex items-center justify-center gap-2 mt-6"
+                >
+                  Criar Conta e Montar Currículo
+                  <ArrowRight className="w-5 h-5" />
+                </button>
+
+                {/* Login Link */}
+                <p className="text-center text-sm text-gray-600 mt-4">
+                  Já tem uma conta?{' '}
+                  <button
+                    type="button"
+                    onClick={() => navigate('/candidato/login')}
+                    className="text-[#FF6B35] hover:underline font-medium"
+                  >
+                    Fazer login
+                  </button>
+                </p>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
