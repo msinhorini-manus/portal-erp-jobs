@@ -91,6 +91,14 @@ function App() {
                 } 
               />
               <Route 
+                path="/empresa/vagas/nova" 
+                element={
+                  <ProtectedRoute requiredType="company">
+                    <PostJobPage />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
                 path="/empresa/vagas/:id/editar" 
                 element={
                   <ProtectedRoute requiredType="company">

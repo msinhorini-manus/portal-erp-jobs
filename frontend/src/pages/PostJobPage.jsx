@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Building2, MapPin, Briefcase, DollarSign, FileText, Code, Globe, CheckCircle } from 'lucide-react';
+import { jobAPI } from '../services/api';
+import toast from 'react-hot-toast';
 
 export default function PostJobPage() {
   const navigate = useNavigate();
@@ -43,32 +45,44 @@ export default function PostJobPage() {
     window.scrollTo(0, 0);
   };
 
-  const handleSubmit = (e) => {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true);
+    setError('');
     
-    // Criar objeto da vaga com dados completos
-    const newJob = {
-      id: Date.now(), // ID único baseado em timestamp
-      ...formData,
-      status: 'Ativa',
-      candidates: 0,
-      views: 0,
-      createdAt: new Date().toLocaleDateString('pt-BR'),
-      companyName: 'Empresa de Tecnologia' // Seria pego do contexto de autenticação
-    };
-    
-    // Buscar vagas existentes do localStorage
-    const existingJobs = JSON.parse(localStorage.getItem('jobs') || '[]');
-    
-    // Adicionar nova vaga
-    const updatedJobs = [...existingJobs, newJob];
-    
-    // Salvar no localStorage
-    localStorage.setItem('jobs', JSON.stringify(updatedJobs));
-    
-    console.log('Vaga publicada:', newJob);
-    alert('Vaga publicada com sucesso! 🎉');
-    navigate('/empresa/vagas');
+    try {
+      // Preparar dados da vaga para a API
+      const jobData = {
+        title: formData.title,
+        area: formData.area,
+        level: formData.level,
+        work_mode: formData.workMode,
+        description: formData.description,
+        requirements: formData.requirements,
+        benefits: formData.benefits,
+        technologies: formData.technologies,
+        salary_min: parseFloat(formData.salaryMin) || null,
+        salary_max: parseFloat(formData.salaryMax) || null,
+        country: formData.country,
+        state: formData.state,
+        city: formData.city,
+        contract_type: formData.contractType,
+      };
+      
+      const response = await jobAPI.create(jobData);
+      
+      toast.success('Vaga publicada com sucesso! 🎉');
+      navigate('/empresa/dashboard');
+    } catch (err) {
+      console.error('Erro ao publicar vaga:', err);
+      setError(err.message || 'Erro ao publicar vaga');
+      toast.error(err.message || 'Erro ao publicar vaga');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const steps = [
