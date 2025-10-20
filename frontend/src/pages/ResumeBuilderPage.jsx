@@ -280,8 +280,9 @@ export default function ResumeBuilderPage() {
       setLoading(true)
       setSaveMessage('')
       
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem('authToken')
       console.log('🔍 handleSave: Token exists?', !!token)
+      console.log('🔑 handleSave: Token value:', token ? token.substring(0, 20) + '...' : 'null')
       
       if (!token) {
         console.log('❌ handleSave: No token found')
