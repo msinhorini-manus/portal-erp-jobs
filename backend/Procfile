@@ -1,1 +1,1 @@
-web: gunicorn --bind 0.0.0.0:$PORT --workers 4 --timeout 120 portal_erp_jobs_api.src.main:app
+web: cd portal_erp_jobs_api && gunicorn --bind 0.0.0.0:$PORT --workers 4 --timeout 120 src.main:app
