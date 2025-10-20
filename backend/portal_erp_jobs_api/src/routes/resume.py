@@ -810,11 +810,15 @@ def get_complete_resume():
 def update_complete_resume():
     """Update candidate personal data and summary"""
     try:
+        print("[DEBUG] PUT /api/resume/complete - Starting...")
         candidate, error_response, status_code = get_authenticated_candidate()
         if error_response:
+            print(f"[DEBUG] Authentication failed: {status_code}")
             return error_response, status_code
         
         data = request.get_json()
+        print(f"[DEBUG] Received data: {data}")
+        print(f"[DEBUG] Candidate found: {candidate.id}")
         
         # Update personal data
         if 'first_name' in data:
@@ -838,7 +842,9 @@ def update_complete_resume():
         if 'professional_summary' in data:
             candidate.professional_summary = data['professional_summary']
         
+        print("[DEBUG] Committing changes to database...")
         db.session.commit()
+        print("[DEBUG] Changes committed successfully")
         
         return jsonify({
             'message': 'Dados pessoais atualizados com sucesso',
@@ -846,6 +852,10 @@ def update_complete_resume():
         }), 200
         
     except Exception as e:
+        print(f"[DEBUG] Exception caught: {str(e)}")
+        print(f"[DEBUG] Exception type: {type(e).__name__}")
+        import traceback
+        print(f"[DEBUG] Traceback: {traceback.format_exc()}")
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
