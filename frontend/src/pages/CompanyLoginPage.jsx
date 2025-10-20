@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { authAPI } from '@/services/api'
+import { toast } from 'react-hot-toast'
 
 export default function CompanyLoginPage() {
   const navigate = useNavigate()
@@ -29,19 +30,31 @@ export default function CompanyLoginPage() {
     setError('')
 
     try {
+      console.log('Tentando fazer login com:', formData);
+      
       const response = await authAPI.loginCompany(formData)
       
-      // Salvar token e dados do usuário
-      localStorage.setItem('authToken', response.access_token)
-      localStorage.setItem('userType', 'company')
-      localStorage.setItem('userId', response.user.id)
-      localStorage.setItem('companyData', JSON.stringify(response.user))
+      console.log('Resposta do login:', response);
       
-      // Redirecionar para dashboard
-      navigate('/empresa/dashboard')
+      // Salvar token e dados do usuário (padrão do AuthContext)
+      if (response.access_token) {
+        localStorage.setItem('authToken', response.access_token)
+        localStorage.setItem('userType', 'company')
+        localStorage.setItem('userId', response.user.id.toString())
+        localStorage.setItem('companyData', JSON.stringify(response.user))
+        
+        toast.success('Login realizado com sucesso!');
+        
+        // Redirecionar para dashboard
+        navigate('/empresa/dashboard')
+      } else {
+        throw new Error('Token de autenticação não recebido');
+      }
     } catch (err) {
       console.error('Erro no login:', err)
-      setError(err.message || 'Erro ao fazer login. Verifique suas credenciais.')
+      const errorMessage = err.message || 'Email ou senha inválidos';
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setLoading(false)
     }

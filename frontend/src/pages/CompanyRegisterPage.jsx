@@ -4,6 +4,8 @@ import { Building2, Mail, Phone, MapPin, Lock, User, CheckCircle, Globe, Briefca
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { authAPI } from '@/services/api'
+import { toast } from 'react-hot-toast'
 
 export default function CompanyRegisterPage() {
   const navigate = useNavigate()
@@ -292,10 +294,60 @@ export default function CompanyRegisterPage() {
     if (step > 1) setStep(step - 1)
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    console.log('Dados do cadastro:', formData)
-    navigate('/empresa/dashboard')
+    
+    // Validate password match
+    if (formData.password !== formData.confirmPassword) {
+      toast.error('As senhas não coincidem');
+      return;
+    }
+    
+    try {
+      // Prepare data for API
+      const companyData = {
+        company_name: formData.legalName,
+        trade_name: formData.tradeName,
+        tax_id: formData.taxId,
+        email: formData.responsibleEmail,
+        password: formData.password,
+        website: formData.website,
+        industry: formData.sector,
+        company_size: formData.companySize,
+        country: formData.country,
+        state: formData.state,
+        city: formData.city,
+        address: formData.address,
+        description: formData.description,
+        responsible_name: formData.responsibleName,
+        responsible_position: formData.responsiblePosition,
+        responsible_department: formData.responsibleDepartment,
+        responsible_phone: formData.responsiblePhone
+      };
+      
+      console.log('Enviando dados para API:', companyData);
+      
+      // Call API
+      const response = await authAPI.registerCompany(companyData);
+      
+      console.log('Resposta da API:', response);
+      
+      // Store auth token and user data
+      if (response.access_token) {
+        localStorage.setItem('authToken', response.access_token);
+        localStorage.setItem('user', JSON.stringify(response.user));
+        
+        toast.success('Empresa cadastrada com sucesso!');
+        
+        // Redirect to dashboard
+        navigate('/empresa/dashboard');
+      } else {
+        throw new Error('Token de autenticação não recebido');
+      }
+    } catch (error) {
+      console.error('Erro ao cadastrar empresa:', error);
+      toast.error(error.message || 'Erro ao cadastrar empresa. Tente novamente.');
+    }
   }
 
   return (
