@@ -80,22 +80,28 @@ export default function CandidateDashboardPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center space-x-4">
-              <h1 className="text-2xl font-bold text-blue-900">Portal ERP Jobs</h1>
-              <span className="text-gray-500">|</span>
-              <span className="text-gray-700">Painel do Candidato</span>
-            </div>
-            <div className="flex items-center space-x-4">
+      <header className="bg-[#1F3B47] text-white shadow-md">
+        <div className="container mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <Link to="/" className="flex items-center gap-3">
+              <div className="flex items-center gap-1">
+                <div className="w-10 h-10 bg-[#F7941D] rounded-full flex items-center justify-center font-bold text-white">
+                  P
+                </div>
+                <div className="text-xl font-bold">
+                  Portal <span className="text-[#F7941D]">ERP</span> Jobs
+                </div>
+              </div>
+              <div className="text-xs text-white/70 ml-2">Software Careers</div>
+            </Link>
+            <div className="flex items-center gap-4">
               <div className="text-right">
-                <p className="text-sm font-medium text-gray-900">{user?.name}</p>
-                <p className="text-xs text-gray-500">{user?.email}</p>
+                <p className="text-sm font-medium text-white">{user?.name}</p>
+                <p className="text-xs text-white/70">{user?.email}</p>
               </div>
               <button
                 onClick={handleLogout}
-                className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition"
+                className="px-4 py-2 bg-pink-500 text-white rounded-lg hover:bg-pink-600 transition text-sm font-medium shadow-md"
               >
                 Sair
               </button>
