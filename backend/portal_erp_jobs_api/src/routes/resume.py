@@ -820,6 +820,12 @@ def update_complete_resume():
         print(f"[DEBUG] Received data: {data}")
         print(f"[DEBUG] Candidate found: {candidate.id}")
         
+        # Validate required fields
+        if 'first_name' in data and not data['first_name']:
+            return jsonify({'error': 'first_name não pode ser vazio'}), 422
+        if 'last_name' in data and not data['last_name']:
+            return jsonify({'error': 'last_name não pode ser vazio'}), 422
+        
         # Update personal data
         if 'first_name' in data:
             candidate.first_name = data['first_name']
@@ -857,5 +863,19 @@ def update_complete_resume():
         import traceback
         print(f"[DEBUG] Traceback: {traceback.format_exc()}")
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        
+        # Return detailed error for debugging
+        error_details = {
+            'error': str(e),
+            'type': type(e).__name__,
+            'message': 'Erro ao atualizar currículo'
+        }
+        
+        # Check for specific SQLAlchemy errors
+        if 'IntegrityError' in type(e).__name__:
+            error_details['message'] = 'Erro de integridade no banco de dados'
+        elif 'DataError' in type(e).__name__:
+            error_details['message'] = 'Erro no formato dos dados'
+        
+        return jsonify(error_details), 422
 
