@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import PortalHeader from '@/components/PortalHeader';
 
 /**
  * Candidate Dashboard Page
@@ -80,35 +81,7 @@ export default function CandidateDashboardPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-[#1F3B47] text-white shadow-md">
-        <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <Link to="/" className="flex items-center gap-3">
-              <div className="flex items-center gap-1">
-                <div className="w-10 h-10 bg-[#F7941D] rounded-full flex items-center justify-center font-bold text-white">
-                  P
-                </div>
-                <div className="text-xl font-bold">
-                  Portal <span className="text-[#F7941D]">ERP</span> Jobs
-                </div>
-              </div>
-              <div className="text-xs text-white/70 ml-2">Software Careers</div>
-            </Link>
-            <div className="flex items-center gap-4">
-              <div className="text-right">
-                <p className="text-sm font-medium text-white">{user?.name}</p>
-                <p className="text-xs text-white/70">{user?.email}</p>
-              </div>
-              <button
-                onClick={handleLogout}
-                className="px-4 py-2 bg-pink-500 text-white rounded-lg hover:bg-pink-600 transition text-sm font-medium shadow-md"
-              >
-                Sair
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
+      <PortalHeader user={user} onLogout={handleLogout} showNav={false} />
 
       {/* Navigation Tabs */}
       <div className="bg-white border-b border-gray-200">
