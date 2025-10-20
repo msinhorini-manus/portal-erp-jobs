@@ -175,10 +175,12 @@ def register_candidate():
         
         # Criar candidato
         # Separar nome completo em first_name e last_name
-        full_name = data.get('name', data.get('full_name', ''))
-        name_parts = full_name.split(' ', 1)
-        first_name = name_parts[0] if name_parts else ''
-        last_name = name_parts[1] if len(name_parts) > 1 else ''
+        full_name = data.get('name', data.get('full_name', '')).strip()
+        name_parts = full_name.split(' ', 1) if full_name else []
+        
+        # Garantir que first_name e last_name nunca sejam vazios (nullable=False no modelo)
+        first_name = name_parts[0].strip() if name_parts and name_parts[0].strip() else 'Nome'
+        last_name = name_parts[1].strip() if len(name_parts) > 1 and name_parts[1].strip() else 'Pendente'
         
         new_candidate = Candidate(
             user_id=new_user.id,

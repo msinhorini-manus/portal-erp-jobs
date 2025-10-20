@@ -12,8 +12,8 @@ class Candidate(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, unique=True)
     
     # Personal Info
-    first_name = db.Column(db.String(50), nullable=False)
-    last_name = db.Column(db.String(50), nullable=False)
+    first_name = db.Column(db.String(50), nullable=False, default='Nome')
+    last_name = db.Column(db.String(50), nullable=False, default='Pendente')
     phone = db.Column(db.String(20))
     photo_url = db.Column(db.String(500))
     
