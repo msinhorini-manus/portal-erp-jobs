@@ -281,17 +281,27 @@ export default function ResumeBuilderPage() {
       setSaveMessage('')
       
       const token = localStorage.getItem('token')
+      console.log('🔍 handleSave: Token exists?', !!token)
+      
       if (!token) {
+        console.log('❌ handleSave: No token found')
         alert('Você precisa estar logado para salvar o currículo')
         navigate('/candidato/login')
         return
       }
+      
+      console.log('✅ handleSave: Token found, starting save...')
 
       // Salvar dados pessoais
       const [firstName, ...lastNameParts] = resume.personal.fullName.split(' ')
       const lastName = lastNameParts.join(' ')
       
-      await resumeAPI.update({
+      console.log('📤 handleSave: Sending personal data...', {
+        first_name: firstName,
+        last_name: lastName
+      })
+      
+      const result = await resumeAPI.update({
         first_name: firstName || '',
         last_name: lastName || '',
         phone: resume.personal.phone,
@@ -302,6 +312,8 @@ export default function ResumeBuilderPage() {
         portfolio_url: resume.personal.portfolio,
         professional_summary: resume.summary
       })
+      
+      console.log('✅ handleSave: Personal data saved successfully', result)
 
       // Salvar experiências
       for (const exp of resume.experiences) {
@@ -383,10 +395,13 @@ export default function ResumeBuilderPage() {
       setSaveMessage('Currículo salvo com sucesso!')
       setTimeout(() => setSaveMessage(''), 3000)
     } catch (error) {
-      console.error('Erro ao salvar currículo:', error)
+      console.error('❌ handleSave: Error caught:', error)
+      console.error('❌ handleSave: Error message:', error.message)
+      console.error('❌ handleSave: Error stack:', error.stack)
       alert('Erro ao salvar currículo. Tente novamente.')
     } finally {
       setLoading(false)
+      console.log('🏁 handleSave: Finished (loading=false)')
     }
   }
 
