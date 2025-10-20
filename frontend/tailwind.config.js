@@ -6,6 +6,15 @@ export default {
     './components/**/*.{js,jsx}',
     './app/**/*.{js,jsx}',
     './src/**/*.{js,jsx}',
+    './index.html',
+  ],
+  safelist: [
+    {
+      pattern: /(bg|text|border|from|to|via)-(blue|orange|green|red|pink|purple|yellow|indigo|teal|cyan|gray|slate)-(50|100|200|300|400|500|600|700|800|900)/,
+    },
+    {
+      pattern: /(p|m|w|h|gap|space|rounded|shadow)-(0|1|2|3|4|5|6|8|10|12|16|20|24|32|40|48|56|64|72|80|96)/,
+    },
   ],
   prefix: "",
   theme: {
