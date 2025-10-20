@@ -21,22 +21,25 @@ export default function ResumeBuilderPage() {
         if (!token) return
 
         const data = await resumeAPI.get()
-        if (data) {
+        if (data && data.candidate) {
+          const candidate = data.candidate
+          const fullName = `${candidate.first_name || ''} ${candidate.last_name || ''}`.trim()
+          
           setResume({
             personal: {
-              fullName: data.full_name || '',
-              email: data.email || '',
-              phone: data.phone || '',
-              city: data.city || '',
-              state: data.state || '',
+              fullName: fullName,
+              email: candidate.email || '',
+              phone: candidate.phone || '',
+              city: candidate.city || '',
+              state: candidate.state || '',
               country: 'Brasil',
-              linkedin: data.linkedin || '',
-              github: data.github || '',
-              portfolio: data.portfolio || ''
+              linkedin: candidate.linkedin_url || '',
+              github: candidate.github_url || '',
+              portfolio: candidate.portfolio_url || ''
             },
-            summary: data.summary || '',
+            summary: candidate.professional_summary || '',
             experiences: data.experiences || [],
-            education: data.education || [],
+            education: data.educations || [],
             skills: data.skills || [],
             certifications: data.certifications || [],
             projects: data.projects || [],
@@ -285,16 +288,19 @@ export default function ResumeBuilderPage() {
       }
 
       // Salvar dados pessoais
+      const [firstName, ...lastNameParts] = resume.personal.fullName.split(' ')
+      const lastName = lastNameParts.join(' ')
+      
       await resumeAPI.update({
-        full_name: resume.personal.fullName,
-        email: resume.personal.email,
+        first_name: firstName || '',
+        last_name: lastName || '',
         phone: resume.personal.phone,
         city: resume.personal.city,
         state: resume.personal.state,
-        linkedin: resume.personal.linkedin,
-        github: resume.personal.github,
-        portfolio: resume.personal.portfolio,
-        summary: resume.summary
+        linkedin_url: resume.personal.linkedin,
+        github_url: resume.personal.github,
+        portfolio_url: resume.personal.portfolio,
+        professional_summary: resume.summary
       })
 
       // Salvar experiências
