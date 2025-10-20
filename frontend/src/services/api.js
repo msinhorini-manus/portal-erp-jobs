@@ -47,7 +47,12 @@ async function fetchAPI(endpoint, options = {}) {
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(data.message || `HTTP error! status: ${response.status}`);
+      // Log detailed error for debugging
+      console.error('🔴 API Error Response:', data);
+      const errorMessage = data.message || data.error || `HTTP error! status: ${response.status}`;
+      const error = new Error(errorMessage);
+      error.response = data; // Attach full response
+      throw error;
     }
 
     return data;
