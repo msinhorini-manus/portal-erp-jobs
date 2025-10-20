@@ -157,7 +157,7 @@ export const jobAPI = {
    * Create a new job posting
    */
   create: async (jobData) => {
-    return fetchAPI('/jobs', {
+    return fetchAPI('/jobs/', {
       method: 'POST',
       body: JSON.stringify(jobData),
     });
