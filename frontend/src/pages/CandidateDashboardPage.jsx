@@ -17,9 +17,12 @@ export default function CandidateDashboardPage() {
   const [filterLocation, setFilterLocation] = useState('');
   const [filterType, setFilterType] = useState('');
   const [filterTech, setFilterTech] = useState('');
+  const [resume, setResume] = useState(null);
+  const [loadingResume, setLoadingResume] = useState(false);
 
   useEffect(() => {
     loadData();
+    loadResume();
   }, []);
 
   const loadData = () => {
@@ -31,6 +34,29 @@ export default function CandidateDashboardPage() {
     const allApplications = JSON.parse(localStorage.getItem('applications') || '[]');
     const myApps = allApplications.filter(app => app.candidateId === user?.id);
     setMyApplications(myApps);
+  };
+
+  const loadResume = async () => {
+    try {
+      setLoadingResume(true);
+      const token = localStorage.getItem('authToken');
+      if (!token) return;
+
+      const response = await fetch('https://portal-erp-jobs-production.up.railway.app/api/resume/', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setResume(data);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar currículo:', error);
+    } finally {
+      setLoadingResume(false);
+    }
   };
 
   const handleLogout = () => {
@@ -338,27 +364,74 @@ export default function CandidateDashboardPage() {
           <div>
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold text-gray-900">Meu Currículo</h2>
-              <Link
-                to="/candidato/curriculo"
-                className="px-6 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition font-medium"
-              >
-                Editar Currículo
-              </Link>
+              {resume && (
+                <Link
+                  to="/candidato/curriculo"
+                  className="px-6 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition font-medium"
+                >
+                  Editar Currículo
+                </Link>
+              )}
             </div>
             
-            <div className="bg-white rounded-lg shadow-sm p-12 text-center">
-              <div className="text-6xl mb-4">📄</div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">Construa seu currículo profissional</h3>
-              <p className="text-gray-600 mb-6">
-                Use nosso construtor de currículos para criar um perfil completo e atrair mais empresas
-              </p>
-              <Link
-                to="/candidato/curriculo"
-                className="inline-block px-6 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition"
-              >
-                Ir para o Construtor de Currículo
-              </Link>
-            </div>
+            {loadingResume ? (
+              <div className="bg-white rounded-lg shadow-sm p-12 text-center">
+                <div className="text-4xl mb-4">⏳</div>
+                <p className="text-gray-600">Carregando currículo...</p>
+              </div>
+            ) : resume && (resume.experiences?.length > 0 || resume.education?.length > 0) ? (
+              <div className="bg-white rounded-lg shadow-sm p-8">
+                <div className="text-center mb-6 pb-4 border-b">
+                  <h1 className="text-2xl font-bold">{user?.name || 'Seu Nome'}</h1>
+                  <p className="text-gray-600 mt-1">{user?.email}</p>
+                </div>
+                
+                {resume.summary && (
+                  <div className="mb-6">
+                    <h2 className="text-lg font-bold mb-2">Resumo Profissional</h2>
+                    <p className="text-gray-700">{resume.summary}</p>
+                  </div>
+                )}
+                
+                {resume.experiences && resume.experiences.length > 0 && (
+                  <div className="mb-6">
+                    <h2 className="text-lg font-bold mb-2">Experiência</h2>
+                    {resume.experiences.map((exp, i) => (
+                      <div key={i} className="mb-3">
+                        <h3 className="font-semibold">{exp.title}</h3>
+                        <p className="text-sm text-gray-600">{exp.company}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {resume.education && resume.education.length > 0 && (
+                  <div className="mb-6">
+                    <h2 className="text-lg font-bold mb-2">Formação</h2>
+                    {resume.education.map((edu, i) => (
+                      <div key={i} className="mb-3">
+                        <h3 className="font-semibold">{edu.degree}</h3>
+                        <p className="text-sm text-gray-600">{edu.institution}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="bg-white rounded-lg shadow-sm p-12 text-center">
+                <div className="text-6xl mb-4">📄</div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">Construa seu currículo profissional</h3>
+                <p className="text-gray-600 mb-6">
+                  Use nosso construtor de currículos para criar um perfil completo e atrair mais empresas
+                </p>
+                <Link
+                  to="/candidato/curriculo"
+                  className="inline-block px-6 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition"
+                >
+                  Ir para o Construtor de Currículo
+                </Link>
+              </div>
+            )}
           </div>
         )}
 
