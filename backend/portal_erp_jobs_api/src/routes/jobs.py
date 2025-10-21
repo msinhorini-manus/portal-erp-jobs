@@ -136,6 +136,7 @@ def create_job():
             description=data.get('description'),
             requirements=data.get('requirements'),
             responsibilities=data.get('responsibilities'),
+            area=data.get('area'),
             seniority_level=seniority_level,
             work_modality=work_modality,
             contract_type=data.get('contract_type', 'clt'),
