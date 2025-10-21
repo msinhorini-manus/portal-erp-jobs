@@ -125,14 +125,16 @@ def create_job():
             title=data.get('title'),
             description=data.get('description'),
             requirements=data.get('requirements'),
-            benefits=data.get('benefits'),
-            employment_type=data.get('employment_type', 'CLT'),
-            work_mode=data.get('work_mode', 'hybrid'),
+            responsibilities=data.get('responsibilities'),
+            seniority_level=data.get('seniority_level'),
+            work_modality=data.get('work_mode', 'hybrid'),
+            contract_type=data.get('contract_type', 'clt'),
+            min_salary=data.get('salary_min'),
+            max_salary=data.get('salary_max'),
             city=data.get('city'),
             state=data.get('state'),
-            salary_min=data.get('salary_min'),
-            salary_max=data.get('salary_max'),
-            status='active'
+            country=data.get('country', 'Brasil'),
+            is_active=True
         )
         
         db.session.add(new_job)
