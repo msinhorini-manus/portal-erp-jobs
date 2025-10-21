@@ -122,17 +122,25 @@ def create_job():
             return jsonify({'error': 'Título e descrição são obrigatórios'}), 400
         
         # Criar nova vaga
+        # Aceitar tanto work_mode quanto work_modality (compatibilidade frontend)
+        work_modality = data.get('work_modality') or data.get('work_mode', 'hybrid')
+        # Aceitar tanto salary_min/max quanto min_salary/max_salary
+        min_salary = data.get('min_salary') or data.get('salary_min')
+        max_salary = data.get('max_salary') or data.get('salary_max')
+        # Aceitar tanto level quanto seniority_level
+        seniority_level = data.get('seniority_level') or data.get('level')
+        
         new_job = Job(
             company_id=company.id,
             title=data.get('title'),
             description=data.get('description'),
             requirements=data.get('requirements'),
             responsibilities=data.get('responsibilities'),
-            seniority_level=data.get('seniority_level'),
-            work_modality=data.get('work_mode', 'hybrid'),
+            seniority_level=seniority_level,
+            work_modality=work_modality,
             contract_type=data.get('contract_type', 'clt'),
-            min_salary=data.get('salary_min'),
-            max_salary=data.get('salary_max'),
+            min_salary=min_salary,
+            max_salary=max_salary,
             city=data.get('city'),
             state=data.get('state'),
             country=data.get('country', 'Brasil'),
