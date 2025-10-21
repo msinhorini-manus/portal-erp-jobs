@@ -267,7 +267,7 @@ def setup_first_admin():
         from werkzeug.security import generate_password_hash
         user = User(
             email=email,
-            password=generate_password_hash(password),
+            password_hash=generate_password_hash(password),
             user_type='admin'
         )
         db.session.add(user)
