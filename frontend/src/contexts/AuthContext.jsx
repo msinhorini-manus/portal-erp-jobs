@@ -7,13 +7,40 @@ import { authAPI } from '@/services/api';
 const AuthContext = createContext({});
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(false); // Mudado para false para não bloquear
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  // Inicializar estado a partir do localStorage de forma síncrona
+  const [user, setUser] = useState(() => {
+    try {
+      if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+        return null;
+      }
+      const token = localStorage.getItem('authToken');
+      const userType = localStorage.getItem('userType');
+      const userData = localStorage.getItem(`${userType}Data`);
+      
+      if (token && userData) {
+        return JSON.parse(userData);
+      }
+    } catch (error) {
+      console.error('Error initializing user from localStorage:', error);
+    }
+    return null;
+  });
+  
+  const [loading, setLoading] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    try {
+      if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+        return false;
+      }
+      return !!localStorage.getItem('authToken');
+    } catch (error) {
+      return false;
+    }
+  });
 
   useEffect(() => {
-    // Check if user is logged in on mount - mas não bloqueia renderização
-    setTimeout(() => checkAuth(), 0);
+    // Validar token ao montar (opcional - pode fazer validação com backend)
+    checkAuth();
   }, []);
 
   const checkAuth = () => {
