@@ -1,8 +1,9 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Plus, Briefcase, Users, Eye, TrendingUp, Edit, Trash2, BarChart3 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { useAuth } from '@/contexts/AuthContext'
 
 const mockJobs = [
   { id: 1, title: 'Desenvolvedor Full Stack', status: 'Ativa', candidates: 45, views: 320, created: '15/09/2025' },
@@ -11,6 +12,14 @@ const mockJobs = [
 ]
 
 export default function CompanyDashboardPage() {
+  const navigate = useNavigate()
+  const { logout } = useAuth()
+
+  const handleLogout = () => {
+    logout()
+    navigate('/')
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -34,7 +43,11 @@ export default function CompanyDashboardPage() {
               <Link to="/empresa/usuarios" className="hover:text-[#F7941D] transition-colors">Usuários</Link>
               <Link to="/empresa/perfil" className="hover:text-[#F7941D] transition-colors">Perfil</Link>
             </nav>
-            <Button variant="outline" className="border-white/30 text-white hover:bg-white/10 text-sm">
+            <Button 
+              onClick={handleLogout}
+              variant="outline" 
+              className="border-white/30 text-white hover:bg-white/10 text-sm"
+            >
               Sair
             </Button>
           </div>

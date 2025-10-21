@@ -2,9 +2,16 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Search, Edit, Trash2, Pause, Play, Users, Eye, BarChart3, Filter } from 'lucide-react';
 import { jobAPI } from '../services/api';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function MyJobsPage() {
   const navigate = useNavigate();
+  const { logout } = useAuth();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/');
+  };
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterArea, setFilterArea] = useState('all');
@@ -106,7 +113,10 @@ export default function MyJobsPage() {
             >
               Dashboard
             </button>
-            <button className="px-4 py-2 border border-white/30 rounded-lg hover:bg-white/10 transition">
+            <button 
+              onClick={handleLogout}
+              className="px-4 py-2 border border-white/30 rounded-lg hover:bg-white/10 transition"
+            >
               Sair
             </button>
           </div>
