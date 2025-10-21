@@ -59,14 +59,14 @@ def register_company():
         db.session.add(new_company)
         db.session.commit()
         
-        # Gerar tokens
+        # Gerar tokens (identity deve ser string)
         access_token = create_access_token(
-            identity=new_user.id,
+            identity=str(new_user.id),
             additional_claims={'user_type': 'company', 'company_id': new_company.id},
             expires_delta=timedelta(hours=24)
         )
         refresh_token = create_refresh_token(
-            identity=new_user.id,
+            identity=str(new_user.id),
             expires_delta=timedelta(days=30)
         )
         
@@ -113,14 +113,14 @@ def login_company():
         if not company:
             return jsonify({'error': 'Empresa não encontrada'}), 404
         
-        # Gerar tokens
+        # Gerar tokens (identity deve ser string)
         access_token = create_access_token(
-            identity=user.id,
+            identity=str(user.id),
             additional_claims={'user_type': 'company', 'company_id': company.id},
             expires_delta=timedelta(hours=24)
         )
         refresh_token = create_refresh_token(
-            identity=user.id,
+            identity=str(user.id),
             expires_delta=timedelta(days=30)
         )
         
@@ -202,14 +202,14 @@ def register_candidate():
         db.session.add(new_candidate)
         db.session.commit()
         
-        # Gerar tokens
+        # Gerar tokens (identity deve ser string)
         access_token = create_access_token(
-            identity=new_user.id,
+            identity=str(new_user.id),
             additional_claims={'user_type': 'candidate', 'candidate_id': new_candidate.id},
             expires_delta=timedelta(hours=24)
         )
         refresh_token = create_refresh_token(
-            identity=new_user.id,
+            identity=str(new_user.id),
             expires_delta=timedelta(days=30)
         )
         
@@ -302,9 +302,9 @@ def refresh():
         if not user:
             return jsonify({'error': 'Usuário não encontrado'}), 404
         
-        # Gerar novo access token
+        # Gerar novo access token (identity deve ser string)
         access_token = create_access_token(
-            identity=user.id,
+            identity=str(user.id),
             additional_claims={'user_type': user.user_type},
             expires_delta=timedelta(hours=24)
         )
