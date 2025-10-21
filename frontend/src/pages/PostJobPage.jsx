@@ -1,11 +1,13 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Building2, MapPin, Briefcase, DollarSign, FileText, Code, Globe, CheckCircle } from 'lucide-react';
 import { jobAPI } from '../services/api';
 import toast from 'react-hot-toast';
 
 export default function PostJobPage() {
   const navigate = useNavigate();
+  const { id } = useParams(); // ID da vaga para edição
+  const isEditing = !!id;
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState({
     // Etapa 1
@@ -47,6 +49,47 @@ export default function PostJobPage() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [loadingJob, setLoadingJob] = useState(isEditing);
+
+  // Carregar dados da vaga se estiver editando
+  useEffect(() => {
+    if (isEditing) {
+      loadJobData();
+    }
+  }, [id]);
+
+  const loadJobData = async () => {
+    try {
+      setLoadingJob(true);
+      const job = await jobAPI.getById(id);
+      
+      // Preencher formulário com dados da vaga
+      setFormData({
+        title: job.title || '',
+        area: job.area || '',
+        level: job.seniority_level || '',
+        workMode: job.work_modality || '',
+        description: job.description || '',
+        requirements: job.requirements || '',
+        benefits: job.benefits || '',
+        technologies: job.technologies || [],
+        softwares: job.softwares || [],
+        languages: job.languages || [],
+        salaryMin: job.min_salary || '',
+        salaryMax: job.max_salary || '',
+        country: job.country || '',
+        state: job.state || '',
+        city: job.city || '',
+        contractType: job.contract_type || '',
+      });
+    } catch (err) {
+      console.error('Erro ao carregar vaga:', err);
+      toast.error('Erro ao carregar dados da vaga');
+      navigate('/empresa/vagas');
+    } finally {
+      setLoadingJob(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -72,10 +115,16 @@ export default function PostJobPage() {
         contract_type: formData.contractType,
       };
       
-      const response = await jobAPI.create(jobData);
+      let response;
+      if (isEditing) {
+        response = await jobAPI.update(id, jobData);
+        toast.success('Vaga atualizada com sucesso! ✅');
+      } else {
+        response = await jobAPI.create(jobData);
+        toast.success('Vaga publicada com sucesso! 🎉');
+      }
       
-      toast.success('Vaga publicada com sucesso! 🎉');
-      navigate('/empresa/dashboard');
+      navigate('/empresa/vagas');
     } catch (err) {
       console.error('Erro ao publicar vaga:', err);
       setError(err.message || 'Erro ao publicar vaga');
@@ -92,6 +141,18 @@ export default function PostJobPage() {
     { number: 4, title: 'Salário e Localização' }
   ];
 
+  // Mostrar loading enquanto carrega vaga para edição
+  if (loadingJob) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#F7941D] mx-auto"></div>
+          <p className="mt-4 text-gray-600">Carregando dados da vaga...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       {/* Header */}
@@ -105,7 +166,7 @@ export default function PostJobPage() {
               <h1 className="text-xl font-bold">
                 PORTAL <span className="text-[#F7941D]">ERP</span> JOBS
               </h1>
-              <p className="text-xs text-gray-300">Anuncie sua vaga</p>
+              <p className="text-xs text-gray-300">{isEditing ? 'Editar vaga' : 'Anuncie sua vaga'}</p>
             </div>
           </div>
           <button
@@ -548,9 +609,10 @@ export default function PostJobPage() {
               ) : (
                 <button
                   type="submit"
-                  className="flex-1 px-6 py-3 bg-[#F7941D] text-white rounded-lg font-medium hover:bg-[#e8870d] transition shadow-lg"
+                  disabled={loading || loadingJob}
+                  className="flex-1 px-6 py-3 bg-[#F7941D] text-white rounded-lg font-medium hover:bg-[#e8870d] transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Publicar Vaga Grátis 🎉
+                  {loading ? 'Salvando...' : (isEditing ? 'Atualizar Vaga ✅' : 'Publicar Vaga Grátis 🎉')}
                 </button>
               )}
             </div>
