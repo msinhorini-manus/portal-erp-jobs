@@ -92,7 +92,7 @@ def get_categories_stats():
                 'top_jobs': job_titles
             })
         
-        return jsonify(result), 200
+        return jsonify({'categories': result}), 200
         
     except Exception as e:
         print(f"Erro ao buscar estatísticas de categorias: {str(e)}")

@@ -51,7 +51,7 @@ class Job(db.Model):
         # Buscar nome da empresa
         company_name = None
         if self.company and not self.is_company_hidden:
-            company_name = self.company.name
+            company_name = self.company.company_name
         
         # Contar candidaturas
         applications_count = len(self.applications) if self.applications else 0
