@@ -196,7 +196,7 @@ def update_job(job_id):
         
         data = request.get_json()
         
-        # Atualizar campos
+        # Atualizar campos básicos
         if 'title' in data:
             job.title = data['title']
         if 'description' in data:
@@ -205,18 +205,42 @@ def update_job(job_id):
             job.requirements = data['requirements']
         if 'benefits' in data:
             job.benefits = data['benefits']
-        if 'employment_type' in data:
-            job.employment_type = data['employment_type']
+        if 'area' in data:
+            job.area = data['area']
+        
+        # Campos com compatibilidade de nomes
+        if 'level' in data:
+            job.seniority_level = data['level']
+        if 'seniority_level' in data:
+            job.seniority_level = data['seniority_level']
+        
         if 'work_mode' in data:
-            job.work_mode = data['work_mode']
+            job.work_modality = data['work_mode']
+        if 'work_modality' in data:
+            job.work_modality = data['work_modality']
+        
+        if 'contract_type' in data:
+            job.contract_type = data['contract_type']
+        
+        # Localização
         if 'city' in data:
             job.city = data['city']
         if 'state' in data:
             job.state = data['state']
+        if 'country' in data:
+            job.country = data['country']
+        
+        # Salário com compatibilidade de nomes
         if 'salary_min' in data:
-            job.salary_min = data['salary_min']
+            job.min_salary = data['salary_min']
+        if 'min_salary' in data:
+            job.min_salary = data['min_salary']
         if 'salary_max' in data:
-            job.salary_max = data['salary_max']
+            job.max_salary = data['salary_max']
+        if 'max_salary' in data:
+            job.max_salary = data['max_salary']
+        
+        # Status
         if 'is_active' in data:
             job.is_active = data['is_active']
         if 'status' in data:
