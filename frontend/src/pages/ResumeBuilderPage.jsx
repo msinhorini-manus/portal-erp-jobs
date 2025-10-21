@@ -867,6 +867,244 @@ export default function ResumeBuilderPage() {
                     )}
                   </div>
                 )}
+
+                {/* Certificações */}
+                {activeSection === 'certifications' && (
+                  <div>
+                    <div className="flex items-center justify-between mb-4">
+                      <h2 className="text-xl font-bold text-gray-900">Certificações</h2>
+                      <button
+                        onClick={addCertification}
+                        className="flex items-center gap-2 px-4 py-2 text-white bg-[#FF6B35] rounded-lg hover:bg-opacity-90 transition-colors"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Adicionar Certificação
+                      </button>
+                    </div>
+                    {resume.certifications.length > 0 ? (
+                      <div className="space-y-6">
+                        {resume.certifications.map((cert, index) => (
+                          <div key={cert.id} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                            <div className="flex items-center justify-between mb-4">
+                              <h3 className="text-lg font-semibold text-gray-900">Certificação #{index + 1}</h3>
+                              <button
+                                onClick={() => removeCertification(cert.id)}
+                                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                            <div className="space-y-4">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Nome da Certificação *</label>
+                                <input
+                                  type="text"
+                                  value={cert.name}
+                                  onChange={(e) => updateCertification(cert.id, 'name', e.target.value)}
+                                  placeholder="Ex: AWS Certified Solutions Architect"
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Instituição Emissora</label>
+                                <input
+                                  type="text"
+                                  value={cert.issuer}
+                                  onChange={(e) => updateCertification(cert.id, 'issuer', e.target.value)}
+                                  placeholder="Ex: Amazon Web Services"
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Data de Emissão</label>
+                                <input
+                                  type="month"
+                                  value={cert.date}
+                                  onChange={(e) => updateCertification(cert.id, 'date', e.target.value)}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">URL da Credencial</label>
+                                <input
+                                  type="url"
+                                  value={cert.url}
+                                  onChange={(e) => updateCertification(cert.id, 'url', e.target.value)}
+                                  placeholder="https://..."
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-12 border-2 border-dashed border-gray-300 rounded-lg">
+                        <p className="text-gray-500">Nenhuma certificação adicionada ainda</p>
+                        <button
+                          onClick={addCertification}
+                          className="mt-4 px-4 py-2 text-sm font-medium text-white bg-[#FF6B35] rounded-lg"
+                        >
+                          Adicionar primeira certificação
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Projetos */}
+                {activeSection === 'projects' && (
+                  <div>
+                    <div className="flex items-center justify-between mb-4">
+                      <h2 className="text-xl font-bold text-gray-900">Projetos</h2>
+                      <button
+                        onClick={addProject}
+                        className="flex items-center gap-2 px-4 py-2 text-white bg-[#FF6B35] rounded-lg hover:bg-opacity-90 transition-colors"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Adicionar Projeto
+                      </button>
+                    </div>
+                    {resume.projects.length > 0 ? (
+                      <div className="space-y-6">
+                        {resume.projects.map((project, index) => (
+                          <div key={project.id} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                            <div className="flex items-center justify-between mb-4">
+                              <h3 className="text-lg font-semibold text-gray-900">Projeto #{index + 1}</h3>
+                              <button
+                                onClick={() => removeProject(project.id)}
+                                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                            <div className="space-y-4">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Nome do Projeto *</label>
+                                <input
+                                  type="text"
+                                  value={project.name}
+                                  onChange={(e) => updateProject(project.id, 'name', e.target.value)}
+                                  placeholder="Ex: Sistema de Gestão de Estoque"
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Descrição</label>
+                                <textarea
+                                  value={project.description}
+                                  onChange={(e) => updateProject(project.id, 'description', e.target.value)}
+                                  placeholder="Descreva o projeto, suas funcionalidades e seu papel..."
+                                  rows={4}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Tecnologias Utilizadas</label>
+                                <input
+                                  type="text"
+                                  value={project.technologies}
+                                  onChange={(e) => updateProject(project.id, 'technologies', e.target.value)}
+                                  placeholder="Ex: React, Node.js, MongoDB"
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">URL do Projeto</label>
+                                <input
+                                  type="url"
+                                  value={project.url}
+                                  onChange={(e) => updateProject(project.id, 'url', e.target.value)}
+                                  placeholder="https://..."
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-12 border-2 border-dashed border-gray-300 rounded-lg">
+                        <p className="text-gray-500">Nenhum projeto adicionado ainda</p>
+                        <button
+                          onClick={addProject}
+                          className="mt-4 px-4 py-2 text-sm font-medium text-white bg-[#FF6B35] rounded-lg"
+                        >
+                          Adicionar primeiro projeto
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Idiomas */}
+                {activeSection === 'languages' && (
+                  <div>
+                    <div className="flex items-center justify-between mb-4">
+                      <h2 className="text-xl font-bold text-gray-900">Idiomas</h2>
+                      <button
+                        onClick={addLanguage}
+                        className="flex items-center gap-2 px-4 py-2 text-white bg-[#FF6B35] rounded-lg hover:bg-opacity-90 transition-colors"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Adicionar Idioma
+                      </button>
+                    </div>
+                    {resume.languages.length > 0 ? (
+                      <div className="space-y-6">
+                        {resume.languages.map((language, index) => (
+                          <div key={language.id} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                            <div className="flex items-center justify-between mb-4">
+                              <h3 className="text-lg font-semibold text-gray-900">Idioma #{index + 1}</h3>
+                              <button
+                                onClick={() => removeLanguage(language.id)}
+                                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                            <div className="space-y-4">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Idioma *</label>
+                                <input
+                                  type="text"
+                                  value={language.name}
+                                  onChange={(e) => updateLanguage(language.id, 'name', e.target.value)}
+                                  placeholder="Ex: Inglês"
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Nível de Proficiência</label>
+                                <select
+                                  value={language.level}
+                                  onChange={(e) => updateLanguage(language.id, 'level', e.target.value)}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                >
+                                  <option>Básico</option>
+                                  <option>Intermediário</option>
+                                  <option>Avançado</option>
+                                  <option>Fluente</option>
+                                  <option>Nativo</option>
+                                </select>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-12 border-2 border-dashed border-gray-300 rounded-lg">
+                        <p className="text-gray-500">Nenhum idioma adicionado ainda</p>
+                        <button
+                          onClick={addLanguage}
+                          className="mt-4 px-4 py-2 text-sm font-medium text-white bg-[#FF6B35] rounded-lg"
+                        >
+                          Adicionar primeiro idioma
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -917,6 +1155,21 @@ export default function ResumeBuilderPage() {
                     </div>
                   )}
 
+                  {/* Preview Education */}
+                  {resume.education.length > 0 && (
+                    <div className="mb-6">
+                      <h2 className="text-xl font-bold border-b-2 border-[#FF6B35] pb-1 mb-2">Formação Acadêmica</h2>
+                      {resume.education.map(edu => (
+                        <div key={edu.id} className="mb-4">
+                          <h3 className="text-lg font-bold">{edu.degree || 'Grau'}</h3>
+                          <p className="font-semibold text-gray-700">{edu.institution || 'Instituição'}</p>
+                          {edu.field && <p className="text-sm text-gray-600">{edu.field}</p>}
+                          <p className="text-xs text-gray-500">{edu.startDate} - {edu.current ? 'Atual' : edu.endDate}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   {/* Preview Skills */}
                   {resume.skills.length > 0 && (
                     <div className="mb-6">
@@ -926,6 +1179,63 @@ export default function ResumeBuilderPage() {
                           <span key={skill.id} className="bg-gray-200 text-gray-800 text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full">
                             {skill.name} - {skill.level}
                           </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Preview Certifications */}
+                  {resume.certifications.length > 0 && (
+                    <div className="mb-6">
+                      <h2 className="text-xl font-bold border-b-2 border-[#FF6B35] pb-1 mb-2">Certificações</h2>
+                      {resume.certifications.map(cert => (
+                        <div key={cert.id} className="mb-4">
+                          <h3 className="text-lg font-bold">{cert.name || 'Certificação'}</h3>
+                          {cert.issuer && <p className="font-semibold text-gray-700">{cert.issuer}</p>}
+                          {cert.date && <p className="text-xs text-gray-500">{cert.date}</p>}
+                          {cert.url && (
+                            <a href={cert.url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">
+                              Ver credencial
+                            </a>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Preview Projects */}
+                  {resume.projects.length > 0 && (
+                    <div className="mb-6">
+                      <h2 className="text-xl font-bold border-b-2 border-[#FF6B35] pb-1 mb-2">Projetos</h2>
+                      {resume.projects.map(project => (
+                        <div key={project.id} className="mb-4">
+                          <h3 className="text-lg font-bold">{project.name || 'Projeto'}</h3>
+                          {project.description && <p className="text-sm text-gray-600 mt-1">{project.description}</p>}
+                          {project.technologies && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              <span className="font-semibold">Tecnologias:</span> {project.technologies}
+                            </p>
+                          )}
+                          {project.url && (
+                            <a href={project.url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">
+                              Ver projeto
+                            </a>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Preview Languages */}
+                  {resume.languages.length > 0 && (
+                    <div className="mb-6">
+                      <h2 className="text-xl font-bold border-b-2 border-[#FF6B35] pb-1 mb-2">Idiomas</h2>
+                      <div className="space-y-2">
+                        {resume.languages.map(language => (
+                          <div key={language.id} className="flex justify-between items-center">
+                            <span className="font-semibold">{language.name || 'Idioma'}</span>
+                            <span className="text-sm text-gray-600">{language.level}</span>
+                          </div>
                         ))}
                       </div>
                     </div>
