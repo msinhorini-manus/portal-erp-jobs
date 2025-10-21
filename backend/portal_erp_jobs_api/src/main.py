@@ -44,7 +44,11 @@ app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'sta
 app.config.from_object(Config)
 
 # Initialize extensions
-CORS(app, origins=['*'])  # Permitir todas as origens
+CORS(app, 
+     resources={r"/api/*": {"origins": "*"}},
+     allow_headers=["Content-Type", "Authorization"],
+     methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+     supports_credentials=False)
 jwt = JWTManager(app)
 
 # Initialize i18n
