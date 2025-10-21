@@ -114,9 +114,11 @@ def create_job():
             return jsonify({'error': 'Perfil de empresa não encontrado. Crie um perfil primeiro'}), 404
         
         data = request.get_json()
+        print(f"[DEBUG] Received data for job creation: {data}")
         
         # Validar dados obrigatórios
         if not data.get('title') or not data.get('description'):
+            print("[ERROR] Missing title or description")
             return jsonify({'error': 'Título e descrição são obrigatórios'}), 400
         
         # Criar nova vaga
@@ -137,8 +139,10 @@ def create_job():
             is_active=True
         )
         
+        print(f"[DEBUG] Creating job with data: title={data.get('title')}, work_mode={data.get('work_mode')}, contract_type={data.get('contract_type')}")
         db.session.add(new_job)
         db.session.commit()
+        print("[DEBUG] Job created successfully!")
         
         return jsonify({
             'message': 'Vaga criada com sucesso',
@@ -147,6 +151,10 @@ def create_job():
         
     except Exception as e:
         db.session.rollback()
+        print(f"[ERROR] Failed to create job: {str(e)}")
+        print(f"[ERROR] Exception type: {type(e).__name__}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 
