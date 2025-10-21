@@ -235,3 +235,74 @@ def delete_job(job_id):
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
+
+
+
+@admin_bp.route('/setup', methods=['POST'])
+def setup_first_admin():
+    """
+    Create the first admin user (only works if no admin exists)
+    This is a one-time setup endpoint for initial deployment
+    """
+    try:
+        # Check if any admin already exists
+        existing_admin = Admin.query.first()
+        if existing_admin:
+            return jsonify({'error': 'Admin already exists. Use regular registration.'}), 403
+        
+        data = request.get_json()
+        email = data.get('email')
+        password = data.get('password')
+        name = data.get('name', 'Administrator')
+        
+        if not email or not password:
+            return jsonify({'error': 'Email and password are required'}), 400
+        
+        # Check if user with this email already exists
+        existing_user = User.query.filter_by(email=email).first()
+        if existing_user:
+            return jsonify({'error': 'User with this email already exists'}), 400
+        
+        # Create User
+        from werkzeug.security import generate_password_hash
+        user = User(
+            email=email,
+            password=generate_password_hash(password),
+            user_type='admin'
+        )
+        db.session.add(user)
+        db.session.flush()  # Get user.id
+        
+        # Create Admin profile
+        admin = Admin(
+            user_id=user.id,
+            name=name,
+            role='super_admin',
+            permissions={
+                'manage_users': True,
+                'manage_jobs': True,
+                'manage_tags': True,
+                'manage_areas': True,
+                'manage_levels': True,
+                'manage_modalities': True,
+                'manage_technologies': True,
+                'manage_softwares': True
+            }
+        )
+        db.session.add(admin)
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'First admin created successfully',
+            'admin': {
+                'id': admin.id,
+                'name': admin.name,
+                'email': user.email,
+                'role': admin.role
+            }
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
