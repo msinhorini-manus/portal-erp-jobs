@@ -47,23 +47,59 @@ class Job(db.Model):
     
     def to_dict(self, include_details=False):
         """Convert to dictionary"""
+        # Buscar nome da empresa
+        company_name = None
+        if self.company and not self.is_company_hidden:
+            company_name = self.company.name
+        
+        # Contar candidaturas
+        applications_count = len(self.applications) if self.applications else 0
+        
+        # Formatar skills como array de strings
+        skills_array = []
+        if self.skills:
+            skills_array = [skill.skill.name for skill in self.skills if skill.skill]
+        
+        # Formatar localização
+        location = ''
+        if self.city and self.state:
+            location = f"{self.city}, {self.state}"
+        elif self.city:
+            location = self.city
+        elif self.work_modality == 'remote':
+            location = 'Remoto'
+        
+        # Formatar salário
+        salary = ''
+        if self.min_salary and self.max_salary:
+            salary = f"R$ {int(self.min_salary):,} - R$ {int(self.max_salary):,}".replace(',', '.')
+        elif self.min_salary:
+            salary = f"A partir de R$ {int(self.min_salary):,}".replace(',', '.')
+        else:
+            salary = 'A combinar'
+        
         data = {
             'id': self.id,
             'company_id': self.company_id,
+            'company_name': company_name,
             'title': self.title,
             'seniority_level': self.seniority_level,
             'work_modality': self.work_modality,
             'contract_type': self.contract_type,
             'min_salary': self.min_salary,
             'max_salary': self.max_salary,
+            'salary': salary,
             'salary_currency': self.salary_currency,
             'city': self.city,
             'state': self.state,
             'country': self.country,
+            'location': location,
             'is_active': self.is_active,
             'is_company_hidden': self.is_company_hidden,
             'created_at': self.created_at.isoformat() if self.created_at else None,
-            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'applications_count': applications_count,
+            'skills': skills_array
         }
         
         if include_details:
@@ -71,7 +107,7 @@ class Job(db.Model):
             data['requirements'] = self.requirements
             data['responsibilities'] = self.responsibilities
             data['expires_at'] = self.expires_at.isoformat() if self.expires_at else None
-            data['skills'] = [skill.to_dict() for skill in self.skills]
+            data['skills_detailed'] = [skill.to_dict() for skill in self.skills]
             data['company'] = self.company.to_dict() if self.company and not self.is_company_hidden else None
         
         return data
