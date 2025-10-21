@@ -53,7 +53,7 @@ export default function CandidateDashboardPage() {
         });
         if (appsResponse.ok) {
           const appsData = await appsResponse.json();
-          setMyApplications(appsData || []);
+          setMyApplications(Array.isArray(appsData) ? appsData : []);
         }
       }
     } catch (error) {
@@ -68,13 +68,10 @@ export default function CandidateDashboardPage() {
       setLoadingResume(true);
       const token = localStorage.getItem('authToken');
       if (!token) return;
-
+      
       const response = await fetch('https://portal-erp-jobs-production.up.railway.app/api/resume/', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        headers: { 'Authorization': `Bearer ${token}` }
       });
-
       if (response.ok) {
         const data = await response.json();
         setResume(data);
@@ -93,7 +90,7 @@ export default function CandidateDashboardPage() {
 
   const handleApply = async (jobId) => {
     // Check if already applied
-    const alreadyApplied = myApplications.some(app => app.job_id === jobId);
+    const alreadyApplied = Array.isArray(myApplications) && myApplications.some(app => app.job_id === jobId);
     
     if (alreadyApplied) {
       alert('Você já se candidatou a esta vaga!');
