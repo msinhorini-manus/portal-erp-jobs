@@ -18,6 +18,7 @@ class Job(db.Model):
     responsibilities = db.Column(db.Text)
     
     # Job Details
+    area = db.Column(db.String(100))  # Desenvolvimento, Consultoria & ERP, etc
     seniority_level = db.Column(db.String(20))  # junior, pleno, senior, tech_lead, etc
     work_modality = db.Column(db.String(20))  # remote, hybrid, onsite
     contract_type = db.Column(db.String(20))  # clt, pj, freelance, internship
@@ -83,6 +84,7 @@ class Job(db.Model):
             'company_id': self.company_id,
             'company_name': company_name,
             'title': self.title,
+            'area': self.area,
             'seniority_level': self.seniority_level,
             'work_modality': self.work_modality,
             'contract_type': self.contract_type,
