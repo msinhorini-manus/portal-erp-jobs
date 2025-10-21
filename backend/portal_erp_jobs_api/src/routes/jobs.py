@@ -375,3 +375,49 @@ def get_job_applications(job_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
+
+@jobs_bp.route('/<int:job_id>/toggle-status', methods=['PATCH'])
+@jwt_required()
+def toggle_job_status(job_id):
+    """
+    Alternar status da vaga (ativar/pausar)
+    """
+    try:
+        current_user_id = get_jwt_identity()
+        claims = get_jwt()
+        
+        # Verificar se é empresa
+        if claims.get('user_type') != 'company':
+            return jsonify({'error': 'Acesso negado'}), 403
+        
+        # Buscar empresa
+        company = Company.query.filter_by(user_id=int(current_user_id)).first()
+        if not company:
+            return jsonify({'error': 'Perfil de empresa não encontrado'}), 404
+        
+        # Buscar vaga
+        job = Job.query.get(job_id)
+        if not job:
+            return jsonify({'error': 'Vaga não encontrada'}), 404
+        
+        # Verificar se a vaga pertence à empresa
+        if job.company_id != company.id:
+            return jsonify({'error': 'Você não tem permissão para alterar esta vaga'}), 403
+        
+        # Alternar status
+        job.is_active = not job.is_active
+        job.updated_at = datetime.utcnow()
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': f'Vaga {"ativada" if job.is_active else "pausada"} com sucesso',
+            'job': job.to_dict()
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+

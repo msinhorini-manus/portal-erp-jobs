@@ -28,8 +28,10 @@ export default function MyJobsPage() {
     try {
       setLoading(true);
       const response = await jobAPI.getByCompany();
+      // Extrair array de jobs da resposta paginada
+      const jobsArray = response.jobs || [];
       // Formatar dados para o frontend
-      const formattedJobs = response.map(job => ({
+      const formattedJobs = jobsArray.map(job => ({
         ...job,
         status: job.is_active ? 'active' : 'paused',
         salary: job.min_salary && job.max_salary ? `R$ ${job.min_salary} - R$ ${job.max_salary}` : 'A combinar',

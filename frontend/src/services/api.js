@@ -198,10 +198,10 @@ export const jobAPI = {
   },
 
   /**
-   * Get jobs by company
+   * Get jobs by company (authenticated)
    */
-  getByCompany: async (companyId) => {
-    return fetchAPI(`/jobs?company_id=${companyId}`);
+  getByCompany: async () => {
+    return fetchAPI('/jobs/my-jobs');
   },
 
   /**
