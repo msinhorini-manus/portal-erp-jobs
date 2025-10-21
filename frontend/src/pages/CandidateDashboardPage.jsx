@@ -152,7 +152,10 @@ export default function CandidateDashboardPage() {
     
     const matchesType = !filterType || job.contract_type === filterType;
     
-    const matchesTech = !filterTech || job.technologies?.toLowerCase().includes(filterTech.toLowerCase());
+    const matchesTech = !filterTech || 
+      (job.skills && job.skills.some(skill => 
+        skill.toLowerCase().includes(filterTech.toLowerCase())
+      ));
     
     const matchesWorkMode = !filterWorkMode || job.work_modality === filterWorkMode;
     
