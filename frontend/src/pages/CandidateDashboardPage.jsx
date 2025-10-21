@@ -26,6 +26,9 @@ export default function CandidateDashboardPage() {
   const [resume, setResume] = useState(null);
   const [loadingResume, setLoadingResume] = useState(false);
   const [loadingJobs, setLoadingJobs] = useState(false);
+  const [applyingJobId, setApplyingJobId] = useState(null);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
     loadData();
@@ -93,14 +96,18 @@ export default function CandidateDashboardPage() {
     const alreadyApplied = Array.isArray(myApplications) && myApplications.some(app => app.job_id === jobId);
     
     if (alreadyApplied) {
-      alert('Você já se candidatou a esta vaga!');
+      setErrorMessage('Você já se candidatou a esta vaga!');
+      setTimeout(() => setErrorMessage(''), 3000);
       return;
     }
 
     try {
+      setApplyingJobId(jobId);
       const token = localStorage.getItem('authToken');
       if (!token) {
-        alert('Você precisa estar logado para se candidatar!');
+        setErrorMessage('Você precisa estar logado para se candidatar!');
+        setTimeout(() => setErrorMessage(''), 3000);
+        setApplyingJobId(null);
         return;
       }
 
@@ -118,14 +125,21 @@ export default function CandidateDashboardPage() {
       if (response.ok) {
         const newApplication = await response.json();
         setMyApplications([...myApplications, newApplication]);
-        alert('Candidatura enviada com sucesso!');
+        setSuccessMessage('🎉 Candidatura enviada com sucesso!');
+        setTimeout(() => setSuccessMessage(''), 5000);
+        // Recarregar dados para atualizar
+        await loadData();
       } else {
         const error = await response.json();
-        alert(error.message || 'Erro ao enviar candidatura. Tente novamente.');
+        setErrorMessage(error.message || 'Erro ao enviar candidatura. Tente novamente.');
+        setTimeout(() => setErrorMessage(''), 3000);
       }
     } catch (error) {
       console.error('Erro ao enviar candidatura:', error);
-      alert('Erro ao enviar candidatura. Tente novamente.');
+      setErrorMessage('Erro ao enviar candidatura. Tente novamente.');
+      setTimeout(() => setErrorMessage(''), 3000);
+    } finally {
+      setApplyingJobId(null);
     }
   };
 
@@ -202,6 +216,24 @@ export default function CandidateDashboardPage() {
           </nav>
         </div>
       </div>
+
+      {/* Success/Error Messages */}
+      {successMessage && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg flex items-center">
+            <span className="text-lg mr-2">✅</span>
+            <span>{successMessage}</span>
+          </div>
+        </div>
+      )}
+      {errorMessage && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg flex items-center">
+            <span className="text-lg mr-2">❌</span>
+            <span>{errorMessage}</span>
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -386,9 +418,24 @@ export default function CandidateDashboardPage() {
                           ) : (
                             <button
                               onClick={() => handleApply(job.id)}
-                              className="px-6 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition font-medium"
+                              disabled={applyingJobId === job.id}
+                              className={`px-6 py-3 rounded-lg transition font-medium ${
+                                applyingJobId === job.id
+                                  ? 'bg-orange-300 text-white cursor-wait'
+                                  : 'bg-orange-500 text-white hover:bg-orange-600'
+                              }`}
                             >
-                              Candidatar-se
+                              {applyingJobId === job.id ? (
+                                <span className="flex items-center">
+                                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                  </svg>
+                                  Enviando...
+                                </span>
+                              ) : (
+                                'Candidatar-se'
+                              )}
                             </button>
                           )}
                         </div>
