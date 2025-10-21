@@ -17,23 +17,50 @@ export default function CandidateDashboardPage() {
   const [filterLocation, setFilterLocation] = useState('');
   const [filterType, setFilterType] = useState('');
   const [filterTech, setFilterTech] = useState('');
+  const [filterWorkMode, setFilterWorkMode] = useState('');
+  const [filterLevel, setFilterLevel] = useState('');
+  const [filterSalaryMin, setFilterSalaryMin] = useState('');
+  const [filterSalaryMax, setFilterSalaryMax] = useState('');
+  const [filterApplicationStatus, setFilterApplicationStatus] = useState('');
+  const [sortApplications, setSortApplications] = useState('recent');
   const [resume, setResume] = useState(null);
   const [loadingResume, setLoadingResume] = useState(false);
+  const [loadingJobs, setLoadingJobs] = useState(false);
 
   useEffect(() => {
     loadData();
     loadResume();
   }, []);
 
-  const loadData = () => {
-    // Load jobs from localStorage (will be replaced with API call)
-    const savedJobs = JSON.parse(localStorage.getItem('company_jobs') || '[]');
-    setJobs(savedJobs.filter(job => job.status === 'active'));
+  const loadData = async () => {
+    try {
+      setLoadingJobs(true);
+      
+      // Carregar vagas ativas da API
+      const response = await fetch('https://portal-erp-jobs-production.up.railway.app/api/jobs/');
+      if (response.ok) {
+        const data = await response.json();
+        setJobs(data.jobs || []);
+      }
 
-    // Load my applications
-    const allApplications = JSON.parse(localStorage.getItem('applications') || '[]');
-    const myApps = allApplications.filter(app => app.candidateId === user?.id);
-    setMyApplications(myApps);
+      // Carregar minhas candidaturas da API
+      const token = localStorage.getItem('authToken');
+      if (token) {
+        const appsResponse = await fetch('https://portal-erp-jobs-production.up.railway.app/api/applications/my-applications', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        if (appsResponse.ok) {
+          const appsData = await appsResponse.json();
+          setMyApplications(appsData || []);
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao carregar dados:', error);
+    } finally {
+      setLoadingJobs(false);
+    }
   };
 
   const loadResume = async () => {
@@ -64,44 +91,66 @@ export default function CandidateDashboardPage() {
     navigate('/');
   };
 
-  const handleApply = (jobId) => {
+  const handleApply = async (jobId) => {
     // Check if already applied
-    const alreadyApplied = myApplications.some(app => app.jobId === jobId);
+    const alreadyApplied = myApplications.some(app => app.job_id === jobId);
     
     if (alreadyApplied) {
       alert('Você já se candidatou a esta vaga!');
       return;
     }
 
-    // Create application
-    const newApplication = {
-      id: Date.now(),
-      jobId,
-      candidateId: user?.id,
-      status: 'pending',
-      createdAt: new Date().toISOString()
-    };
+    try {
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        alert('Você precisa estar logado para se candidatar!');
+        return;
+      }
 
-    // Save to localStorage
-    const allApplications = JSON.parse(localStorage.getItem('applications') || '[]');
-    allApplications.push(newApplication);
-    localStorage.setItem('applications', JSON.stringify(allApplications));
+      const response = await fetch('https://portal-erp-jobs-production.up.railway.app/api/applications/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          job_id: jobId
+        })
+      });
 
-    // Update state
-    setMyApplications([...myApplications, newApplication]);
-    
-    alert('Candidatura enviada com sucesso!');
+      if (response.ok) {
+        const newApplication = await response.json();
+        setMyApplications([...myApplications, newApplication]);
+        alert('Candidatura enviada com sucesso!');
+      } else {
+        const error = await response.json();
+        alert(error.message || 'Erro ao enviar candidatura. Tente novamente.');
+      }
+    } catch (error) {
+      console.error('Erro ao enviar candidatura:', error);
+      alert('Erro ao enviar candidatura. Tente novamente.');
+    }
   };
 
   const filteredJobs = jobs.filter(job => {
     const matchesSearch = job.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          job.description?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesLocation = !filterLocation || job.location?.toLowerCase().includes(filterLocation.toLowerCase());
-    const matchesType = !filterType || job.type === filterType;
-    const matchesTech = !filterTech || job.skills?.some(skill => 
-      skill.toLowerCase().includes(filterTech.toLowerCase())
-    );
-    return matchesSearch && matchesLocation && matchesType && matchesTech;
+    
+    const location = job.city && job.state ? `${job.city}, ${job.state}` : job.city || '';
+    const matchesLocation = !filterLocation || location.toLowerCase().includes(filterLocation.toLowerCase());
+    
+    const matchesType = !filterType || job.contract_type === filterType;
+    
+    const matchesTech = !filterTech || job.technologies?.toLowerCase().includes(filterTech.toLowerCase());
+    
+    const matchesWorkMode = !filterWorkMode || job.work_modality === filterWorkMode;
+    
+    const matchesLevel = !filterLevel || job.seniority_level === filterLevel;
+    
+    const matchesSalary = (!filterSalaryMin || job.min_salary >= parseInt(filterSalaryMin)) &&
+                         (!filterSalaryMax || job.max_salary <= parseInt(filterSalaryMax));
+    
+    return matchesSearch && matchesLocation && matchesType && matchesTech && matchesWorkMode && matchesLevel && matchesSalary;
   });
 
   return (
@@ -219,10 +268,65 @@ export default function CandidateDashboardPage() {
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                   />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Modalidade de Trabalho
+                  </label>
+                  <select
+                    value={filterWorkMode}
+                    onChange={(e) => setFilterWorkMode(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  >
+                    <option value="">Todas</option>
+                    <option value="presencial">Presencial</option>
+                    <option value="remoto">Remoto</option>
+                    <option value="híbrido">Híbrido</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Nível
+                  </label>
+                  <select
+                    value={filterLevel}
+                    onChange={(e) => setFilterLevel(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  >
+                    <option value="">Todos</option>
+                    <option value="junior">Júnior</option>
+                    <option value="pleno">Pleno</option>
+                    <option value="senior">Sênior</option>
+                    <option value="especialista">Especialista</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Salário Mínimo (R$)
+                  </label>
+                  <input
+                    type="number"
+                    value={filterSalaryMin}
+                    onChange={(e) => setFilterSalaryMin(e.target.value)}
+                    placeholder="Ex: 5000"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Salário Máximo (R$)
+                  </label>
+                  <input
+                    type="number"
+                    value={filterSalaryMax}
+                    onChange={(e) => setFilterSalaryMax(e.target.value)}
+                    placeholder="Ex: 15000"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  />
+                </div>
               </div>
               <div className="mt-4 flex justify-between items-center">
                 <p className="text-sm text-gray-600">
-                  {filteredJobs.length} vaga{filteredJobs.length !== 1 ? 's' : ''} encontrada{filteredJobs.length !== 1 ? 's' : ''}
+                  {loadingJobs ? 'Carregando...' : `${filteredJobs.length} vaga${filteredJobs.length !== 1 ? 's' : ''} encontrada${filteredJobs.length !== 1 ? 's' : ''}`}
                 </p>
                 <button
                   onClick={() => {
@@ -230,6 +334,10 @@ export default function CandidateDashboardPage() {
                     setFilterLocation('');
                     setFilterType('');
                     setFilterTech('');
+                    setFilterWorkMode('');
+                    setFilterLevel('');
+                    setFilterSalaryMin('');
+                    setFilterSalaryMax('');
                   }}
                   className="text-sm text-orange-600 hover:text-orange-700 font-medium"
                 >
@@ -304,6 +412,42 @@ export default function CandidateDashboardPage() {
           <div>
             <h2 className="text-2xl font-bold text-gray-900 mb-6">Minhas Candidaturas</h2>
             
+            {/* Filtros de Candidaturas */}
+            {myApplications.length > 0 && (
+              <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Filtrar por Status
+                    </label>
+                    <select
+                      value={filterApplicationStatus}
+                      onChange={(e) => setFilterApplicationStatus(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    >
+                      <option value="">Todos os status</option>
+                      <option value="pending">Pendente</option>
+                      <option value="approved">Aprovado</option>
+                      <option value="rejected">Rejeitado</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Ordenar por
+                    </label>
+                    <select
+                      value={sortApplications}
+                      onChange={(e) => setSortApplications(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    >
+                      <option value="recent">Mais recentes</option>
+                      <option value="oldest">Mais antigas</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            )}
+            
             {myApplications.length === 0 ? (
               <div className="bg-white rounded-lg shadow-sm p-12 text-center">
                 <div className="text-6xl mb-4">📋</div>
@@ -318,7 +462,14 @@ export default function CandidateDashboardPage() {
               </div>
             ) : (
               <div className="grid gap-4">
-                {myApplications.map(application => {
+                {myApplications
+                  .filter(app => !filterApplicationStatus || app.status === filterApplicationStatus)
+                  .sort((a, b) => {
+                    const dateA = new Date(a.created_at || a.createdAt);
+                    const dateB = new Date(b.created_at || b.createdAt);
+                    return sortApplications === 'recent' ? dateB - dateA : dateA - dateB;
+                  })
+                  .map(application => {
                   const job = jobs.find(j => j.id === application.jobId);
                   
                   if (!job) return null;

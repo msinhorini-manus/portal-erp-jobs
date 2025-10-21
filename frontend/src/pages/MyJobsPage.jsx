@@ -15,6 +15,9 @@ export default function MyJobsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterArea, setFilterArea] = useState('all');
+  const [filterWorkMode, setFilterWorkMode] = useState('all');
+  const [filterLevel, setFilterLevel] = useState('all');
+  const [sortBy, setSortBy] = useState('recent');
 
   // Carregar vagas da API
   const [jobs, setJobs] = useState([]);
@@ -78,12 +81,25 @@ export default function MyJobsPage() {
     }
   };
 
-  const filteredJobs = jobs.filter(job => {
-    const matchesSearch = job.title.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = filterStatus === 'all' || job.status === filterStatus;
-    const matchesArea = filterArea === 'all' || job.area === filterArea;
-    return matchesSearch && matchesStatus && matchesArea;
-  });
+  const filteredJobs = jobs
+    .filter(job => {
+      const matchesSearch = job.title.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesStatus = filterStatus === 'all' || job.status === filterStatus;
+      const matchesArea = filterArea === 'all' || job.area === filterArea;
+      const matchesWorkMode = filterWorkMode === 'all' || job.workMode === filterWorkMode;
+      const matchesLevel = filterLevel === 'all' || job.seniority_level === filterLevel;
+      return matchesSearch && matchesStatus && matchesArea && matchesWorkMode && matchesLevel;
+    })
+    .sort((a, b) => {
+      if (sortBy === 'recent') {
+        return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+      } else if (sortBy === 'oldest') {
+        return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+      } else if (sortBy === 'candidates') {
+        return (b.candidates || 0) - (a.candidates || 0);
+      }
+      return 0;
+    });
 
   const stats = {
     total: jobs.length,
@@ -197,6 +213,39 @@ export default function MyJobsPage() {
               <option value="Consultoria & ERP">Consultoria & ERP</option>
               <option value="Suporte & Infraestrutura">Suporte & Infraestrutura</option>
               <option value="Gestão & Liderança">Gestão & Liderança</option>
+            </select>
+
+            <select
+              value={filterWorkMode}
+              onChange={(e) => setFilterWorkMode(e.target.value)}
+              className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F7941D] focus:border-transparent"
+            >
+              <option value="all">Todas Modalidades</option>
+              <option value="presencial">Presencial</option>
+              <option value="remoto">Remoto</option>
+              <option value="híbrido">Híbrido</option>
+            </select>
+
+            <select
+              value={filterLevel}
+              onChange={(e) => setFilterLevel(e.target.value)}
+              className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F7941D] focus:border-transparent"
+            >
+              <option value="all">Todos os Níveis</option>
+              <option value="junior">Júnior</option>
+              <option value="pleno">Pleno</option>
+              <option value="senior">Sênior</option>
+              <option value="especialista">Especialista</option>
+            </select>
+
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F7941D] focus:border-transparent"
+            >
+              <option value="recent">Mais Recentes</option>
+              <option value="oldest">Mais Antigas</option>
+              <option value="candidates">Mais Candidatos</option>
             </select>
 
             {/* New Job Button */}
