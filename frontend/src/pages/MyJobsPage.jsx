@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Search, Edit, Trash2, Pause, Play, Users, Eye, BarChart3, Filter } from 'lucide-react';
+import { jobAPI } from '../services/api';
 
 export default function MyJobsPage() {
   const navigate = useNavigate();
@@ -8,49 +9,64 @@ export default function MyJobsPage() {
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterArea, setFilterArea] = useState('all');
 
-  // Carregar vagas do localStorage
+  // Carregar vagas da API
   const [jobs, setJobs] = useState([]);
+  const [loading, setLoading] = useState(true);
   
   useEffect(() => {
-    const loadJobs = () => {
-      const storedJobs = JSON.parse(localStorage.getItem('jobs') || '[]');
-      // Converter status para formato usado no filtro
-      const formattedJobs = storedJobs.map(job => ({
+    loadJobs();
+  }, []);
+
+  const loadJobs = async () => {
+    try {
+      setLoading(true);
+      const response = await jobAPI.getByCompany();
+      // Formatar dados para o frontend
+      const formattedJobs = response.map(job => ({
         ...job,
-        status: job.status === 'Ativa' ? 'active' : 'paused',
-        salary: job.salaryMin && job.salaryMax ? `R$ ${job.salaryMin} - R$ ${job.salaryMax}` : 'A combinar',
+        status: job.is_active ? 'active' : 'paused',
+        salary: job.min_salary && job.max_salary ? `R$ ${job.min_salary} - R$ ${job.max_salary}` : 'A combinar',
         location: job.city && job.state ? `${job.city}, ${job.state}` : job.city || 'Remoto',
-        workMode: job.workMode || 'Remoto'
+        workMode: job.work_modality || 'Remoto',
+        candidates: 0 // TODO: Buscar número real de candidaturas
       }));
       setJobs(formattedJobs);
-    };
-    
-    loadJobs();
-    
-    // Atualizar quando voltar para a página
-    window.addEventListener('focus', loadJobs);
-    return () => window.removeEventListener('focus', loadJobs);
-  }, []);
-  
-  const handleDelete = (jobId) => {
-    if (confirm('Tem certeza que deseja excluir esta vaga?')) {
-      const updatedJobs = jobs.filter(job => job.id !== jobId);
-      localStorage.setItem('jobs', JSON.stringify(updatedJobs));
-      setJobs(updatedJobs);
-      alert('Vaga excluída com sucesso!');
+    } catch (error) {
+      console.error('Erro ao carregar vagas:', error);
+      alert('Erro ao carregar vagas. Tente novamente.');
+    } finally {
+      setLoading(false);
     }
   };
   
-  const handleToggleStatus = (jobId) => {
-    const updatedJobs = jobs.map(job => {
-      if (job.id === jobId) {
-        const newStatus = job.status === 'active' ? 'paused' : 'active';
-        return { ...job, status: newStatus };
+  const handleDelete = async (jobId) => {
+    if (confirm('Tem certeza que deseja excluir esta vaga?')) {
+      try {
+        await jobAPI.delete(jobId);
+        setJobs(jobs.filter(job => job.id !== jobId));
+        alert('Vaga excluída com sucesso!');
+      } catch (error) {
+        console.error('Erro ao excluir vaga:', error);
+        alert('Erro ao excluir vaga. Tente novamente.');
       }
-      return job;
-    });
-    localStorage.setItem('jobs', JSON.stringify(updatedJobs));
-    setJobs(updatedJobs);
+    }
+  };
+  
+  const handleToggleStatus = async (jobId) => {
+    try {
+      await jobAPI.toggleStatus(jobId);
+      const updatedJobs = jobs.map(job => {
+        if (job.id === jobId) {
+          const newStatus = job.status === 'active' ? 'paused' : 'active';
+          return { ...job, status: newStatus };
+        }
+        return job;
+      });
+      setJobs(updatedJobs);
+    } catch (error) {
+      console.error('Erro ao alterar status da vaga:', error);
+      alert('Erro ao alterar status. Tente novamente.');
+    }
   };
 
   const filteredJobs = jobs.filter(job => {
