@@ -17,6 +17,7 @@ import CompanyDashboardPage from './pages/CompanyDashboardPage'
 import PostJobPage from './pages/PostJobPage'
 import MyJobsPage from './pages/MyJobsPage'
 import AdminDashboard from './pages/admin/AdminDashboard'
+import AdminLoginPage from './pages/admin/AdminLoginPage'
 import AdminTags from './pages/admin/AdminTags'
 import AdminAreas from './pages/admin/AdminAreas'
 import AdminLevels from './pages/admin/AdminLevels'
@@ -61,6 +62,9 @@ function App() {
               <Route path="/candidato/:id" element={<CandidateProfilePage />} />
               <Route path="/buscar-candidatos" element={<CompanySearchPage />} />
               
+              
+              {/* Admin Routes - Public */}
+              <Route path="/admin/login" element={<AdminLoginPage />} />
               {/* Company Routes - Public */}
               <Route path="/empresa/cadastro" element={<CompanyRegisterPage />} />
               <Route path="/empresa/login" element={<CompanyLoginPage />} />

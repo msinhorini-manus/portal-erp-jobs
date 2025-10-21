@@ -12,6 +12,7 @@ from .education import Education
 from .certification import Certification
 from .project import Project
 from .language import Language
+from .admin import Admin
 
 __all__ = [
     'User',
@@ -23,6 +24,7 @@ __all__ = [
     'Education',
     'Certification',
     'Project',
-    'Language'
+    'Language',
+    'Admin'
 ]
 

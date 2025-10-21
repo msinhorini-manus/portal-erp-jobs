@@ -35,6 +35,7 @@ from src.routes.companies import companies_bp
 from src.routes.jobs import jobs_bp
 from src.routes.applications import applications_bp
 from src.routes.resume import resume_bp
+from src.routes.admin import admin_bp
 
 # Initialize Flask app
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
@@ -59,6 +60,7 @@ app.register_blueprint(companies_bp)
 app.register_blueprint(jobs_bp)
 app.register_blueprint(applications_bp)
 app.register_blueprint(resume_bp)
+app.register_blueprint(admin_bp)
 
 # API root endpoint
 @app.route('/api')
