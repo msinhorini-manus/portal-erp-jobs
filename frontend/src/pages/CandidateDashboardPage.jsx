@@ -393,10 +393,10 @@ export default function CandidateDashboardPage() {
                         <div className="flex-1">
                           <h3 className="text-xl font-semibold text-gray-900 mb-2">{job.title}</h3>
                           <div className="flex items-center space-x-4 text-sm text-gray-600 mb-3">
-                            <span>🏢 {job.company || 'Empresa'}</span>
+                            <span>🏢 {job.company_name || 'Empresa'}</span>
                             <span>📍 {job.location}</span>
                             <span>💰 {job.salary}</span>
-                            <span>🕒 {job.type}</span>
+                            <span>🕒 {job.contract_type || job.work_modality}</span>
                           </div>
                           <p className="text-gray-700 mb-3 line-clamp-2">{job.description}</p>
                           <div className="flex flex-wrap gap-2">
@@ -441,7 +441,7 @@ export default function CandidateDashboardPage() {
                         </div>
                       </div>
                       <div className="mt-4 pt-4 border-t border-gray-200 text-sm text-gray-600">
-                        Publicada em: {new Date(job.createdAt || Date.now()).toLocaleDateString('pt-BR')}
+                        Publicada em: {new Date(job.created_at || Date.now()).toLocaleDateString('pt-BR')}
                       </div>
                     </div>
                   );

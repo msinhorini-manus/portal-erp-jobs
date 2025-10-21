@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Plus, Briefcase, Users, Eye, TrendingUp, Edit, Trash2, BarChart3 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -5,20 +6,81 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { useAuth } from '@/contexts/AuthContext'
 
-const mockJobs = [
-  { id: 1, title: 'Desenvolvedor Full Stack', status: 'Ativa', candidates: 45, views: 320, created: '15/09/2025' },
-  { id: 2, title: 'Analista SAP', status: 'Ativa', candidates: 28, views: 185, created: '10/09/2025' },
-  { id: 3, title: 'DevOps Engineer', status: 'Pausada', candidates: 12, views: 95, created: '05/09/2025' },
-]
+const API_URL = import.meta.env.VITE_API_URL || 'https://portal-erp-jobs-production.up.railway.app';
 
 export default function CompanyDashboardPage() {
   const navigate = useNavigate()
-  const { logout } = useAuth()
+  const { user, logout } = useAuth()
+  
+  // Estados para dados reais da API
+  const [stats, setStats] = useState({
+    total_jobs: 0,
+    active_jobs: 0,
+    paused_jobs: 0,
+    total_applications: 0,
+    total_views: 0,
+    conversion_rate: 0,
+    company_name: 'Empresa'
+  });
+  const [recentJobs, setRecentJobs] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('authToken');
+      
+      if (!token) {
+        navigate('/empresa/login');
+        return;
+      }
+
+      // Carregar estatísticas da empresa
+      const statsResponse = await fetch(`${API_URL}/api/stats/company`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (statsResponse.ok) {
+        const statsData = await statsResponse.json();
+        setStats(statsData);
+      }
+
+      // Carregar vagas recentes da empresa
+      const jobsResponse = await fetch(`${API_URL}/api/jobs/company`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (jobsResponse.ok) {
+        const jobsData = await jobsResponse.json();
+        // Pegar apenas as 5 mais recentes
+        const jobs = (jobsData.jobs || []).slice(0, 5);
+        setRecentJobs(jobs);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar dados:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleLogout = () => {
     logout()
     navigate('/')
   }
+
+  const formatDate = (dateString) => {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('pt-BR');
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -59,7 +121,7 @@ export default function CompanyDashboardPage() {
         {/* Welcome Section */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-[#1F3B47] mb-2">
-            Bem-vindo, <span className="text-[#F7941D]">Empresa de Tecnologia</span>!
+            Bem-vindo, <span className="text-[#F7941D]">{loading ? '...' : stats.company_name}</span>!
           </h1>
           <p className="text-gray-600">Gerencie suas vagas e encontre os melhores talentos</p>
         </div>
@@ -71,7 +133,9 @@ export default function CompanyDashboardPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600 font-medium mb-1">Vagas Ativas</p>
-                  <p className="text-3xl font-bold text-[#1F3B47]">12</p>
+                  <p className="text-3xl font-bold text-[#1F3B47]">
+                    {loading ? '...' : stats.active_jobs}
+                  </p>
                 </div>
                 <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
                   <Briefcase className="w-6 h-6 text-blue-600" />
@@ -85,7 +149,9 @@ export default function CompanyDashboardPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600 font-medium mb-1">Candidaturas</p>
-                  <p className="text-3xl font-bold text-[#1F3B47]">85</p>
+                  <p className="text-3xl font-bold text-[#1F3B47]">
+                    {loading ? '...' : stats.total_applications}
+                  </p>
                 </div>
                 <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
                   <Users className="w-6 h-6 text-green-600" />
@@ -99,7 +165,9 @@ export default function CompanyDashboardPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600 font-medium mb-1">Visualizações</p>
-                  <p className="text-3xl font-bold text-[#1F3B47]">600</p>
+                  <p className="text-3xl font-bold text-[#1F3B47]">
+                    {loading ? '...' : stats.total_views}
+                  </p>
                 </div>
                 <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
                   <Eye className="w-6 h-6 text-purple-600" />
@@ -112,8 +180,10 @@ export default function CompanyDashboardPage() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600 font-medium mb-1">Taxa de Conversão</p>
-                  <p className="text-3xl font-bold text-[#1F3B47]">14%</p>
+                  <p className="text-sm text-gray-600 font-medium mb-1">Média Candidaturas/Vaga</p>
+                  <p className="text-3xl font-bold text-[#1F3B47]">
+                    {loading ? '...' : stats.conversion_rate}
+                  </p>
                 </div>
                 <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
                   <TrendingUp className="w-6 h-6 text-orange-600" />
@@ -146,58 +216,89 @@ export default function CompanyDashboardPage() {
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b-2">
-                  <tr>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-[#1F3B47]">Título da Vaga</th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-[#1F3B47]">Status</th>
-                    <th className="px-6 py-4 text-center text-sm font-semibold text-[#1F3B47]">Candidatos</th>
-                    <th className="px-6 py-4 text-center text-sm font-semibold text-[#1F3B47]">Visualizações</th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-[#1F3B47]">Criada em</th>
-                    <th className="px-6 py-4 text-center text-sm font-semibold text-[#1F3B47]">Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {mockJobs.map((job, index) => (
-                    <tr key={job.id} className={`border-b hover:bg-gray-50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
-                      <td className="px-6 py-4">
-                        <Link to={`/empresa/vagas/${job.id}`} className="font-semibold text-[#1F3B47] hover:text-[#F7941D] transition-colors">
-                          {job.title}
-                        </Link>
-                      </td>
-                      <td className="px-6 py-4">
-                        <Badge className={job.status === 'Ativa' ? 'bg-green-500 hover:bg-green-600' : 'bg-yellow-500 hover:bg-yellow-600'}>
-                          {job.status}
-                        </Badge>
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <span className="font-semibold text-[#F7941D]">{job.candidates}</span>
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <span className="text-gray-600">{job.views}</span>
-                      </td>
-                      <td className="px-6 py-4 text-gray-600 text-sm">
-                        {job.created}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center justify-center gap-2">
-                          <Button size="sm" variant="ghost" className="hover:bg-blue-50">
-                            <BarChart3 className="w-4 h-4 text-blue-600" />
-                          </Button>
-                          <Button size="sm" variant="ghost" className="hover:bg-green-50">
-                            <Edit className="w-4 h-4 text-green-600" />
-                          </Button>
-                          <Button size="sm" variant="ghost" className="hover:bg-red-50">
-                            <Trash2 className="w-4 h-4 text-red-600" />
-                          </Button>
-                        </div>
-                      </td>
+            {loading ? (
+              <div className="p-12 text-center">
+                <div className="text-lg text-gray-600">Carregando vagas...</div>
+              </div>
+            ) : recentJobs.length === 0 ? (
+              <div className="p-12 text-center">
+                <Briefcase className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <h3 className="text-xl font-semibold text-gray-700 mb-2">Nenhuma vaga publicada ainda</h3>
+                <p className="text-gray-500 mb-6">Comece publicando sua primeira vaga!</p>
+                <Link to="/empresa/vagas/nova">
+                  <Button className="bg-[#F7941D] hover:bg-[#e8850d] text-white">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Publicar Vaga
+                  </Button>
+                </Link>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b">
+                    <tr>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Vaga</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Status</th>
+                      <th className="px-6 py-4 text-center text-sm font-semibold text-gray-700">Candidatos</th>
+                      <th className="px-6 py-4 text-center text-sm font-semibold text-gray-700">Visualizações</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Criada em</th>
+                      <th className="px-6 py-4 text-center text-sm font-semibold text-gray-700">Ações</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {recentJobs.map((job) => (
+                      <tr key={job.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="font-medium text-gray-900">{job.title}</div>
+                          <div className="text-sm text-gray-500">{job.location}</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          {job.is_active ? (
+                            <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Ativa</Badge>
+                          ) : (
+                            <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">Pausada</Badge>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <Users className="w-4 h-4 text-gray-400" />
+                            <span className="font-semibold text-gray-900">{job.applications_count || 0}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <Eye className="w-4 h-4 text-gray-400" />
+                            <span className="font-semibold text-gray-900">0</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-600">
+                          {formatDate(job.created_at)}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center justify-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                              onClick={() => navigate(`/empresa/vagas/${job.id}/editar`)}
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
