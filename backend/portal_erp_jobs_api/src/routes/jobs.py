@@ -384,7 +384,7 @@ def get_job_applications(job_id):
         if status:
             applications_query = applications_query.filter_by(status=status)
         
-        applications_query = applications_query.order_by(Application.match_percentage.desc(), Application.applied_at.desc())
+        applications_query = applications_query.order_by(Application.applied_at.desc())
         
         pagination = applications_query.paginate(page=page, per_page=per_page, error_out=False)
         
