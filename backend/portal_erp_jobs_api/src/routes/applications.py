@@ -52,16 +52,11 @@ def apply_to_job():
         if existing_application:
             return jsonify({'error': 'Você já se candidatou a esta vaga'}), 409
         
-        # Calcular match percentage (simplificado - pode ser melhorado)
-        match_percentage = calculate_match_percentage(candidate, job)
-        
         # Criar candidatura
         new_application = Application(
             job_id=job_id,
             candidate_id=candidate.id,
-            status='pending',
-            cover_letter=data.get('cover_letter', ''),
-            match_percentage=match_percentage
+            status='applied'
         )
         
         db.session.add(new_application)
