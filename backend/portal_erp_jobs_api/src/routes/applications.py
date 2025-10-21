@@ -40,7 +40,7 @@ def apply_to_job():
         job = Job.query.get(job_id)
         if not job:
             return jsonify({'error': 'Vaga não encontrada'}), 404
-        if job.status != 'active':
+        if not job.is_active:
             return jsonify({'error': 'Esta vaga não está mais ativa'}), 400
         
         # Verificar se já se candidatou
