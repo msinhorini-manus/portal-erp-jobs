@@ -27,7 +27,7 @@ def get_all_jobs():
         per_page = request.args.get('per_page', 20, type=int)
         
         # Construir query - apenas vagas ativas
-        jobs_query = Job.query.filter_by(status='active')
+        jobs_query = Job.query.filter_by(is_active=True)
         
         # Filtro de texto (título ou descrição)
         if query:
@@ -217,8 +217,11 @@ def update_job(job_id):
             job.salary_min = data['salary_min']
         if 'salary_max' in data:
             job.salary_max = data['salary_max']
+        if 'is_active' in data:
+            job.is_active = data['is_active']
         if 'status' in data:
-            job.status = data['status']
+            # Compatibilidade: converter status string para is_active boolean
+            job.is_active = data['status'] in ['active', 'Active', True]
         
         job.updated_at = datetime.utcnow()
         
@@ -299,7 +302,9 @@ def get_my_company_jobs():
         jobs_query = Job.query.filter_by(company_id=company.id)
         
         if status:
-            jobs_query = jobs_query.filter_by(status=status)
+            # Converter status string para is_active boolean
+            is_active = status in ['active', 'Active', True, 'true', '1']
+            jobs_query = jobs_query.filter_by(is_active=is_active)
         
         jobs_query = jobs_query.order_by(Job.created_at.desc())
         
