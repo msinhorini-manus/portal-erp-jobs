@@ -30,6 +30,11 @@ export default function CandidateDashboardPage() {
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [candidateData, setCandidateData] = useState(null);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [profileFormData, setProfileFormData] = useState({
+    name: '',
+    phone: ''
+  });
 
   useEffect(() => {
     loadData();
@@ -99,9 +104,61 @@ export default function CandidateDashboardPage() {
       if (response.ok) {
         const data = await response.json();
         setCandidateData(data);
+        setProfileFormData({
+          name: user?.name || '',
+          phone: data?.phone || ''
+        });
       }
     } catch (error) {
       console.error('Erro ao carregar dados do candidato:', error);
+    }
+  };
+
+  const handleEditProfile = () => {
+    setIsEditingProfile(true);
+    setProfileFormData({
+      name: user?.name || '',
+      phone: candidateData?.phone || ''
+    });
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditingProfile(false);
+    setProfileFormData({
+      name: user?.name || '',
+      phone: candidateData?.phone || ''
+    });
+  };
+
+  const handleSaveProfile = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      if (!token) return;
+
+      const response = await fetch('https://portal-erp-jobs-production.up.railway.app/api/candidates/me', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          phone: profileFormData.phone
+        })
+      });
+
+      if (response.ok) {
+        setSuccessMessage('✅ Perfil atualizado com sucesso!');
+        setTimeout(() => setSuccessMessage(''), 3000);
+        setIsEditingProfile(false);
+        await loadCandidateData();
+      } else {
+        setErrorMessage('❌ Erro ao atualizar perfil. Tente novamente.');
+        setTimeout(() => setErrorMessage(''), 3000);
+      }
+    } catch (error) {
+      console.error('Erro ao salvar perfil:', error);
+      setErrorMessage('❌ Erro ao atualizar perfil. Tente novamente.');
+      setTimeout(() => setErrorMessage(''), 3000);
     }
   };
 
@@ -680,15 +737,38 @@ export default function CandidateDashboardPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Telefone</label>
                   <input
                     type="tel"
-                    value={candidateData?.phone || ''}
-                    disabled
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50"
+                    value={isEditingProfile ? profileFormData.phone : (candidateData?.phone || '')}
+                    onChange={(e) => setProfileFormData({...profileFormData, phone: e.target.value})}
+                    disabled={!isEditingProfile}
+                    className={`w-full px-4 py-2 border border-gray-300 rounded-lg ${
+                      isEditingProfile ? 'bg-white' : 'bg-gray-50'
+                    }`}
                   />
                 </div>
-                <div className="pt-4">
-                  <button className="px-6 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition">
-                    Editar Perfil
-                  </button>
+                <div className="pt-4 flex gap-3">
+                  {!isEditingProfile ? (
+                    <button 
+                      onClick={handleEditProfile}
+                      className="px-6 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition"
+                    >
+                      Editar Perfil
+                    </button>
+                  ) : (
+                    <>
+                      <button 
+                        onClick={handleSaveProfile}
+                        className="px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition"
+                      >
+                        Salvar
+                      </button>
+                      <button 
+                        onClick={handleCancelEdit}
+                        className="px-6 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition"
+                      >
+                        Cancelar
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
