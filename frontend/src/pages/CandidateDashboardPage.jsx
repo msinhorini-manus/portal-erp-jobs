@@ -98,7 +98,7 @@ export default function CandidateDashboardPage() {
       const token = localStorage.getItem('authToken');
       if (!token) return;
       
-      const response = await fetch('https://portal-erp-jobs-production.up.railway.app/api/candidates/me', {
+      const response = await fetch('https://portal-erp-jobs-production.up.railway.app/api/candidates/profile', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
@@ -135,7 +135,7 @@ export default function CandidateDashboardPage() {
       const token = localStorage.getItem('authToken');
       if (!token) return;
 
-      const response = await fetch('https://portal-erp-jobs-production.up.railway.app/api/candidates/me', {
+      const response = await fetch('https://portal-erp-jobs-production.up.railway.app/api/candidates/profile', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
