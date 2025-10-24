@@ -29,10 +29,12 @@ export default function CandidateDashboardPage() {
   const [applyingJobId, setApplyingJobId] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [candidateData, setCandidateData] = useState(null);
 
   useEffect(() => {
     loadData();
     loadResume();
+    loadCandidateData();
   }, []);
 
   const loadData = async () => {
@@ -83,6 +85,23 @@ export default function CandidateDashboardPage() {
       console.error('Erro ao carregar currículo:', error);
     } finally {
       setLoadingResume(false);
+    }
+  };
+
+  const loadCandidateData = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      if (!token) return;
+      
+      const response = await fetch('https://portal-erp-jobs-production.up.railway.app/api/candidates/me', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setCandidateData(data);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar dados do candidato:', error);
     }
   };
 
@@ -661,7 +680,7 @@ export default function CandidateDashboardPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Telefone</label>
                   <input
                     type="tel"
-                    value={user?.phone || ''}
+                    value={candidateData?.phone || ''}
                     disabled
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50"
                   />
