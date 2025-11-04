@@ -280,10 +280,10 @@ export default function CompanyRegisterPage() {
   const t = translations[language]
 
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
+    setFormData(prevFormData => ({
+      ...prevFormData,
       [e.target.name]: e.target.value
-    })
+    }))
   }
 
   const handleNext = () => {
