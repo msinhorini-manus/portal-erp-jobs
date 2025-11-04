@@ -3,7 +3,7 @@
  * Handles all HTTP requests to the backend
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://5000-impv5j8wkhhpbvjd7fptx-be1b5b70.manusvm.computer/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://portal-erp-jobs-production.up.railway.app/api';
 
 /**
  * Generic fetch wrapper with error handling
