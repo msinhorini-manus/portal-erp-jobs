@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Building2, Mail, Phone, MapPin, Lock, User, CheckCircle, Globe, Briefcase, Users as UsersIcon, FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -279,12 +279,13 @@ export default function CompanyRegisterPage() {
 
   const t = translations[language]
 
-  const handleChange = (e) => {
+  const handleChange = useCallback((e) => {
+    const { name, value } = e.target
     setFormData(prevFormData => ({
       ...prevFormData,
-      [e.target.name]: e.target.value
+      [name]: value
     }))
-  }
+  }, [])
 
   const handleNext = () => {
     if (step < 3) setStep(step + 1)
