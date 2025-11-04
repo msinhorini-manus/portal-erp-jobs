@@ -32,7 +32,7 @@ export default function PortalHeader({ user, onLogout, showNav = true }) {
             </nav>
           )}
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             {user ? (
               <>
                 <div className="text-right">
@@ -50,30 +50,32 @@ export default function PortalHeader({ user, onLogout, showNav = true }) {
               <>
                 <Button 
                   onClick={() => navigate('/empresa/publicar-vaga')}
-                  className="bg-[#F7941D] hover:bg-[#e8850d] text-white text-sm font-bold flex items-center gap-2 shadow-lg"
+                  className="bg-[#F7941D] hover:bg-[#e8850d] text-white text-xs font-semibold flex items-center gap-1.5 shadow-md px-3 py-1.5 h-8"
                 >
-                  <Plus size={18} />
-                  Anunciar Vagas Grátis
+                  <Plus size={14} />
+                  Anunciar Vagas
                 </Button>
                 <Button 
                   onClick={() => navigate("/candidato/cadastro")} 
-                  className="bg-white text-[#1F3B47] hover:bg-gray-100 text-sm font-medium"
+                  className="bg-white text-[#1F3B47] hover:bg-gray-100 text-xs font-medium px-3 py-1.5 h-8"
                 >
-                  Cadastrar CV grátis
+                  Cadastrar CV
                 </Button>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
                   <Button 
                     onClick={() => navigate("/candidato/login")}
                     variant="outline" 
-                    className="border-pink-500 text-pink-500 hover:bg-pink-50 text-sm font-medium"
+                    className="border-pink-500 text-pink-500 hover:bg-pink-50 text-xs font-medium px-3 py-1.5 h-8"
+                    title="Entrar como Profissional"
                   >
-                    👤 Entrar como Profissional
+                    👤 Profissional
                   </Button>
                   <Button 
                     onClick={() => navigate("/empresa/login")}
-                    className="bg-pink-500 text-white hover:bg-pink-600 text-sm font-medium"
+                    className="bg-pink-500 text-white hover:bg-pink-600 text-xs font-medium px-3 py-1.5 h-8"
+                    title="Entrar como Empresa"
                   >
-                    🏢 Entrar como Empresa
+                    🏢 Empresa
                   </Button>
                 </div>
               </>
