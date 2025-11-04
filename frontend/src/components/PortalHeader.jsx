@@ -61,13 +61,21 @@ export default function PortalHeader({ user, onLogout, showNav = true }) {
                 >
                   Cadastrar CV grátis
                 </Button>
-                <Button 
-                  onClick={() => navigate("/candidato/login")}
-                  variant="outline" 
-                  className="border-pink-500 bg-pink-500 text-white hover:bg-pink-600 text-sm font-medium"
-                >
-                  Entrar
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    onClick={() => navigate("/candidato/login")}
+                    variant="outline" 
+                    className="border-pink-500 text-pink-500 hover:bg-pink-50 text-sm font-medium"
+                  >
+                    👤 Entrar como Profissional
+                  </Button>
+                  <Button 
+                    onClick={() => navigate("/empresa/login")}
+                    className="bg-pink-500 text-white hover:bg-pink-600 text-sm font-medium"
+                  >
+                    🏢 Entrar como Empresa
+                  </Button>
+                </div>
               </>
             )}
           </div>

@@ -122,9 +122,21 @@ export default function HomePage() {
               <Button onClick={() => navigate("/candidato/cadastro")} className="bg-white text-[#1F3B47] hover:bg-gray-100 text-sm font-medium">
                 Cadastrar CV grátis
               </Button>
-              <Button variant="outline" className="border-white/30 text-white hover:bg-white/10 text-sm font-medium">
-                Entrar
-              </Button>
+              <div className="flex items-center gap-3">
+                <Button 
+                  onClick={() => navigate("/candidato/login")}
+                  variant="outline" 
+                  className="border-white text-white hover:bg-white/10 text-sm font-medium"
+                >
+                  👤 Entrar como Profissional
+                </Button>
+                <Button 
+                  onClick={() => navigate("/empresa/login")}
+                  className="bg-white text-[#1F3B47] hover:bg-gray-100 text-sm font-medium"
+                >
+                  🏢 Entrar como Empresa
+                </Button>
+              </div>
             </div>
           </div>
         </div>
