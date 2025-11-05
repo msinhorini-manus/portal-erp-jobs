@@ -14,7 +14,7 @@ export default function CompanyRegisterPage() {
   const [language, setLanguage] = useState('pt')
   
   // React Hook Form
-  const { register, handleSubmit, watch, formState: { errors } } = useForm({
+  const { register, handleSubmit, watch, formState: { errors }, getValues } = useForm({
     mode: 'onSubmit',
     shouldUnregister: false,
     defaultValues: {
@@ -127,6 +127,8 @@ export default function CompanyRegisterPage() {
   const t = translations[language]
 
   const handleNext = () => {
+    console.log('➡️ handleNext chamado, step atual:', step)
+    console.log('📊 Valores atuais:', getValues())
     if (step < 3) setStep(step + 1)
   }
 
@@ -135,7 +137,9 @@ export default function CompanyRegisterPage() {
   }
 
   const onSubmit = async (data) => {
+    console.log('🎉 onSubmit CHAMADO!')
     console.log('📝 Form submitted with data:', data)
+    console.log('📊 Errors:', errors)
     
     // Validate password match
     if (data.password !== data.confirmPassword) {
