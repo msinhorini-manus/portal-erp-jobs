@@ -34,7 +34,13 @@ export default function PostJobPage() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    console.log('🔧 handleChange chamado:', { name, value });
+    setFormData(prev => {
+      console.log('🔧 Estado anterior:', prev);
+      const newState = { ...prev, [name]: value };
+      console.log('🔧 Novo estado:', newState);
+      return newState;
+    });
   };
 
   const handleNext = () => {
