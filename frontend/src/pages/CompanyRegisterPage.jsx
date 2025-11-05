@@ -15,6 +15,8 @@ export default function CompanyRegisterPage() {
   
   // React Hook Form
   const { register, handleSubmit, watch, formState: { errors } } = useForm({
+    mode: 'onSubmit',
+    shouldUnregister: false,
     defaultValues: {
       // Company Data
       legalName: '',
