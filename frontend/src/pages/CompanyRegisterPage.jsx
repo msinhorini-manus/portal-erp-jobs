@@ -245,7 +245,11 @@ export default function CompanyRegisterPage() {
           </CardHeader>
 
           <CardContent className="p-8">
-            <form onSubmit={handleSubmit(onSubmit)}>
+            <form onSubmit={handleSubmit(onSubmit, (errors) => {
+              console.log('❌ ERROS DE VALIDAÇÃO:', errors)
+              console.log('❌ Campos com erro:', Object.keys(errors))
+              toast.error('Há campos obrigatórios não preenchidos')
+            })}>
               {/* Step 1: Company Data */}
               {step === 1 && (
                 <div className="space-y-6">
