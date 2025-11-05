@@ -25,10 +25,16 @@ export default function ResumeBuilderPage() {
   useEffect(() => {
     const loadResume = async () => {
       try {
-        const token = localStorage.getItem('token')
-        if (!token) return
+        const token = localStorage.getItem('authToken')
+        console.log('🔍 loadResume: Token exists?', !!token)
+        if (!token) {
+          console.log('❌ loadResume: No token found')
+          return
+        }
 
+        console.log('📥 loadResume: Fetching resume data...')
         const data = await resumeAPI.get()
+        console.log('✅ loadResume: Data received:', data)
         if (data && data.candidate) {
           const candidate = data.candidate
           const fullName = `${candidate.first_name || ''} ${candidate.last_name || ''}`.trim()
@@ -53,9 +59,12 @@ export default function ResumeBuilderPage() {
             projects: data.projects || [],
             languages: data.languages || []
           })
+          console.log('✅ loadResume: Resume state updated successfully')
+        } else {
+          console.log('⚠️ loadResume: No candidate data found in response')
         }
       } catch (error) {
-        console.error('Erro ao carregar currículo:', error)
+        console.error('❌ loadResume: Error loading resume:', error)
       }
     }
 
