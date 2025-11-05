@@ -5,6 +5,14 @@ import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas'
 import { resumeAPI } from '../services/api'
 
+// Mapeamento de níveis de proficiência
+const PROFICIENCY_MAPPING = {
+  "Básico": 1,
+  "Intermediário": 2,
+  "Avançado": 3,
+  "Expert": 4
+}
+
 export default function ResumeBuilderPage() {
   const navigate = useNavigate()
   const [showPreview, setShowPreview] = useState(true)
@@ -353,7 +361,7 @@ export default function ResumeBuilderPage() {
         if (!skill.backend_id) {
           await resumeAPI.addSkill({
             name: skill.name,
-            proficiency_level: skill.level
+            proficiency_level: PROFICIENCY_MAPPING[skill.level] || 2
           })
         }
       }
