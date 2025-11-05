@@ -6,8 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useAuth } from '@/contexts/AuthContext'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+import { jobAPI, applicationAPI } from '@/services/api'
 
 export default function JobDetailPage() {
   const { id } = useParams()
@@ -33,13 +32,7 @@ export default function JobDetailPage() {
       setLoading(true)
       setError(null)
       
-      const response = await fetch(`${API_URL}/api/jobs/${id}`)
-      
-      if (!response.ok) {
-        throw new Error('Vaga não encontrada')
-      }
-      
-      const data = await response.json()
+      const data = await jobAPI.getById(id)
       setJob(data)
     } catch (err) {
       console.error('Erro ao carregar vaga:', err)
