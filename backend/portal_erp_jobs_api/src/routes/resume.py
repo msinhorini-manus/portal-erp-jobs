@@ -20,6 +20,20 @@ resume_bp = Blueprint('resume', __name__, url_prefix='/api/resume')
 
 # ==================== HELPER FUNCTIONS ====================
 
+# Proficiency level mapping
+PROFICIENCY_MAPPING = {
+    'Básico': 1,
+    'Intermediário': 2,
+    'Avançado': 3,
+    'Expert': 4,
+    'basico': 1,
+    'intermediario': 2,
+    'intermediário': 2,
+    'avancado': 3,
+    'avançado': 3,
+    'expert': 4
+}
+
 def get_authenticated_candidate():
     """Get authenticated candidate or return error response"""
     current_user_id = int(get_jwt_identity())
@@ -334,10 +348,15 @@ def create_skill():
             db.session.add(skill)
             db.session.flush()
         
+        # Map proficiency level from text to integer
+        proficiency = data.get('proficiency_level', 3)
+        if isinstance(proficiency, str):
+            proficiency = PROFICIENCY_MAPPING.get(proficiency, 3)
+        
         new_skill = CandidateSkill(
             candidate_id=candidate.id,
             skill_id=skill.id,
-            proficiency_level=data.get('proficiency_level', 3)
+            proficiency_level=proficiency
         )
         
         db.session.add(new_skill)
@@ -369,7 +388,10 @@ def update_skill(skill_id):
         data = request.get_json()
         
         if 'proficiency_level' in data:
-            skill.proficiency_level = data['proficiency_level']
+            proficiency = data['proficiency_level']
+            if isinstance(proficiency, str):
+                proficiency = PROFICIENCY_MAPPING.get(proficiency, 3)
+            skill.proficiency_level = proficiency
         
         db.session.commit()
         
@@ -878,4 +900,39 @@ def update_complete_resume():
             error_details['message'] = 'Erro no formato dos dados'
         
         return jsonify(error_details), 422
+
+
+
+
+# ==================== GET RESUME ROOT ====================
+
+@resume_bp.route('/', methods=['GET'])
+@jwt_required()
+def get_resume_root():
+    """Get complete resume data for authenticated candidate"""
+    try:
+        candidate, error_response, status_code = get_authenticated_candidate()
+        if error_response:
+            return error_response, status_code
+        
+        # Get all resume components
+        experiences = Experience.query.filter_by(candidate_id=candidate.id).order_by(Experience.start_date.desc()).all()
+        educations = Education.query.filter_by(candidate_id=candidate.id).order_by(Education.start_date.desc()).all()
+        skills = CandidateSkill.query.filter_by(candidate_id=candidate.id).all()
+        certifications = Certification.query.filter_by(candidate_id=candidate.id).order_by(Certification.issue_date.desc()).all()
+        projects = Project.query.filter_by(candidate_id=candidate.id).order_by(Project.start_date.desc()).all()
+        languages = Language.query.filter_by(candidate_id=candidate.id).all()
+        
+        return jsonify({
+            'candidate': candidate.to_dict(),
+            'experiences': [exp.to_dict() for exp in experiences],
+            'educations': [edu.to_dict() for edu in educations],
+            'skills': [skill.to_dict() for skill in skills],
+            'certifications': [cert.to_dict() for cert in certifications],
+            'projects': [proj.to_dict() for proj in projects],
+            'languages': [lang.to_dict() for lang in languages]
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
