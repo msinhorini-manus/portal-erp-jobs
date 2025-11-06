@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -18,11 +17,18 @@ export default function CandidatePublicProfilePage() {
   const loadCandidateProfile = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`${API_URL}/candidates/${id}/profile`);
-      setCandidate(response.data);
+      const response = await fetch(`${API_URL}/candidates/${id}/profile`);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Erro ao carregar perfil');
+      }
+      
+      const data = await response.json();
+      setCandidate(data);
     } catch (err) {
       console.error('Error loading candidate profile:', err);
-      setError(err.response?.data?.message || 'Erro ao carregar perfil');
+      setError(err.message || 'Erro ao carregar perfil');
     } finally {
       setLoading(false);
     }
