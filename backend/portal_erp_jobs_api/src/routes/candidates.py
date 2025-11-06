@@ -211,3 +211,51 @@ def get_candidate_by_id(candidate_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
+
+@candidates_bp.route('/<int:candidate_id>/profile', methods=['GET'])
+def get_candidate_public_profile(candidate_id):
+    """
+    Obter perfil público do candidato (para visualização por empresas)
+    Respeita a configuração de privacidade (curriculo_publico)
+    """
+    try:
+        # Buscar candidato
+        candidate = Candidate.query.get(candidate_id)
+        
+        if not candidate:
+            return jsonify({'error': 'Candidato não encontrado'}), 404
+        
+        # Verificar se o currículo é público
+        # Se não for público, só permite acesso se for uma empresa autenticada
+        # ou se o candidato se candidatou a uma vaga da empresa
+        if not candidate.curriculo_publico:
+            # TODO: Implementar lógica para verificar se a empresa tem acesso
+            # (ex: candidato se candidatou a uma vaga da empresa)
+            return jsonify({'error': 'Este perfil é privado'}), 403
+        
+        # Buscar dados relacionados
+        user = User.query.get(candidate.user_id)
+        experiences = Experience.query.filter_by(candidate_id=candidate.id).order_by(Experience.start_date.desc()).all()
+        educations = Education.query.filter_by(candidate_id=candidate.id).order_by(Education.start_date.desc()).all()
+        skills = CandidateSkill.query.filter_by(candidate_id=candidate.id).all()
+        
+        # Montar resposta completa
+        profile_data = candidate.to_dict(include_details=False)
+        profile_data['email'] = user.email if user else None
+        profile_data['experiences'] = [exp.to_dict() for exp in experiences]
+        profile_data['educations'] = [edu.to_dict() for edu in educations]
+        profile_data['skills'] = [skill.to_dict() for skill in skills]
+        profile_data['professional_summary'] = candidate.professional_summary
+        
+        # TODO: Adicionar certificações, projetos e idiomas quando os modelos existirem
+        profile_data['certifications'] = []
+        profile_data['projects'] = []
+        profile_data['languages'] = []
+        
+        return jsonify(profile_data), 200
+        
+    except Exception as e:
+        print(f"Error getting candidate public profile: {e}")
+        return jsonify({'error': str(e)}), 500
+

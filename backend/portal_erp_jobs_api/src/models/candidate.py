@@ -41,6 +41,7 @@ class Candidate(db.Model):
     # Status
     is_actively_looking = db.Column(db.Boolean, default=True)
     available_immediately = db.Column(db.Boolean, default=True)
+    curriculo_publico = db.Column(db.Boolean, default=False)  # Privacy control: public resume
     
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -71,6 +72,7 @@ class Candidate(db.Model):
             'portfolio_url': self.portfolio_url,
             'is_actively_looking': self.is_actively_looking,
             'available_immediately': self.available_immediately,
+            'curriculo_publico': self.curriculo_publico,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }

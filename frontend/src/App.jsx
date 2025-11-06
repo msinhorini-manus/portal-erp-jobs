@@ -29,6 +29,7 @@ import ResumeBuilderPage from './pages/ResumeBuilderPage'
 import CandidateRegisterPage from './pages/CandidateRegisterPage'
 import CandidateLoginPage from './pages/CandidateLoginPage'
 import CandidateDashboardPage from './pages/CandidateDashboardPage'
+import CandidatePublicProfilePage from './pages/CandidatePublicProfilePage'
 import CompaniesPage from './pages/CompaniesPage'
 import AreasPage from './pages/AreasPage'
 import TechnologiesPage from './pages/TechnologiesPage'
@@ -60,6 +61,7 @@ function App() {
               <Route path="/conteudo/:id" element={<ArticlePage />} />
               <Route path="/vagas/:id" element={<JobDetailPage />} />
               <Route path="/candidato/:id" element={<CandidateProfilePage />} />
+              <Route path="/candidato/perfil/:id" element={<CandidatePublicProfilePage />} />
               <Route path="/buscar-candidatos" element={<CompanySearchPage />} />
               
               
