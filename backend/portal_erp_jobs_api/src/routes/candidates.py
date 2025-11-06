@@ -259,3 +259,68 @@ def get_candidate_public_profile(candidate_id):
         print(f"Error getting candidate public profile: {e}")
         return jsonify({'error': str(e)}), 500
 
+
+
+@candidates_bp.route('/me/privacy', methods=['PATCH'])
+@jwt_required()
+def update_candidate_privacy():
+    """
+    Atualizar configuração de privacidade do currículo
+    Permite que o candidato torne seu currículo público ou privado
+    """
+    try:
+        # Obter ID do usuário autenticado
+        current_user_id = get_jwt_identity()
+        
+        # Buscar candidato
+        candidate = Candidate.query.filter_by(user_id=current_user_id).first()
+        
+        if not candidate:
+            return jsonify({'error': 'Candidato não encontrado'}), 404
+        
+        # Obter dados da requisição
+        data = request.get_json()
+        curriculo_publico = data.get('curriculo_publico')
+        
+        if curriculo_publico is None:
+            return jsonify({'error': 'Campo curriculo_publico é obrigatório'}), 400
+        
+        # Atualizar privacidade
+        candidate.curriculo_publico = bool(curriculo_publico)
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Configuração de privacidade atualizada com sucesso',
+            'curriculo_publico': candidate.curriculo_publico
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error updating candidate privacy: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@candidates_bp.route('/me/privacy', methods=['GET'])
+@jwt_required()
+def get_candidate_privacy():
+    """
+    Obter configuração de privacidade atual do currículo
+    """
+    try:
+        # Obter ID do usuário autenticado
+        current_user_id = get_jwt_identity()
+        
+        # Buscar candidato
+        candidate = Candidate.query.filter_by(user_id=current_user_id).first()
+        
+        if not candidate:
+            return jsonify({'error': 'Candidato não encontrado'}), 404
+        
+        return jsonify({
+            'curriculo_publico': candidate.curriculo_publico
+        }), 200
+        
+    except Exception as e:
+        print(f"Error getting candidate privacy: {e}")
+        return jsonify({'error': str(e)}), 500
+

@@ -19,6 +19,7 @@ export default function ResumeBuilderPage() {
   const [activeSection, setActiveSection] = useState('personal')
   const [loading, setLoading] = useState(false)
   const [saveMessage, setSaveMessage] = useState('')
+  const [curriculoPublico, setCurriculoPublico] = useState(false)
   const resumePreviewRef = useRef(null)
 
   // Carregar currículo existente
@@ -69,7 +70,61 @@ export default function ResumeBuilderPage() {
     }
 
     loadResume()
+    loadPrivacyStatus()
   }, [])
+
+  // Carregar status de privacidade
+  const loadPrivacyStatus = async () => {
+    try {
+      const token = localStorage.getItem('authToken')
+      if (!token) return
+
+      const response = await fetch('https://portal-erp-jobs-production.up.railway.app/api/candidates/me/privacy', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setCurriculoPublico(data.curriculo_publico)
+      }
+    } catch (error) {
+      console.error('Error loading privacy status:', error)
+    }
+  }
+
+  // Atualizar status de privacidade
+  const togglePrivacy = async () => {
+    try {
+      const token = localStorage.getItem('authToken')
+      if (!token) {
+        alert('Você precisa estar logado')
+        return
+      }
+
+      const newStatus = !curriculoPublico
+
+      const response = await fetch('https://portal-erp-jobs-production.up.railway.app/api/candidates/me/privacy', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ curriculo_publico: newStatus })
+      })
+
+      if (response.ok) {
+        setCurriculoPublico(newStatus)
+        alert(newStatus ? 'Seu currículo agora é público!' : 'Seu currículo agora é privado!')
+      } else {
+        alert('Erro ao atualizar privacidade')
+      }
+    } catch (error) {
+      console.error('Error toggling privacy:', error)
+      alert('Erro ao atualizar privacidade')
+    }
+  }
 
   // Estado do currículo
   const [resume, setResume] = useState({
@@ -476,6 +531,27 @@ export default function ResumeBuilderPage() {
                 <Download className="w-4 h-4" />
                 Exportar PDF
               </button>
+              
+              {/* Toggle de Privacidade */}
+              <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 rounded-lg border border-gray-200">
+                <span className="text-sm text-gray-700 font-medium">
+                  {curriculoPublico ? '🌐 Público' : '🔒 Privado'}
+                </span>
+                <button
+                  onClick={togglePrivacy}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    curriculoPublico ? 'bg-green-600' : 'bg-gray-300'
+                  }`}
+                  title={curriculoPublico ? 'Clique para tornar privado' : 'Clique para tornar público'}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      curriculoPublico ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+
               <button
                 onClick={handleSave}
                 className="flex items-center gap-2 px-4 py-2 text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
