@@ -30,7 +30,7 @@ export default function JobSearchPage() {
     const fetchJobs = async () => {
       try {
         setLoading(true)
-        const response = await fetch(`${API_URL}/api/jobs`)
+        const response = await fetch(`${API_URL}/api/jobs/`)
         
         if (!response.ok) {
           throw new Error('Erro ao carregar vagas')
@@ -39,23 +39,24 @@ export default function JobSearchPage() {
         const data = await response.json()
         
         // Transformar dados da API para o formato esperado
-        const transformedJobs = data.map(job => ({
+        const jobsArray = data.jobs || data
+        const transformedJobs = jobsArray.map(job => ({
           id: job.id,
           title: job.title,
-          company: job.company?.name || 'Empresa não informada',
-          location: `${job.city || ''}, ${job.state || ''}`.trim(),
+          company: job.company_name || 'Empresa não informada',
+          location: job.location || `${job.city || ''}, ${job.state || ''}`.trim(),
           match: 85, // TODO: Calcular match real baseado no perfil do candidato
-          level: job.level || 'Não especificado',
-          salary: job.salary_min && job.salary_max 
-            ? `R$ ${job.salary_min.toLocaleString()} - ${job.salary_max.toLocaleString()}`
-            : 'A combinar',
-          salaryMin: job.salary_min || 0,
-          salaryMax: job.salary_max || 0,
-          tags: job.technologies?.map(t => t.name) || [],
-          type: job.level || 'Não especificado',
+          level: job.seniority_level || 'Não especificado',
+          salary: job.salary || (job.min_salary && job.max_salary 
+            ? `R$ ${job.min_salary.toLocaleString()} - ${job.max_salary.toLocaleString()}`
+            : 'A combinar'),
+          salaryMin: job.min_salary || 0,
+          salaryMax: job.max_salary || 0,
+          tags: job.skills?.map(s => s.name || s) || [],
+          type: job.seniority_level || 'Não especificado',
           contractType: job.contract_type || 'Não especificado',
           date: job.created_at || new Date().toISOString(),
-          modality: job.modality || 'Não especificado'
+          modality: job.work_modality || 'Não especificado'
         }))
         
         setJobs(transformedJobs)
