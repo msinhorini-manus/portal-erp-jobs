@@ -116,6 +116,32 @@ def api_root():
 #             }), 200
 
 
+# Apply database migrations
+def apply_migrations():
+    """Apply pending database migrations"""
+    try:
+        # Add curriculo_publico column if it doesn't exist
+        with db.engine.connect() as conn:
+            # Check if column exists
+            result = conn.execute(db.text("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name='candidates' AND column_name='curriculo_publico'
+            """))
+            
+            if result.fetchone() is None:
+                # Column doesn't exist, create it
+                conn.execute(db.text("""
+                    ALTER TABLE candidates 
+                    ADD COLUMN curriculo_publico BOOLEAN DEFAULT FALSE
+                """))
+                conn.commit()
+                print("✅ Migration applied: Added curriculo_publico column to candidates table")
+            else:
+                print("ℹ️  Column curriculo_publico already exists")
+    except Exception as e:
+        print(f"⚠️  Migration error: {e}")
+
 # Create tables on first request
 @app.before_request
 def create_tables():
@@ -123,6 +149,7 @@ def create_tables():
     if not hasattr(app, 'tables_created'):
         with app.app_context():
             db.create_all()
+            apply_migrations()
             app.tables_created = True
             print("✅ Database tables created successfully!")
 
