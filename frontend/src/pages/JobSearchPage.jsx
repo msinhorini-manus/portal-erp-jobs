@@ -1,17 +1,12 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { MapPin, Building2, Clock, DollarSign, X, Filter } from 'lucide-react'
+import { MapPin, Building2, Clock, DollarSign, X, Filter, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 
-const mockJobs = [
-  { id: 1, title: 'Desenvolvedor ABAP', company: 'Empresa A', location: 'São Paulo, SP', match: 82, level: 'Pleno', salary: 'R$ 8.000 - 10.000', salaryMin: 8000, salaryMax: 10000, tags: ['SAP', 'ABAP', 'Fiori'], type: 'Pleno', contractType: 'CLT', date: '2025-11-01' },
-  { id: 2, title: 'Consultor Funcional SAP', company: 'Empresa B', location: 'São Paulo, SD', match: 84, level: 'Júnior', salary: 'R$ 5.000 - 7.000', salaryMin: 5000, salaryMax: 7000, tags: ['SAP', 'MM', 'SD'], type: 'Júnior', contractType: 'PJ', date: '2025-11-03' },
-  { id: 3, title: 'Analista de Sistemas', company: 'Empresa C', location: 'Rio de Janeiro, RJ', match: 82, level: 'Presencial', salary: 'R$ 4.500 - 6.500', salaryMin: 4500, salaryMax: 6500, tags: ['ERP', 'SQL', 'Python'], type: 'Presencial', contractType: 'CLT', date: '2025-11-02' },
-  { id: 4, title: 'Coordenador de Projetos', company: 'Empresa D', location: 'São Paulo, SP', match: 88, level: 'Sênior', salary: 'R$ 10.000 - 12.000', salaryMin: 10000, salaryMax: 12000, tags: ['SAP', 'ERP', 'PMO'], type: 'Sênior', contractType: 'CLT', date: '2025-11-04' },
-]
+const API_URL = import.meta.env.VITE_API_URL || 'https://portal-erp-jobs-production.up.railway.app'
 
 export default function JobSearchPage() {
   const [filters, setFilters] = useState({
@@ -25,17 +20,72 @@ export default function JobSearchPage() {
   })
 
   const [sortBy, setSortBy] = useState('match') // match, salary, date
-  const [filteredJobs, setFilteredJobs] = useState(mockJobs)
+  const [jobs, setJobs] = useState([])
+  const [filteredJobs, setFilteredJobs] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  // Buscar vagas da API
+  useEffect(() => {
+    const fetchJobs = async () => {
+      try {
+        setLoading(true)
+        const response = await fetch(`${API_URL}/api/jobs`)
+        
+        if (!response.ok) {
+          throw new Error('Erro ao carregar vagas')
+        }
+        
+        const data = await response.json()
+        
+        // Transformar dados da API para o formato esperado
+        const transformedJobs = data.map(job => ({
+          id: job.id,
+          title: job.title,
+          company: job.company?.name || 'Empresa não informada',
+          location: `${job.city || ''}, ${job.state || ''}`.trim(),
+          match: 85, // TODO: Calcular match real baseado no perfil do candidato
+          level: job.level || 'Não especificado',
+          salary: job.salary_min && job.salary_max 
+            ? `R$ ${job.salary_min.toLocaleString()} - ${job.salary_max.toLocaleString()}`
+            : 'A combinar',
+          salaryMin: job.salary_min || 0,
+          salaryMax: job.salary_max || 0,
+          tags: job.technologies?.map(t => t.name) || [],
+          type: job.level || 'Não especificado',
+          contractType: job.contract_type || 'Não especificado',
+          date: job.created_at || new Date().toISOString(),
+          modality: job.modality || 'Não especificado'
+        }))
+        
+        setJobs(transformedJobs)
+        setFilteredJobs(transformedJobs)
+        setError(null)
+      } catch (err) {
+        console.error('Erro ao buscar vagas:', err)
+        setError(err.message)
+        setJobs([])
+        setFilteredJobs([])
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchJobs()
+  }, [])
 
   // Aplicar filtros e ordenação
   useEffect(() => {
-    let result = [...mockJobs]
+    if (jobs.length === 0) return
+
+    let result = [...jobs]
 
     // Filtrar por palavra-chave
     if (filters.keyword) {
       result = result.filter(job => 
         job.title.toLowerCase().includes(filters.keyword.toLowerCase()) ||
-        job.tags.some(tag => tag.toLowerCase().includes(filters.keyword.toLowerCase()))
+        job.tags.some(tag => tag.toLowerCase().includes(filters.keyword.toLowerCase())) ||
+        job.company.toLowerCase().includes(filters.keyword.toLowerCase())
       )
     }
 
@@ -46,7 +96,7 @@ export default function JobSearchPage() {
       )
     }
 
-    // Filtrar por área (mock - não implementado ainda)
+    // Filtrar por área (TODO: implementar quando houver campo de área no backend)
     if (filters.area !== 'Todas') {
       // result = result.filter(job => job.area === filters.area)
     }
@@ -56,15 +106,15 @@ export default function JobSearchPage() {
       result = result.filter(job => job.level === filters.level)
     }
 
-    // Filtrar por modalidade (mock - não implementado ainda)
+    // Filtrar por modalidade
     if (filters.modality !== 'Todas') {
-      // result = result.filter(job => job.modality === filters.modality)
+      result = result.filter(job => job.modality === filters.modality)
     }
 
     // Filtrar por faixa salarial
     if (filters.salary !== 'Todas') {
       if (filters.salary === 'Até R$ 5.000') {
-        result = result.filter(job => job.salaryMax <= 5000)
+        result = result.filter(job => job.salaryMax <= 5000 && job.salaryMax > 0)
       } else if (filters.salary === 'R$ 5.000 - R$ 8.000') {
         result = result.filter(job => job.salaryMin >= 5000 && job.salaryMax <= 8000)
       } else if (filters.salary === 'R$ 8.000 - R$ 12.000') {
@@ -89,7 +139,7 @@ export default function JobSearchPage() {
     }
 
     setFilteredJobs(result)
-  }, [filters, sortBy])
+  }, [filters, sortBy, jobs])
 
   const handleFilterChange = (key, value) => {
     setFilters(prev => ({ ...prev, [key]: value }))
@@ -281,9 +331,13 @@ export default function JobSearchPage() {
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h1 className="text-3xl font-bold text-[#1F3B47] mb-2">PESQUISA DE VAGAS</h1>
-                  <p className="text-gray-600">
-                    Encontradas <span className="font-bold text-[#F7941D]">{filteredJobs.length} {filteredJobs.length === 1 ? 'vaga' : 'vagas'}</span>
-                  </p>
+                  {loading ? (
+                    <p className="text-gray-600">Carregando vagas...</p>
+                  ) : (
+                    <p className="text-gray-600">
+                      Encontradas <span className="font-bold text-[#F7941D]">{filteredJobs.length} {filteredJobs.length === 1 ? 'vaga' : 'vagas'}</span>
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-center gap-3">
                   <label className="text-sm font-semibold text-[#1F3B47]">Ordenar por:</label>
@@ -325,7 +379,22 @@ export default function JobSearchPage() {
               )}
             </div>
 
-            {filteredJobs.length === 0 ? (
+            {loading ? (
+              <Card className="p-8 text-center">
+                <Loader2 className="w-12 h-12 animate-spin text-[#F7941D] mx-auto mb-4" />
+                <p className="text-gray-600 text-lg">Carregando vagas...</p>
+              </Card>
+            ) : error ? (
+              <Card className="p-8 text-center">
+                <p className="text-red-600 text-lg mb-4">❌ {error}</p>
+                <Button 
+                  className="bg-[#F7941D] hover:bg-[#e8850d] text-white"
+                  onClick={() => window.location.reload()}
+                >
+                  Tentar Novamente
+                </Button>
+              </Card>
+            ) : filteredJobs.length === 0 ? (
               <Card className="p-8 text-center">
                 <p className="text-gray-600 text-lg">Nenhuma vaga encontrada com os filtros selecionados.</p>
                 <Button 
@@ -355,20 +424,24 @@ export default function JobSearchPage() {
                                 <MapPin className="w-4 h-4" />
                                 {job.location}
                               </span>
-                              <Badge variant="outline" className="font-semibold">
-                                {job.contractType}
-                              </Badge>
-                            </div>
-                            <div className="flex flex-wrap gap-2 mb-4">
-                              {job.tags.map((tag, idx) => (
-                                <Badge 
-                                  key={idx} 
-                                  className="bg-[#F7941D] hover:bg-[#e8850d] text-white font-semibold px-3 py-1"
-                                >
-                                  {tag}
+                              {job.contractType !== 'Não especificado' && (
+                                <Badge variant="outline" className="font-semibold">
+                                  {job.contractType}
                                 </Badge>
-                              ))}
+                              )}
                             </div>
+                            {job.tags.length > 0 && (
+                              <div className="flex flex-wrap gap-2 mb-4">
+                                {job.tags.map((tag, idx) => (
+                                  <Badge 
+                                    key={idx} 
+                                    className="bg-[#F7941D] hover:bg-[#e8850d] text-white font-semibold px-3 py-1"
+                                  >
+                                    {tag}
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
                             <div className="flex items-center gap-6 text-sm">
                               <span className="flex items-center gap-2 text-gray-700 font-medium">
                                 <Clock className="w-4 h-4" />
