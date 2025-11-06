@@ -97,14 +97,20 @@ export default function ResumeBuilderPage() {
   // Atualizar status de privacidade
   const togglePrivacy = async () => {
     try {
+      console.log('🔄 togglePrivacy: Iniciando...')
       const token = localStorage.getItem('authToken')
+      console.log('🔑 togglePrivacy: Token exists?', !!token)
+      
       if (!token) {
+        console.log('❌ togglePrivacy: No token found')
         alert('Você precisa estar logado')
         return
       }
 
       const newStatus = !curriculoPublico
+      console.log('📝 togglePrivacy: Current status:', curriculoPublico, '→ New status:', newStatus)
 
+      console.log('📤 togglePrivacy: Sending PATCH request...')
       const response = await fetch('https://portal-erp-jobs-production.up.railway.app/api/candidates/me/privacy', {
         method: 'PATCH',
         headers: {
@@ -114,14 +120,20 @@ export default function ResumeBuilderPage() {
         body: JSON.stringify({ curriculo_publico: newStatus })
       })
 
+      console.log('📥 togglePrivacy: Response status:', response.status)
+      const responseData = await response.json()
+      console.log('📥 togglePrivacy: Response data:', responseData)
+
       if (response.ok) {
+        console.log('✅ togglePrivacy: Success!')
         setCurriculoPublico(newStatus)
         alert(newStatus ? 'Seu currículo agora é público!' : 'Seu currículo agora é privado!')
       } else {
-        alert('Erro ao atualizar privacidade')
+        console.log('❌ togglePrivacy: Failed with status', response.status)
+        alert(`Erro ao atualizar privacidade: ${responseData.error || 'Erro desconhecido'}`)
       }
     } catch (error) {
-      console.error('Error toggling privacy:', error)
+      console.error('❌ togglePrivacy: Exception caught:', error)
       alert('Erro ao atualizar privacidade')
     }
   }
