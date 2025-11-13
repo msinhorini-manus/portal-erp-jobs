@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_BASE = `${API_URL}/api`;
 
 export default function CandidatePublicProfilePage() {
   const { id } = useParams();
@@ -17,7 +18,7 @@ export default function CandidatePublicProfilePage() {
   const loadCandidateProfile = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_URL}/candidates/${id}/profile`);
+      const response = await fetch(`${API_BASE}/candidates/${id}/profile`);
       
       if (!response.ok) {
         const errorData = await response.json();
