@@ -492,7 +492,7 @@ def login_generic():
             candidate = Candidate.query.filter_by(user_id=user.id).first()
             if candidate:
                 response_data['candidate_id'] = candidate.id
-                response_data['name'] = candidate.full_name
+                response_data['name'] = f"{candidate.first_name} {candidate.last_name}"
                 additional_claims = {'user_type': 'candidate', 'candidate_id': candidate.id}
             else:
                 return jsonify({'error': 'Perfil de candidato não encontrado'}), 404
