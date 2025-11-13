@@ -40,8 +40,9 @@ export default function CompanyLoginPage() {
       if (response.access_token) {
         localStorage.setItem('authToken', response.access_token)
         localStorage.setItem('userType', 'company')
-        localStorage.setItem('userId', response.user.id.toString())
-        localStorage.setItem('companyData', JSON.stringify(response.user))
+        localStorage.setItem('userId', response.user_id.toString())
+        localStorage.setItem('companyId', response.company_id.toString())
+        localStorage.setItem('companyName', response.name)
         
         toast.success('Login realizado com sucesso!');
         
