@@ -447,7 +447,7 @@ export default function ResumeBuilderPage() {
         if (!cert.backend_id) {
           await resumeAPI.addCertification({
             name: cert.name,
-            issuing_organization: cert.organization,
+            issuing_organization: cert.issuer,
             issue_date: cert.date,
             credential_id: cert.credentialId || '',
             credential_url: cert.url || ''
