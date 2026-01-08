@@ -14,7 +14,7 @@ export default function CompanyRegisterPage() {
   const [language, setLanguage] = useState('pt')
   
   // React Hook Form
-  const { register, handleSubmit, watch, formState: { errors }, getValues } = useForm({
+  const { register, handleSubmit, watch, formState: { errors }, getValues, trigger } = useForm({
     mode: 'onSubmit',
     shouldUnregister: false,
     defaultValues: {
@@ -126,10 +126,31 @@ export default function CompanyRegisterPage() {
 
   const t = translations[language]
 
-  const handleNext = () => {
+  // Validação por etapa
+  const handleNext = async () => {
     console.log('➡️ handleNext chamado, step atual:', step)
     console.log('📊 Valores atuais:', getValues())
-    if (step < 3) setStep(step + 1)
+    
+    let fieldsToValidate = []
+    
+    // Definir campos obrigatórios por etapa
+    if (step === 1) {
+      fieldsToValidate = ['legalName', 'taxId', 'sector', 'companySize', 'country', 'state', 'city']
+    } else if (step === 2) {
+      fieldsToValidate = ['responsibleName', 'responsiblePosition', 'responsibleEmail', 'responsiblePhone']
+    }
+    
+    // Validar apenas os campos da etapa atual
+    const isValid = await trigger(fieldsToValidate)
+    
+    console.log('✅ Validação da etapa:', isValid)
+    console.log('❌ Erros:', errors)
+    
+    if (isValid) {
+      setStep(step + 1)
+    } else {
+      toast.error('Preencha todos os campos obrigatórios')
+    }
   }
 
   const handlePrevious = () => {
@@ -264,6 +285,9 @@ export default function CompanyRegisterPage() {
                         placeholder={t.legalNamePlaceholder}
                         className="h-11"
                       />
+                      {errors.legalName && (
+                        <p className="text-red-500 text-xs mt-1">Campo obrigatório</p>
+                      )}
                     </div>
 
                     <div>
@@ -289,6 +313,9 @@ export default function CompanyRegisterPage() {
                         placeholder={t.taxIdPlaceholder}
                         className="h-11"
                       />
+                      {errors.taxId && (
+                        <p className="text-red-500 text-xs mt-1">Campo obrigatório</p>
+                      )}
                     </div>
 
                     <div>
@@ -323,10 +350,9 @@ export default function CompanyRegisterPage() {
                         <option value="retail">{t.sectors.retail}</option>
                         <option value="other">{t.sectors.other}</option>
                       </select>
-                      {/* Debug: Show selected value */}
-                      <p className="text-xs text-gray-500 mt-1">
-                        Selecionado: {watchedSector || 'nenhum'}
-                      </p>
+                      {errors.sector && (
+                        <p className="text-red-500 text-xs mt-1">Campo obrigatório</p>
+                      )}
                     </div>
 
                     <div>
@@ -344,10 +370,9 @@ export default function CompanyRegisterPage() {
                         <option value="large">{t.sizes.large}</option>
                         <option value="enterprise">{t.sizes.enterprise}</option>
                       </select>
-                      {/* Debug: Show selected value */}
-                      <p className="text-xs text-gray-500 mt-1">
-                        Selecionado: {watchedSize || 'nenhum'}
-                      </p>
+                      {errors.companySize && (
+                        <p className="text-red-500 text-xs mt-1">Campo obrigatório</p>
+                      )}
                     </div>
                   </div>
 
@@ -379,10 +404,9 @@ export default function CompanyRegisterPage() {
                         <option value="es">{t.countries.es}</option>
                         <option value="pt">{t.countries.pt}</option>
                       </select>
-                      {/* Debug: Show selected value */}
-                      <p className="text-xs text-gray-500 mt-1">
-                        Selecionado: {watchedCountry || 'nenhum'}
-                      </p>
+                      {errors.country && (
+                        <p className="text-red-500 text-xs mt-1">Campo obrigatório</p>
+                      )}
                     </div>
 
                     <div>
@@ -395,10 +419,14 @@ export default function CompanyRegisterPage() {
                         placeholder={t.statePlaceholder}
                         className="h-11"
                       />
+                      {errors.state && (
+                        <p className="text-red-500 text-xs mt-1">Campo obrigatório</p>
+                      )}
                     </div>
 
                     <div>
-                      <label className="text-sm font-semibold mb-2 block text-[#1F3B47]">
+                      <label className="text-sm font-semibold mb-2 block text-[#1F3B47] flex items-center gap-2">
+                        <MapPin className="w-4 h-4" />
                         {t.city} *
                       </label>
                       <Input
@@ -406,6 +434,9 @@ export default function CompanyRegisterPage() {
                         placeholder={t.cityPlaceholder}
                         className="h-11"
                       />
+                      {errors.city && (
+                        <p className="text-red-500 text-xs mt-1">Campo obrigatório</p>
+                      )}
                     </div>
                   </div>
 
@@ -436,21 +467,25 @@ export default function CompanyRegisterPage() {
               {/* Step 2: Responsible Person */}
               {step === 2 && (
                 <div className="space-y-6">
-                  <div>
-                    <label className="text-sm font-semibold mb-2 block text-[#1F3B47] flex items-center gap-2">
-                      <User className="w-4 h-4" />
-                      {t.responsibleName} *
-                    </label>
-                    <Input
-                      {...register('responsibleName', { required: true })}
-                      placeholder={t.responsibleNamePlaceholder}
-                      className="h-11"
-                    />
-                  </div>
-
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="text-sm font-semibold mb-2 block text-[#1F3B47]">
+                      <label className="text-sm font-semibold mb-2 block text-[#1F3B47] flex items-center gap-2">
+                        <User className="w-4 h-4" />
+                        {t.responsibleName} *
+                      </label>
+                      <Input
+                        {...register('responsibleName', { required: true })}
+                        placeholder={t.responsibleNamePlaceholder}
+                        className="h-11"
+                      />
+                      {errors.responsibleName && (
+                        <p className="text-red-500 text-xs mt-1">Campo obrigatório</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="text-sm font-semibold mb-2 block text-[#1F3B47] flex items-center gap-2">
+                        <Briefcase className="w-4 h-4" />
                         {t.responsiblePosition} *
                       </label>
                       <Input
@@ -458,18 +493,21 @@ export default function CompanyRegisterPage() {
                         placeholder={t.responsiblePositionPlaceholder}
                         className="h-11"
                       />
+                      {errors.responsiblePosition && (
+                        <p className="text-red-500 text-xs mt-1">Campo obrigatório</p>
+                      )}
                     </div>
+                  </div>
 
-                    <div>
-                      <label className="text-sm font-semibold mb-2 block text-[#1F3B47]">
-                        {t.responsibleDepartment}
-                      </label>
-                      <Input
-                        {...register('responsibleDepartment')}
-                        placeholder={t.responsibleDepartmentPlaceholder}
-                        className="h-11"
-                      />
-                    </div>
+                  <div>
+                    <label className="text-sm font-semibold mb-2 block text-[#1F3B47]">
+                      {t.responsibleDepartment}
+                    </label>
+                    <Input
+                      {...register('responsibleDepartment')}
+                      placeholder={t.responsibleDepartmentPlaceholder}
+                      className="h-11"
+                    />
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -479,11 +517,19 @@ export default function CompanyRegisterPage() {
                         {t.responsibleEmail} *
                       </label>
                       <Input
-                        {...register('responsibleEmail', { required: true })}
+                        {...register('responsibleEmail', { 
+                          required: true,
+                          pattern: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i
+                        })}
                         type="email"
                         placeholder={t.responsibleEmailPlaceholder}
                         className="h-11"
                       />
+                      {errors.responsibleEmail && (
+                        <p className="text-red-500 text-xs mt-1">
+                          {errors.responsibleEmail.type === 'required' ? 'Campo obrigatório' : 'Email inválido'}
+                        </p>
+                      )}
                     </div>
 
                     <div>
@@ -493,9 +539,13 @@ export default function CompanyRegisterPage() {
                       </label>
                       <Input
                         {...register('responsiblePhone', { required: true })}
+                        type="tel"
                         placeholder={t.responsiblePhonePlaceholder}
                         className="h-11"
                       />
+                      {errors.responsiblePhone && (
+                        <p className="text-red-500 text-xs mt-1">Campo obrigatório</p>
+                      )}
                     </div>
                   </div>
 
@@ -533,6 +583,11 @@ export default function CompanyRegisterPage() {
                       placeholder={t.passwordPlaceholder}
                       className="h-11"
                     />
+                    {errors.password && (
+                      <p className="text-red-500 text-xs mt-1">
+                        {errors.password.type === 'required' ? 'Campo obrigatório' : 'Mínimo 8 caracteres'}
+                      </p>
+                    )}
                   </div>
 
                   <div>
@@ -546,6 +601,11 @@ export default function CompanyRegisterPage() {
                       placeholder={t.confirmPasswordPlaceholder}
                       className="h-11"
                     />
+                    {errors.confirmPassword && (
+                      <p className="text-red-500 text-xs mt-1">
+                        {errors.confirmPassword.type === 'required' ? 'Campo obrigatório' : 'Mínimo 8 caracteres'}
+                      </p>
+                    )}
                   </div>
 
                   <div className="flex justify-between">
@@ -586,4 +646,3 @@ export default function CompanyRegisterPage() {
     </div>
   )
 }
-
