@@ -15,8 +15,9 @@ export default function CompanyRegisterPage() {
   
   // React Hook Form
   const { register, handleSubmit, watch, formState: { errors }, getValues, trigger } = useForm({
-    mode: 'onSubmit',
+    mode: 'onChange',
     shouldUnregister: false,
+    reValidateMode: 'onChange',
     defaultValues: {
       // Company Data
       legalName: '',
@@ -266,11 +267,24 @@ export default function CompanyRegisterPage() {
           </CardHeader>
 
           <CardContent className="p-8">
-            <form onSubmit={handleSubmit(onSubmit, (errors) => {
-              console.log('❌ ERROS DE VALIDAÇÃO:', errors)
-              console.log('❌ Campos com erro:', Object.keys(errors))
-              toast.error('Há campos obrigatórios não preenchidos')
-            })}>
+            <form onSubmit={(e) => {
+              e.preventDefault()
+              // Apenas validar campos da etapa 3 antes de submeter
+              if (step === 3) {
+                const password = getValues('password')
+                const confirmPassword = getValues('confirmPassword')
+                if (!password || !confirmPassword) {
+                  toast.error('Preencha todos os campos de senha')
+                  return
+                }
+                if (password !== confirmPassword) {
+                  toast.error('As senhas não coincidem')
+                  return
+                }
+                // Chamar onSubmit diretamente
+                onSubmit(getValues())
+              }
+            }}>
               {/* Step 1: Company Data */}
               {step === 1 && (
                 <div className="space-y-6">
