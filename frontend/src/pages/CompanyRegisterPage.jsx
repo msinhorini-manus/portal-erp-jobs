@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link, useNavigate } from 'react-router-dom'
-import { Building2, Mail, Phone, MapPin, Lock, User, CheckCircle, Globe, Briefcase, Users as UsersIcon, FileText } from 'lucide-react'
+import { Building2, Mail, Phone, MapPin, Lock, User, CheckCircle, Globe, Briefcase, Users as UsersIcon, FileText, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -12,9 +12,10 @@ export default function CompanyRegisterPage() {
   const navigate = useNavigate()
   const [step, setStep] = useState(1)
   const [language, setLanguage] = useState('pt')
+  const [isSubmitting, setIsSubmitting] = useState(false)
   
   // React Hook Form
-  const { register, handleSubmit, watch, formState: { errors }, getValues, trigger } = useForm({
+  const { register, handleSubmit, watch, formState: { errors }, getValues, trigger, setValue } = useForm({
     mode: 'onChange',
     shouldUnregister: false,
     reValidateMode: 'onChange',
@@ -27,7 +28,7 @@ export default function CompanyRegisterPage() {
       sector: '',
       companySize: '',
       description: '',
-      country: '',
+      country: 'br',
       state: '',
       city: '',
       address: '',
@@ -120,6 +121,7 @@ export default function CompanyRegisterPage() {
       next: 'Próximo',
       previous: 'Voltar',
       createAccount: 'Criar Conta',
+      creating: 'Criando...',
       haveAccount: 'Já tem uma conta?',
       login: 'Fazer login'
     }
@@ -161,7 +163,6 @@ export default function CompanyRegisterPage() {
   const onSubmit = async (data) => {
     console.log('🎉 onSubmit CHAMADO!')
     console.log('📝 Form submitted with data:', data)
-    console.log('📊 Errors:', errors)
     
     // Validate password match
     if (data.password !== data.confirmPassword) {
@@ -169,26 +170,47 @@ export default function CompanyRegisterPage() {
       return
     }
 
+    if (data.password.length < 8) {
+      toast.error('A senha deve ter no mínimo 8 caracteres')
+      return
+    }
+
+    setIsSubmitting(true)
+
     try {
-      // Prepare data for API
+      // Mapear país para nome completo
+      const countryMap = {
+        'br': 'Brasil',
+        'us': 'Estados Unidos',
+        'es': 'Espanha',
+        'pt': 'Portugal'
+      }
+
+      // Prepare data for API - usando os campos que o backend espera
       const companyData = {
+        // Campos de autenticação
+        email: data.responsibleEmail,
+        password: data.password,
+        
+        // Dados da empresa
         legal_name: data.legalName,
-        trade_name: data.tradeName,
+        trade_name: data.tradeName || data.legalName,
         tax_id: data.taxId,
-        website: data.website,
+        website: data.website || '',
         sector: data.sector,
         company_size: data.companySize,
-        description: data.description,
-        country: data.country,
+        description: data.description || '',
+        country: countryMap[data.country] || data.country,
         state: data.state,
         city: data.city,
-        address: data.address,
+        address: data.address || '',
+        
+        // Dados do responsável
+        contact_name: data.responsibleName,
         responsible_name: data.responsibleName,
         responsible_position: data.responsiblePosition,
-        responsible_department: data.responsibleDepartment,
-        email: data.responsibleEmail,
-        phone: data.responsiblePhone,
-        password: data.password
+        responsible_department: data.responsibleDepartment || '',
+        phone: data.responsiblePhone
       }
 
       console.log('🚀 Sending to API:', companyData)
@@ -197,12 +219,53 @@ export default function CompanyRegisterPage() {
       
       console.log('✅ Registration successful:', response)
       
+      // Salvar token se retornado
+      if (response.access_token) {
+        localStorage.setItem('authToken', response.access_token)
+        localStorage.setItem('userType', 'company')
+        if (response.user?.company_id) {
+          localStorage.setItem('companyId', response.user.company_id)
+        }
+      }
+      
       toast.success('Empresa cadastrada com sucesso!')
-      navigate('/empresa/login')
+      
+      // Redirecionar para o dashboard da empresa
+      navigate('/empresa/dashboard')
     } catch (error) {
       console.error('❌ Registration error:', error)
-      toast.error(error.response?.data?.message || 'Erro ao cadastrar empresa')
+      const errorMessage = error.message || error.response?.data?.message || error.response?.data?.error || 'Erro ao cadastrar empresa'
+      toast.error(errorMessage)
+    } finally {
+      setIsSubmitting(false)
     }
+  }
+
+  const handleFormSubmit = async (e) => {
+    e.preventDefault()
+    
+    if (step !== 3) return
+    
+    const password = getValues('password')
+    const confirmPassword = getValues('confirmPassword')
+    
+    if (!password || !confirmPassword) {
+      toast.error('Preencha todos os campos de senha')
+      return
+    }
+    
+    if (password.length < 8) {
+      toast.error('A senha deve ter no mínimo 8 caracteres')
+      return
+    }
+    
+    if (password !== confirmPassword) {
+      toast.error('As senhas não coincidem')
+      return
+    }
+    
+    // Chamar onSubmit com todos os valores
+    await onSubmit(getValues())
   }
 
   return (
@@ -267,24 +330,7 @@ export default function CompanyRegisterPage() {
           </CardHeader>
 
           <CardContent className="p-8">
-            <form onSubmit={(e) => {
-              e.preventDefault()
-              // Apenas validar campos da etapa 3 antes de submeter
-              if (step === 3) {
-                const password = getValues('password')
-                const confirmPassword = getValues('confirmPassword')
-                if (!password || !confirmPassword) {
-                  toast.error('Preencha todos os campos de senha')
-                  return
-                }
-                if (password !== confirmPassword) {
-                  toast.error('As senhas não coincidem')
-                  return
-                }
-                // Chamar onSubmit diretamente
-                onSubmit(getValues())
-              }
-            }}>
+            <form onSubmit={handleFormSubmit}>
               {/* Step 1: Company Data */}
               {step === 1 && (
                 <div className="space-y-6">
@@ -628,14 +674,23 @@ export default function CompanyRegisterPage() {
                       onClick={handlePrevious}
                       variant="outline"
                       className="px-8"
+                      disabled={isSubmitting}
                     >
                       {t.previous}
                     </Button>
                     <Button
                       type="submit"
                       className="bg-[#E91E63] hover:bg-[#C2185B] text-white px-8"
+                      disabled={isSubmitting}
                     >
-                      {t.createAccount}
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          {t.creating}
+                        </>
+                      ) : (
+                        t.createAccount
+                      )}
                     </Button>
                   </div>
                 </div>

@@ -79,7 +79,7 @@ export default function ResumeBuilderPage() {
       const token = localStorage.getItem('authToken')
       if (!token) return
 
-      const response = await fetch('https://portal-erp-jobs-production.up.railway.app/api/candidates/me/privacy', {
+      const response = await fetch('/api/candidates/me/privacy', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -111,7 +111,7 @@ export default function ResumeBuilderPage() {
       console.log('📝 togglePrivacy: Current status:', curriculoPublico, '→ New status:', newStatus)
 
       console.log('📤 togglePrivacy: Sending PATCH request...')
-      const response = await fetch('https://portal-erp-jobs-production.up.railway.app/api/candidates/me/privacy', {
+      const response = await fetch('/api/candidates/me/privacy', {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

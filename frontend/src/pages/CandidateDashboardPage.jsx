@@ -47,7 +47,7 @@ export default function CandidateDashboardPage() {
       setLoadingJobs(true);
       
       // Carregar vagas ativas da API
-      const response = await fetch('https://portal-erp-jobs-production.up.railway.app/api/jobs/');
+      const response = await fetch('/api/jobs/');
       if (response.ok) {
         const data = await response.json();
         setJobs(data.jobs || []);
@@ -56,7 +56,7 @@ export default function CandidateDashboardPage() {
       // Carregar minhas candidaturas da API
       const token = localStorage.getItem('authToken');
       if (token) {
-        const appsResponse = await fetch('https://portal-erp-jobs-production.up.railway.app/api/applications/my-applications', {
+        const appsResponse = await fetch('/api/applications/my-applications', {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -79,7 +79,7 @@ export default function CandidateDashboardPage() {
       const token = localStorage.getItem('authToken');
       if (!token) return;
       
-      const response = await fetch('https://portal-erp-jobs-production.up.railway.app/api/resume/', {
+      const response = await fetch('/api/resume/', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
@@ -98,7 +98,7 @@ export default function CandidateDashboardPage() {
       const token = localStorage.getItem('authToken');
       if (!token) return;
       
-      const response = await fetch('https://portal-erp-jobs-production.up.railway.app/api/candidates/profile', {
+      const response = await fetch('/api/candidates/profile', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
@@ -135,7 +135,7 @@ export default function CandidateDashboardPage() {
       const token = localStorage.getItem('authToken');
       if (!token) return;
 
-      const response = await fetch('https://portal-erp-jobs-production.up.railway.app/api/candidates/profile', {
+      const response = await fetch('/api/candidates/profile', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -187,7 +187,7 @@ export default function CandidateDashboardPage() {
         return;
       }
 
-      const response = await fetch('https://portal-erp-jobs-production.up.railway.app/api/applications/', {
+      const response = await fetch('/api/applications/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

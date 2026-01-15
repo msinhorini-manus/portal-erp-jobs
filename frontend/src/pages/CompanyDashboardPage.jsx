@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { useAuth } from '@/contexts/AuthContext'
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://portal-erp-jobs-production.up.railway.app';
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 export default function CompanyDashboardPage() {
   const navigate = useNavigate()
@@ -52,7 +52,7 @@ export default function CompanyDashboardPage() {
       }
 
       // Carregar vagas recentes da empresa
-      const jobsResponse = await fetch(`${API_URL}/api/jobs/company`, {
+      const jobsResponse = await fetch(`${API_URL}/api/jobs/my-jobs`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

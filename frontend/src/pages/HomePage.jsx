@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useNavigate } from 'react-router-dom'
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://portal-erp-jobs-production.up.railway.app';
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 // Mapeamento de categorias com ícones e cores
 const categoryConfig = {
@@ -42,14 +42,14 @@ export default function HomePage() {
       setLoading(true);
       
       // Carregar estatísticas gerais
-      const statsResponse = await fetch(`${API_URL}/api/stats/dashboard`);
+      const statsResponse = await fetch(`${API_URL}/stats/dashboard`);
       if (statsResponse.ok) {
         const statsData = await statsResponse.json();
         setStats(statsData);
       }
 
       // Carregar estatísticas de categorias
-      const categoriesResponse = await fetch(`${API_URL}/api/stats/categories`);
+      const categoriesResponse = await fetch(`${API_URL}/stats/categories`);
       if (categoriesResponse.ok) {
         const categoriesData = await categoriesResponse.json();
         
@@ -253,7 +253,7 @@ export default function HomePage() {
               </div>
             </div>
             <p className="text-sm text-white/60">
-              © 2025 Portal ERP Jobs. Todos os direitos reservados.
+              © 2026 Portal ERP Jobs. Todos os direitos reservados.
             </p>
           </div>
         </div>

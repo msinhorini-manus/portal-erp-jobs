@@ -88,7 +88,7 @@ def get_job_by_id(job_id):
         if not job:
             return jsonify({'error': 'Vaga não encontrada'}), 404
         
-        return jsonify(job.to_dict()), 200
+        return jsonify(job.to_dict(include_details=True)), 200
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500

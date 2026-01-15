@@ -34,9 +34,9 @@ export default function CandidateLoginPage() {
       // Salvar token e dados do usuário
       localStorage.setItem('authToken', response.access_token)
       localStorage.setItem('userType', 'candidate')
-      localStorage.setItem('userId', response.user_id)
-      localStorage.setItem('candidateId', response.candidate_id)
-      localStorage.setItem('candidateName', response.name)
+      localStorage.setItem('userId', response.user?.id?.toString() || '')
+      localStorage.setItem('candidateId', response.user?.candidate_id?.toString() || '')
+      localStorage.setItem('candidateName', response.user?.name || '')
       
       // Redirecionar para dashboard
       navigate('/candidato/dashboard')

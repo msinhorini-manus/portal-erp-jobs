@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://portal-erp-jobs-production.up.railway.app'
+const API_URL = import.meta.env.VITE_API_URL || '/api'
 
 export default function JobSearchPage() {
   const [filters, setFilters] = useState({
@@ -30,7 +30,7 @@ export default function JobSearchPage() {
     const fetchJobs = async () => {
       try {
         setLoading(true)
-        const response = await fetch(`${API_URL}/api/jobs/`)
+        const response = await fetch(`${API_URL}/jobs/`)
         
         if (!response.ok) {
           throw new Error('Erro ao carregar vagas')

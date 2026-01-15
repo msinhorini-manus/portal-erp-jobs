@@ -3,7 +3,7 @@
  * Handles all admin-related API calls
  */
 
-const API_BASE_URL = 'https://portal-erp-jobs-production.up.railway.app/api/admin';
+const API_BASE_URL = '/api/admin';
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem('authToken');
