@@ -63,7 +63,7 @@ export default function CandidateDashboardPage() {
         });
         if (appsResponse.ok) {
           const appsData = await appsResponse.json();
-          setMyApplications(Array.isArray(appsData) ? appsData : []);
+          setMyApplications(appsData.applications || []);
         }
       }
     } catch (error) {
@@ -464,7 +464,7 @@ export default function CandidateDashboardPage() {
             ) : (
               <div className="grid gap-4">
                 {filteredJobs.map(job => {
-                  const alreadyApplied = myApplications.some(app => app.jobId === job.id);
+                  const alreadyApplied = myApplications.some(app => app.job_id === job.id);
                   
                   return (
                     <div key={job.id} className="bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition">
@@ -593,7 +593,7 @@ export default function CandidateDashboardPage() {
                     return sortApplications === 'recent' ? dateB - dateA : dateA - dateB;
                   })
                   .map(application => {
-                  const job = jobs.find(j => j.id === application.jobId);
+                  const job = jobs.find(j => j.id === application.job_id);
                   
                   if (!job) return null;
                   
@@ -608,7 +608,7 @@ export default function CandidateDashboardPage() {
                             <span>💰 {job.salary}</span>
                           </div>
                           <p className="text-sm text-gray-600">
-                            Candidatura enviada em: {new Date(application.createdAt).toLocaleDateString('pt-BR')}
+                            Candidatura enviada em: {new Date(application.applied_at || application.createdAt).toLocaleDateString('pt-BR')}
                           </p>
                         </div>
                         <div>
