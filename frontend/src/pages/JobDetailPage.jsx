@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
-import { 
+import {
   MapPin, Building2, Clock, DollarSign, Users, Briefcase, Calendar,
   Globe, FileText, CheckCircle, Gift, Laptop, GraduationCap, Tag,
   Home, Building, Wifi
@@ -59,7 +59,7 @@ export default function JobDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { user, isAuthenticated } = useAuth()
-  
+
   const [job, setJob] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -78,7 +78,7 @@ export default function JobDetailPage() {
     try {
       setLoading(true)
       setError(null)
-      
+
       const data = await jobAPI.getById(id)
       setJob(data)
     } catch (err) {
@@ -94,7 +94,7 @@ export default function JobDetailPage() {
       const token = localStorage.getItem('authToken')
       if (!token) return
 
-      const response = await fetch(`${API_URL}/api/applications/my-applications`, {
+      const response = await fetch('/api/applications/my-applications', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -135,7 +135,7 @@ export default function JobDetailPage() {
       setError(null)
 
       const token = localStorage.getItem('authToken')
-      const response = await fetch(`${API_URL}/api/applications/`, {
+      const response = await fetch('/api/applications/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -155,7 +155,7 @@ export default function JobDetailPage() {
       // Sucesso!
       setHasApplied(true)
       setApplicationSuccess(true)
-      
+
       // Esconder mensagem de sucesso após 5 segundos
       setTimeout(() => {
         setApplicationSuccess(false)
@@ -265,7 +265,7 @@ export default function JobDetailPage() {
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <CardTitle className="text-3xl mb-4">{job.title}</CardTitle>
-                  
+
                   {/* Informações principais */}
                   <div className="flex items-center gap-6 text-muted-foreground mb-4 flex-wrap">
                     <span className="flex items-center gap-2">
@@ -284,10 +284,10 @@ export default function JobDetailPage() {
                   <div className="flex gap-2 mb-4 flex-wrap">
                     {/* Área de Atuação */}
                     {(job.area_info || job.area) && (
-                      <Badge 
-                        variant="outline" 
+                      <Badge
+                        variant="outline"
                         className="flex items-center gap-1"
-                        style={{ 
+                        style={{
                           borderColor: job.area_info?.color || 'gray',
                           color: job.area_info?.color || 'gray'
                         }}
@@ -296,7 +296,7 @@ export default function JobDetailPage() {
                         {job.area_info?.name || job.area}
                       </Badge>
                     )}
-                    
+
                     {/* Nível de Experiência */}
                     {job.seniority_level && (
                       <Badge variant="secondary" className="flex items-center gap-1">
@@ -304,7 +304,7 @@ export default function JobDetailPage() {
                         {formatSeniority(job.seniority_level)}
                       </Badge>
                     )}
-                    
+
                     {/* Modalidade de Trabalho */}
                     {job.work_modality && (
                       <Badge variant="secondary" className="flex items-center gap-1">
@@ -312,7 +312,7 @@ export default function JobDetailPage() {
                         {formatModality(job.work_modality)}
                       </Badge>
                     )}
-                    
+
                     {/* Tipo de Contrato */}
                     {job.contract_type && (
                       <Badge variant="outline" className="flex items-center gap-1">
@@ -331,7 +331,7 @@ export default function JobDetailPage() {
                     </div>
                   )}
                 </div>
-                
+
                 {job.match_percentage && (
                   <div className="text-center ml-4">
                     <div className="text-4xl font-bold text-secondary mb-1">
@@ -341,12 +341,12 @@ export default function JobDetailPage() {
                   </div>
                 )}
               </div>
-              
+
               {/* Botão de Candidatura */}
               <div className="flex items-center gap-4 pt-4 border-t">
-                <Button 
-                  size="lg" 
-                  variant="secondary" 
+                <Button
+                  size="lg"
+                  variant="secondary"
                   className="flex-1"
                   onClick={handleApply}
                   disabled={applying || hasApplied || !job.is_active}
@@ -354,8 +354,8 @@ export default function JobDetailPage() {
                   {applying ? 'Enviando...' : hasApplied ? 'Já Candidatado' : 'Candidatar-se'}
                 </Button>
                 {!isAuthenticated && (
-                  <Button 
-                    size="lg" 
+                  <Button
+                    size="lg"
                     variant="outline"
                     onClick={() => navigate('/candidato/login')}
                   >
@@ -470,9 +470,9 @@ export default function JobDetailPage() {
                       <div className="md:col-span-2">
                         <span className="text-sm text-muted-foreground">Website:</span>
                         <p>
-                          <a 
-                            href={job.company.website} 
-                            target="_blank" 
+                          <a
+                            href={job.company.website}
+                            target="_blank"
                             rel="noopener noreferrer"
                             className="text-primary hover:underline flex items-center gap-1"
                           >
@@ -496,7 +496,7 @@ export default function JobDetailPage() {
                     <div className="text-lg font-bold text-green-600">{job.salary}</div>
                   </div>
                 )}
-                
+
                 {/* Tipo de Contratação */}
                 {job.contract_type && (
                   <div className="text-center p-4 bg-muted/30 rounded-lg">
@@ -505,7 +505,7 @@ export default function JobDetailPage() {
                     <div className="text-lg font-bold">{formatContract(job.contract_type)}</div>
                   </div>
                 )}
-                
+
                 {/* Candidatos */}
                 {job.applications_count !== undefined && (
                   <div className="text-center p-4 bg-muted/30 rounded-lg">
@@ -514,7 +514,7 @@ export default function JobDetailPage() {
                     <div className="text-lg font-bold">{job.applications_count}</div>
                   </div>
                 )}
-                
+
                 {/* Data de Publicação */}
                 {job.created_at && (
                   <div className="text-center p-4 bg-muted/30 rounded-lg">

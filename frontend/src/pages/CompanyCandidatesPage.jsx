@@ -4,7 +4,7 @@ import { Users, Search, MapPin, Briefcase, Mail, Phone, ExternalLink, Filter } f
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/contexts/AuthContext'
 
-const API_BASE = import.meta.env.VITE_API_URL || 'https://jobs.portalerp.com.br/api'
+
 
 export default function CompanyCandidatesPage() {
   const navigate = useNavigate()
@@ -21,16 +21,47 @@ export default function CompanyCandidatesPage() {
   const fetchApplications = async () => {
     try {
       setLoading(true)
-      const response = await fetch(`${API_BASE}/jobs/my-jobs/applications`, {
+      const authToken = token || localStorage.getItem('authToken')
+      if (!authToken) return
+
+      // Buscar vagas da empresa
+      const jobsResponse = await fetch('/api/jobs/my-jobs', {
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${authToken}`
         }
       })
-      
-      if (response.ok) {
-        const data = await response.json()
-        setApplications(data.applications || [])
+
+      if (!jobsResponse.ok) return
+
+      const jobsData = await jobsResponse.json()
+      const jobs = jobsData.jobs || []
+
+      // Para cada vaga, buscar candidaturas
+      const allApplications = []
+      for (const job of jobs) {
+        try {
+          const appsResponse = await fetch(`/api/jobs/${job.id}/applications`, {
+            headers: {
+              'Authorization': `Bearer ${authToken}`
+            }
+          })
+          if (appsResponse.ok) {
+            const appsData = await appsResponse.json()
+            const apps = appsData.applications || []
+            apps.forEach(app => {
+              allApplications.push({
+                ...app,
+                job_title: job.title,
+                job_id: job.id
+              })
+            })
+          }
+        } catch (err) {
+          console.error(`Erro ao carregar candidaturas da vaga ${job.id}:`, err)
+        }
       }
+
+      setApplications(allApplications)
     } catch (err) {
       console.error('Erro ao carregar candidaturas:', err)
     } finally {
@@ -38,7 +69,7 @@ export default function CompanyCandidatesPage() {
     }
   }
 
-  const filteredApplications = applications.filter(app => 
+  const filteredApplications = applications.filter(app =>
     app.candidate_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     app.job_title?.toLowerCase().includes(searchTerm.toLowerCase())
   )
@@ -66,7 +97,7 @@ export default function CompanyCandidatesPage() {
                 <p className="text-gray-500">Gerencie as candidaturas das suas vagas</p>
               </div>
             </div>
-            
+
             {/* Search */}
             <div className="relative w-full md:w-80">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
@@ -94,7 +125,7 @@ export default function CompanyCandidatesPage() {
               </div>
             </div>
           </div>
-          
+
           <div className="bg-white rounded-xl shadow-sm p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -108,7 +139,7 @@ export default function CompanyCandidatesPage() {
               </div>
             </div>
           </div>
-          
+
           <div className="bg-white rounded-xl shadow-sm p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -133,13 +164,13 @@ export default function CompanyCandidatesPage() {
                 {applications.length === 0 ? 'Nenhuma candidatura ainda' : 'Nenhum resultado encontrado'}
               </h3>
               <p className="text-gray-500 mb-6">
-                {applications.length === 0 
+                {applications.length === 0
                   ? 'Quando candidatos se inscreverem nas suas vagas, eles aparecerão aqui.'
                   : 'Tente ajustar os filtros de busca.'}
               </p>
               {applications.length === 0 && (
-                <Button 
-                  onClick={() => navigate('/empresa/publicar-vaga')}
+                <Button
+                  onClick={() => navigate('/empresa/vagas/nova')}
                   className="bg-[#F7941D] hover:bg-[#e8850d]"
                 >
                   Publicar Nova Vaga
@@ -182,7 +213,7 @@ export default function CompanyCandidatesPage() {
                         </div>
                       </div>
                     </div>
-                    
+
                     <div className="flex items-center gap-2">
                       <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                         application.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
@@ -197,7 +228,7 @@ export default function CompanyCandidatesPage() {
                          application.status === 'rejected' ? 'Rejeitado' :
                          application.status}
                       </span>
-                      
+
                       {application.candidate_id && (
                         <Button
                           variant="outline"
@@ -219,7 +250,7 @@ export default function CompanyCandidatesPage() {
 
         {/* Botão Voltar */}
         <div className="mt-6">
-          <Button 
+          <Button
             onClick={() => navigate('/empresa/dashboard')}
             variant="outline"
             className="gap-2"

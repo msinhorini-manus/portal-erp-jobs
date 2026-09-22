@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">Portal ERP Jobs</title>
+  <desc id="desc">Carreiras em ERP, SAP, TOTVS e software</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1F3B47"/>
+      <stop offset="1" stop-color="#2C5F7F"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#F7941D" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#F7941D" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <circle cx="1040" cy="90" r="330" fill="url(#glow)"/>
+  <circle cx="1120" cy="560" r="230" fill="#F7941D" opacity="0.08"/>
+  <path d="M0 520 C250 430 430 590 720 500 C920 438 1060 455 1200 510 L1200 630 L0 630 Z" fill="#142A34" opacity="0.72"/>
+
+  <g transform="translate(86 82)">
+    <rect width="170" height="72" rx="18" fill="#F7941D"/>
+    <text x="85" y="48" text-anchor="middle" fill="#FFFFFF" font-family="Arial, Helvetica, sans-serif" font-size="36" font-weight="700">ERP</text>
+    <text x="194" y="48" fill="#FFFFFF" font-family="Arial, Helvetica, sans-serif" font-size="38" font-weight="700">JOBS</text>
+  </g>
+
+  <text x="86" y="280" fill="#FFFFFF" font-family="Arial, Helvetica, sans-serif" font-size="72" font-weight="700">Portal ERP Jobs</text>
+  <text x="86" y="355" fill="#D8E5EA" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="400">Carreiras em ERP, SAP, TOTVS e software</text>
+
+  <g transform="translate(86 435)">
+    <rect width="520" height="74" rx="37" fill="#FFFFFF" opacity="0.1"/>
+    <circle cx="39" cy="37" r="12" fill="#F7941D"/>
+    <text x="68" y="48" fill="#FFFFFF" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="600">jobs.portalerp.com.br</text>
+  </g>
+
+  <g transform="translate(830 205)" opacity="0.95">
+    <rect x="0" y="0" width="255" height="280" rx="28" fill="#FFFFFF" opacity="0.11" stroke="#FFFFFF" stroke-opacity="0.2" stroke-width="2"/>
+    <rect x="34" y="42" width="126" height="16" rx="8" fill="#F7941D"/>
+    <rect x="34" y="78" width="184" height="12" rx="6" fill="#FFFFFF" opacity="0.85"/>
+    <rect x="34" y="104" width="150" height="12" rx="6" fill="#FFFFFF" opacity="0.55"/>
+    <rect x="34" y="150" width="78" height="36" rx="18" fill="#FFFFFF" opacity="0.15"/>
+    <rect x="124" y="150" width="94" height="36" rx="18" fill="#FFFFFF" opacity="0.15"/>
+    <rect x="34" y="218" width="184" height="20" rx="10" fill="#F7941D"/>
+  </g>
+</svg>

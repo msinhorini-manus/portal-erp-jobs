@@ -17,7 +17,7 @@ export function AuthProvider({ children }) {
       const token = localStorage.getItem('authToken');
       const userType = localStorage.getItem('userType');
       const userData = localStorage.getItem(`${userType}Data`);
-      
+
       if (token && userData) {
         return JSON.parse(userData);
       }
@@ -26,7 +26,7 @@ export function AuthProvider({ children }) {
     }
     return null;
   });
-  
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
@@ -117,7 +117,7 @@ export function AuthProvider({ children }) {
       }
 
       // Login normal via API para company e candidate
-      const response = type === 'company' 
+      const response = type === 'company'
         ? await authAPI.loginCompany(credentialsOrUser)
         : await authAPI.loginCandidate(credentialsOrUser);
 
@@ -143,7 +143,7 @@ export function AuthProvider({ children }) {
       setLoading(true);
 
       const response = await authAPI.loginAdmin({ email, password });
-      
+
       saveAuthData(response, 'admin');
       const userData = { ...response, user_type: 'admin' };
       setUser(userData);
@@ -167,7 +167,7 @@ export function AuthProvider({ children }) {
       setLoading(true);
 
       const response = await authAPI.loginCandidate({ email, password });
-      
+
       saveAuthData(response, 'candidate');
       setUser(response.user);
       setIsAuthenticated(true);
@@ -190,7 +190,7 @@ export function AuthProvider({ children }) {
       setLoading(true);
 
       const response = await authAPI.loginCompany({ email, password });
-      
+
       saveAuthData(response, 'company');
       setUser(response.user);
       setIsAuthenticated(true);
@@ -213,7 +213,7 @@ export function AuthProvider({ children }) {
       setLoading(true);
 
       const response = await authAPI.socialGoogle(googleToken);
-      
+
       saveAuthData(response, 'candidate');
       setUser(response.user);
       setIsAuthenticated(true);
@@ -236,7 +236,7 @@ export function AuthProvider({ children }) {
       setLoading(true);
 
       const response = await authAPI.socialLinkedIn(code, redirectUri);
-      
+
       saveAuthData(response, 'candidate');
       setUser(response.user);
       setIsAuthenticated(true);

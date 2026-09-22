@@ -56,7 +56,7 @@ export default function PostJobPage() {
         configAPI.getTechnologies(),
         configAPI.getSoftwares()
       ]);
-      
+
       setAreas(areasData || []);
       setLevels(levelsData || []);
       setModalities(modalitiesData || []);
@@ -142,7 +142,7 @@ export default function PostJobPage() {
     try {
       setLoadingJob(true);
       const job = await jobAPI.getById(id);
-      
+
       // Preencher formulário com dados da vaga
       setFormData({
         title: job.title || '',
@@ -176,7 +176,7 @@ export default function PostJobPage() {
     e.preventDefault();
     setLoading(true);
     setError('');
-    
+
     try {
       // Preparar dados da vaga para a API
       const jobData = {
@@ -196,7 +196,7 @@ export default function PostJobPage() {
         city: formData.city,
         contract_type: formData.contractType,
       };
-      
+
       let response;
       if (isEditing) {
         response = await jobAPI.update(id, jobData);
@@ -205,7 +205,7 @@ export default function PostJobPage() {
         response = await jobAPI.create(jobData);
         toast.success('Vaga publicada com sucesso! 🎉');
       }
-      
+
       navigate('/empresa/vagas');
     } catch (err) {
       console.error('Erro ao publicar vaga:', err);
@@ -480,7 +480,7 @@ export default function PostJobPage() {
                     Tecnologias Necessárias *
                   </label>
                   <div className="flex flex-wrap gap-2 mb-4">
-                    {(technologiesList.length > 0 ? technologiesList.map(t => t.name) : 
+                    {(technologiesList.length > 0 ? technologiesList.map(t => t.name) :
                       ['React', 'Node.js', 'Python', 'Java', 'C#', '.NET', 'Angular', 'Vue.js', 'TypeScript', 'JavaScript', 'PHP', 'Ruby']
                     ).map((tech) => (
                       <button
@@ -514,7 +514,7 @@ export default function PostJobPage() {
                     Softwares / ERPs
                   </label>
                   <div className="flex flex-wrap gap-2 mb-4">
-                    {(softwaresList.length > 0 ? softwaresList.map(s => s.name) : 
+                    {(softwaresList.length > 0 ? softwaresList.map(s => s.name) :
                       ['SAP', 'TOTVS Protheus', 'TOTVS RM', 'Oracle EBS', 'Microsoft Dynamics', 'Salesforce', 'NetSuite', 'Workday']
                     ).map((software) => (
                       <button

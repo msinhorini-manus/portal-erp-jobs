@@ -10,7 +10,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
  */
 async function fetchAPI(endpoint, options = {}) {
   const url = `${API_BASE_URL}${endpoint}`;
-  
+
   const defaultOptions = {
     headers: {
       'Content-Type': 'application/json',
@@ -34,7 +34,7 @@ async function fetchAPI(endpoint, options = {}) {
 
   try {
     const response = await fetch(url, config);
-    
+
     // Handle non-JSON responses
     const contentType = response.headers.get('content-type');
     if (!contentType || !contentType.includes('application/json')) {
@@ -362,10 +362,17 @@ export const applicationAPI = {
    * Apply to a job
    */
   apply: async (applicationData) => {
-    return fetchAPI('/applications', {
+    return fetchAPI('/applications/', {
       method: 'POST',
       body: JSON.stringify(applicationData),
     });
+  },
+
+  /**
+   * Get my applications (candidate)
+   */
+  getMyApplications: async () => {
+    return fetchAPI('/applications/my-applications');
   },
 
   /**

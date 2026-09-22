@@ -11,7 +11,7 @@ const API_URL = import.meta.env.VITE_API_URL || '';
 export default function CompanyDashboardPage() {
   const navigate = useNavigate()
   const { user, logout } = useAuth()
-  
+
   // Estados para dados reais da API
   const [stats, setStats] = useState({
     total_jobs: 0,
@@ -33,7 +33,7 @@ export default function CompanyDashboardPage() {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      
+
       if (!token) {
         navigate('/empresa/login');
         return;
@@ -45,7 +45,7 @@ export default function CompanyDashboardPage() {
           'Authorization': `Bearer ${token}`
         }
       });
-      
+
       if (statsResponse.ok) {
         const statsData = await statsResponse.json();
         setStats(statsData);
@@ -57,7 +57,7 @@ export default function CompanyDashboardPage() {
           'Authorization': `Bearer ${token}`
         }
       });
-      
+
       if (jobsResponse.ok) {
         const jobsData = await jobsResponse.json();
         // Pegar apenas as 5 mais recentes
@@ -273,4 +273,3 @@ export default function CompanyDashboardPage() {
     </div>
   )
 }
-

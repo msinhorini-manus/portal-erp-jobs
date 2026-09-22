@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { Plus, Menu, X, User, Building2, Shield, LogOut, Home, Briefcase, Users, BarChart3, FileText, Settings, ChevronDown, LayoutDashboard, Heart, Send } from 'lucide-react'
+import { Plus, Menu, X, User, Building2, Shield, LogOut, Home, Briefcase, Users, BarChart3, FileText, Settings, ChevronDown, LayoutDashboard } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/contexts/AuthContext'
 
@@ -39,11 +39,8 @@ export default function Navbar() {
 
   // Links específicos por tipo de usuário
   const candidateLinks = [
-    { to: '/profissional/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { to: '/profissional/candidaturas', label: 'Candidaturas', icon: Send },
-    { to: '/profissional/curriculo', label: 'Meu Currículo', icon: FileText },
-    { to: '/profissional/vagas-salvas', label: 'Vagas Salvas', icon: Heart },
-    { to: '/profissional/perfil', label: 'Perfil', icon: User },
+    { to: '/candidato/dashboard', label: 'Meu Painel', icon: Home },
+    { to: '/vagas', label: 'Buscar Vagas', icon: Briefcase },
   ]
 
   const companyLinks = [
@@ -75,28 +72,28 @@ export default function Navbar() {
   // Obter informações do usuário
   const getUserInfo = () => {
     switch (userType) {
-      case 'candidate': 
-        return { 
-          label: 'Profissional', 
-          color: 'bg-blue-500', 
+      case 'candidate':
+        return {
+          label: 'Profissional',
+          color: 'bg-blue-500',
           borderColor: 'border-blue-500',
           textColor: 'text-blue-500',
           icon: User,
-          dashboardPath: '/profissional/dashboard'
+          dashboardPath: '/candidato/dashboard'
         }
-      case 'company': 
-        return { 
-          label: 'Empresa', 
-          color: 'bg-emerald-500', 
+      case 'company':
+        return {
+          label: 'Empresa',
+          color: 'bg-emerald-500',
           borderColor: 'border-emerald-500',
           textColor: 'text-emerald-500',
           icon: Building2,
           dashboardPath: '/empresa/dashboard'
         }
-      case 'admin': 
-        return { 
-          label: 'Administrador', 
-          color: 'bg-purple-500', 
+      case 'admin':
+        return {
+          label: 'Administrador',
+          color: 'bg-purple-500',
           borderColor: 'border-purple-500',
           textColor: 'text-purple-500',
           icon: Shield,
@@ -148,8 +145,8 @@ export default function Navbar() {
                     key={link.to}
                     to={link.to}
                     className={`flex items-center gap-1.5 text-sm font-medium transition-colors px-2 py-1 rounded ${
-                      isActive(link.to) 
-                        ? 'text-[#F7941D] bg-white/10' 
+                      isActive(link.to)
+                        ? 'text-[#F7941D] bg-white/10'
                         : 'text-white/90 hover:text-[#F7941D] hover:bg-white/5'
                     }`}
                   >
@@ -174,8 +171,8 @@ export default function Navbar() {
                   key={link.to}
                   to={link.to}
                   className={`text-sm font-medium transition-colors ${
-                    isActive(link.to) 
-                      ? 'text-[#F7941D]' 
+                    isActive(link.to)
+                      ? 'text-[#F7941D]'
                       : 'text-white/90 hover:text-[#F7941D]'
                   }`}
                 >
@@ -198,7 +195,7 @@ export default function Navbar() {
                   <div className={`w-9 h-9 ${userInfo.color} rounded-full flex items-center justify-center font-bold text-white text-sm shadow-lg`}>
                     {user?.name?.charAt(0)?.toUpperCase() || 'U'}
                   </div>
-                  
+
                   {/* Informações do usuário */}
                   <div className="text-left">
                     <p className="text-sm font-semibold text-white leading-tight">
@@ -208,11 +205,11 @@ export default function Navbar() {
                       {userInfo.label}
                     </p>
                   </div>
-                  
+
                   {/* Seta do dropdown */}
-                  <ChevronDown 
-                    size={18} 
-                    className={`text-white/70 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} 
+                  <ChevronDown
+                    size={18}
+                    className={`text-white/70 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`}
                   />
                 </button>
 
@@ -273,22 +270,22 @@ export default function Navbar() {
             ) : (
               // Visitante não logado
               <>
-                <Button 
+                <Button
                   onClick={() => navigate('/empresa/publicar-vaga')}
                   className="bg-[#F7941D] hover:bg-[#e8850d] text-white text-xs font-semibold gap-1.5 h-8"
                 >
                   <Plus size={14} />
                   Anunciar Vagas
                 </Button>
-                <Button 
-                  onClick={() => navigate('/candidato/cadastro')} 
+                <Button
+                  onClick={() => navigate('/candidato/cadastro')}
                   variant="outline"
                   className="border-white/50 bg-white text-[#1F3B47] hover:bg-gray-100 text-xs h-8 font-semibold"
                 >
                   Cadastrar CV
                 </Button>
                 <div className="flex items-center gap-2">
-                  <Button 
+                  <Button
                     onClick={() => navigate('/candidato/login')}
                     variant="ghost"
                     className="text-white hover:bg-white/10 text-xs h-8 gap-1"
@@ -296,7 +293,7 @@ export default function Navbar() {
                     <User size={14} />
                     Profissional
                   </Button>
-                  <Button 
+                  <Button
                     onClick={() => navigate('/empresa/login')}
                     className="bg-white text-[#1F3B47] hover:bg-gray-100 text-xs h-8 gap-1"
                   >
@@ -344,15 +341,15 @@ export default function Navbar() {
                     <LayoutDashboard size={20} />
                     Ir para o Dashboard
                   </Link>
-                  
+
                   {userLinks.slice(1).map((link) => (
                     <Link
                       key={link.to}
                       to={link.to}
                       onClick={() => setMobileMenuOpen(false)}
                       className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                        isActive(link.to) 
-                          ? 'bg-[#F7941D] text-white' 
+                        isActive(link.to)
+                          ? 'bg-[#F7941D] text-white'
                           : 'text-white/90 hover:bg-white/10'
                       }`}
                     >
@@ -360,9 +357,9 @@ export default function Navbar() {
                       {link.label}
                     </Link>
                   ))}
-                  
+
                   <div className="h-px bg-white/10 my-2" />
-                  
+
                   <Link
                     to="/vagas"
                     onClick={() => setMobileMenuOpen(false)}
@@ -371,7 +368,7 @@ export default function Navbar() {
                     <Briefcase size={20} />
                     Buscar Vagas
                   </Link>
-                  
+
                   <button
                     onClick={handleLogout}
                     className="flex items-center gap-3 px-4 py-3 rounded-lg text-red-400 hover:bg-red-500/10 mt-2"
@@ -388,26 +385,26 @@ export default function Navbar() {
                       to={link.to}
                       onClick={() => setMobileMenuOpen(false)}
                       className={`px-4 py-3 rounded-lg transition-colors ${
-                        isActive(link.to) 
-                          ? 'bg-[#F7941D] text-white' 
+                        isActive(link.to)
+                          ? 'bg-[#F7941D] text-white'
                           : 'text-white/90 hover:bg-white/10'
                       }`}
                     >
                       {link.label}
                     </Link>
                   ))}
-                  
+
                   <div className="h-px bg-white/10 my-2" />
-                  
+
                   <div className="flex flex-col gap-2 mt-2">
-                    <Button 
+                    <Button
                       onClick={() => { navigate('/empresa/publicar-vaga'); setMobileMenuOpen(false); }}
                       className="bg-[#F7941D] hover:bg-[#e8850d] text-white w-full justify-center gap-2 h-12"
                     >
                       <Plus size={18} />
                       Anunciar Vagas Grátis
                     </Button>
-                    <Button 
+                    <Button
                       onClick={() => { navigate('/candidato/cadastro'); setMobileMenuOpen(false); }}
                       variant="outline"
                       className="border-white/50 text-white hover:bg-white/10 w-full h-12"
@@ -415,7 +412,7 @@ export default function Navbar() {
                       Cadastrar CV grátis
                     </Button>
                     <div className="grid grid-cols-2 gap-2">
-                      <Button 
+                      <Button
                         onClick={() => { navigate('/candidato/login'); setMobileMenuOpen(false); }}
                         variant="outline"
                         className="border-white/50 text-white hover:bg-white/10 gap-1 h-12"
@@ -423,7 +420,7 @@ export default function Navbar() {
                         <User size={16} />
                         Profissional
                       </Button>
-                      <Button 
+                      <Button
                         onClick={() => { navigate('/empresa/login'); setMobileMenuOpen(false); }}
                         className="bg-white text-[#1F3B47] hover:bg-gray-100 gap-1 h-12"
                       >
