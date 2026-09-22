@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { Save, Download, Eye, EyeOff, Plus, Trash2, Edit2 } from 'lucide-react'
 import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas'
@@ -13,8 +12,12 @@ const PROFICIENCY_MAPPING = {
   "Expert": 4
 }
 
+function readCookie(name) {
+  const prefix = `${encodeURIComponent(name)}=`
+  return document.cookie.split('; ').find(value => value.startsWith(prefix))?.slice(prefix.length) || ''
+}
+
 export default function ResumeBuilderPage() {
-  const navigate = useNavigate()
   const [showPreview, setShowPreview] = useState(true)
   const [activeSection, setActiveSection] = useState('personal')
   const [loading, setLoading] = useState(false)
@@ -26,16 +29,7 @@ export default function ResumeBuilderPage() {
   useEffect(() => {
     const loadResume = async () => {
       try {
-        const token = localStorage.getItem('authToken')
-        console.log('🔍 loadResume: Token exists?', !!token)
-        if (!token) {
-          console.log('❌ loadResume: No token found')
-          return
-        }
-
-        console.log('📥 loadResume: Fetching resume data...')
         const data = await resumeAPI.get()
-        console.log('✅ loadResume: Data received:', data)
         if (data && data.candidate) {
           const candidate = data.candidate
           const fullName = `${candidate.first_name || ''} ${candidate.last_name || ''}`.trim()
@@ -60,12 +54,9 @@ export default function ResumeBuilderPage() {
             projects: data.projects || [],
             languages: data.languages || []
           })
-          console.log('✅ loadResume: Resume state updated successfully')
-        } else {
-          console.log('⚠️ loadResume: No candidate data found in response')
         }
       } catch (error) {
-        console.error('❌ loadResume: Error loading resume:', error)
+        console.error('Erro ao carregar currículo:', error)
       }
     }
 
@@ -76,14 +67,7 @@ export default function ResumeBuilderPage() {
   // Carregar status de privacidade
   const loadPrivacyStatus = async () => {
     try {
-      const token = localStorage.getItem('authToken')
-      if (!token) return
-
-      const response = await fetch('/api/candidates/me/privacy', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      })
+      const response = await fetch('/bff/candidate/privacy', { credentials: 'same-origin', cache: 'no-store' })
 
       if (response.ok) {
         const data = await response.json()
@@ -97,39 +81,23 @@ export default function ResumeBuilderPage() {
   // Atualizar status de privacidade
   const togglePrivacy = async () => {
     try {
-      console.log('🔄 togglePrivacy: Iniciando...')
-      const token = localStorage.getItem('authToken')
-      console.log('🔑 togglePrivacy: Token exists?', !!token)
-
-      if (!token) {
-        console.log('❌ togglePrivacy: No token found')
-        alert('Você precisa estar logado')
-        return
-      }
-
       const newStatus = !curriculoPublico
-      console.log('📝 togglePrivacy: Current status:', curriculoPublico, '→ New status:', newStatus)
-
-      console.log('📤 togglePrivacy: Sending PATCH request...')
-      const response = await fetch('/api/candidates/me/privacy', {
+      const response = await fetch('/bff/candidate/privacy', {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'X-CSRF-Token': decodeURIComponent(readCookie('pej_csrf'))
         },
+        credentials: 'same-origin',
         body: JSON.stringify({ curriculo_publico: newStatus })
       })
 
-      console.log('📥 togglePrivacy: Response status:', response.status)
       const responseData = await response.json()
-      console.log('📥 togglePrivacy: Response data:', responseData)
 
       if (response.ok) {
-        console.log('✅ togglePrivacy: Success!')
         setCurriculoPublico(newStatus)
         alert(newStatus ? 'Seu currículo agora é público!' : 'Seu currículo agora é privado!')
       } else {
-        console.log('❌ togglePrivacy: Failed with status', response.status)
         alert(`Erro ao atualizar privacidade: ${responseData.error || 'Erro desconhecido'}`)
       }
     } catch (error) {
@@ -364,29 +332,11 @@ export default function ResumeBuilderPage() {
       setLoading(true)
       setSaveMessage('')
 
-      const token = localStorage.getItem('authToken')
-      console.log('🔍 handleSave: Token exists?', !!token)
-      console.log('🔑 handleSave: Token value:', token ? token.substring(0, 20) + '...' : 'null')
-
-      if (!token) {
-        console.log('❌ handleSave: No token found')
-        alert('Você precisa estar logado para salvar o currículo')
-        navigate('/candidato/login')
-        return
-      }
-
-      console.log('✅ handleSave: Token found, starting save...')
-
       // Salvar dados pessoais
       const [firstName, ...lastNameParts] = resume.personal.fullName.split(' ')
       const lastName = lastNameParts.join(' ')
 
-      console.log('📤 handleSave: Sending personal data...', {
-        first_name: firstName,
-        last_name: lastName
-      })
-
-      const result = await resumeAPI.update({
+      await resumeAPI.update({
         first_name: firstName || '',
         last_name: lastName || '',
         phone: resume.personal.phone,
@@ -397,8 +347,6 @@ export default function ResumeBuilderPage() {
         portfolio_url: resume.personal.portfolio,
         professional_summary: resume.summary
       })
-
-      console.log('✅ handleSave: Personal data saved successfully', result)
 
       // Salvar experiências
       for (const exp of resume.experiences) {
@@ -480,13 +428,10 @@ export default function ResumeBuilderPage() {
       setSaveMessage('Currículo salvo com sucesso!')
       setTimeout(() => setSaveMessage(''), 3000)
     } catch (error) {
-      console.error('❌ handleSave: Error caught:', error)
-      console.error('❌ handleSave: Error message:', error.message)
-      console.error('❌ handleSave: Error stack:', error.stack)
+      console.error('Erro ao salvar currículo:', error)
       alert('Erro ao salvar currículo. Tente novamente.')
     } finally {
       setLoading(false)
-      console.log('🏁 handleSave: Finished (loading=false)')
     }
   }
 
@@ -566,15 +511,24 @@ export default function ResumeBuilderPage() {
 
               <button
                 onClick={handleSave}
-                className="flex items-center gap-2 px-4 py-2 text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
+                disabled={loading}
+                className="flex items-center gap-2 px-4 py-2 text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors disabled:cursor-wait disabled:opacity-60"
               >
                 <Save className="w-4 h-4" />
-                Salvar
+                {loading ? 'Salvando...' : 'Salvar'}
               </button>
             </div>
           </div>
         </div>
       </header>
+
+      {saveMessage && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
+          <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-green-800">
+            {saveMessage}
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

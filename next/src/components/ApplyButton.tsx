@@ -1,38 +1,34 @@
 'use client'
 
 import { useState } from 'react'
-import Link from 'next/link'
+
+import { candidateFetch, candidatePath } from '@/lib/candidate-client'
 
 export function ApplyButton({ jobId }: { jobId: number }) {
   const [applied, setApplied] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
   const handleApply = async () => {
-    // Check if user is logged in
-    const token = typeof window !== 'undefined' ? localStorage.getItem('candidateToken') : null
-
-    if (!token) {
-      // Redirect to login
-      window.location.href = `/candidato/login?redirect=/vagas/${jobId}`
-      return
-    }
-
     setLoading(true)
+    setError('')
     try {
-      const res = await fetch('/api/applications/', {
+      await candidateFetch(candidatePath('applications'), {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
         body: JSON.stringify({ job_id: jobId }),
       })
-
-      if (res.ok || res.status === 409) {
-        setApplied(true)
+      setApplied(true)
+    } catch (reason) {
+      const status = (reason as { status?: number }).status
+      if (status === 401 || status === 403) {
+        window.location.href = `/candidato/login?redirect=${encodeURIComponent(`/vagas/${jobId}`)}`
+        return
       }
-    } catch (e) {
-      console.error('Failed to apply:', e)
+      if (status === 409) {
+        setApplied(true)
+        return
+      }
+      setError(reason instanceof Error ? reason.message : 'Não foi possível enviar a candidatura.')
     } finally {
       setLoading(false)
     }
@@ -42,20 +38,23 @@ export function ApplyButton({ jobId }: { jobId: number }) {
     return (
       <button
         disabled
-        className="w-full bg-green-500 text-white py-3 rounded-lg font-medium cursor-default"
+        className="w-full cursor-default rounded-lg bg-green-500 py-3 font-medium text-white"
       >
-        ✓ Candidatado
+        Candidatado
       </button>
     )
   }
 
   return (
-    <button
-      onClick={handleApply}
-      disabled={loading}
-      className="w-full bg-portal-orange hover:bg-portal-orange-dark text-white py-3 rounded-lg font-bold transition-colors disabled:opacity-50"
-    >
-      {loading ? 'Enviando...' : 'Candidatar-se'}
-    </button>
+    <div>
+      <button
+        onClick={handleApply}
+        disabled={loading}
+        className="w-full rounded-lg bg-portal-orange py-3 font-bold text-white transition-colors hover:bg-portal-orange-dark disabled:opacity-50"
+      >
+        {loading ? 'Enviando...' : 'Candidatar-se'}
+      </button>
+      {error && <p className="mt-2 text-sm text-red-600" role="alert">{error}</p>}
+    </div>
   )
 }

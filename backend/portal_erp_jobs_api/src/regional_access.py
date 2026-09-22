@@ -144,13 +144,15 @@ def get_candidate_access(*, require_active=True):
     return candidate, membership, None, None
 
 
-def token_claims(user, site, *, company=None, candidate=None, admin=None):
+def token_claims(user, site, *, company=None, candidate=None, admin=None, family_id=None):
     """Create the regional claims shared by access and refresh tokens."""
     claims = {
         "user_type": user.user_type,
         "site_id": site.id,
         "site_code": site.code,
     }
+    if family_id is not None:
+        claims["family_id"] = family_id
     if company is not None:
         claims["company_id"] = company.id
     if candidate is not None:

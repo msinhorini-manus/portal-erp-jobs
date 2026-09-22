@@ -42,11 +42,28 @@ class Config:
 
     JWT_SECRET_KEY = _required_secret("JWT_SECRET_KEY")
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(
-        seconds=int(os.getenv("JWT_ACCESS_TOKEN_EXPIRES", 86400))
+        seconds=int(os.getenv("JWT_ACCESS_TOKEN_EXPIRES", 900))
     )
     JWT_REFRESH_TOKEN_EXPIRES = timedelta(
         seconds=int(os.getenv("JWT_REFRESH_TOKEN_EXPIRES", 604800))
     )
+
+    EMAIL_PROVIDER = os.getenv("EMAIL_PROVIDER", "").strip().lower()
+    EMAIL_FROM = os.getenv("EMAIL_FROM", "").strip()
+    SMTP_HOST = os.getenv("SMTP_HOST", "").strip()
+    SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+    SMTP_USERNAME = os.getenv("SMTP_USERNAME", "").strip()
+    SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+    SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() == "true"
+    SMTP_USE_SSL = os.getenv("SMTP_USE_SSL", "false").lower() == "true"
+    RESEND_API_KEY = os.getenv("RESEND_API_KEY", "").strip()
+
+    AUTH_LOGIN_RATE_LIMIT = int(os.getenv("AUTH_LOGIN_RATE_LIMIT", "10"))
+    AUTH_LOGIN_RATE_WINDOW = int(os.getenv("AUTH_LOGIN_RATE_WINDOW", "900"))
+    AUTH_FORGOT_RATE_LIMIT = int(os.getenv("AUTH_FORGOT_RATE_LIMIT", "5"))
+    AUTH_FORGOT_RATE_WINDOW = int(os.getenv("AUTH_FORGOT_RATE_WINDOW", "3600"))
+    AUTH_RESET_RATE_LIMIT = int(os.getenv("AUTH_RESET_RATE_LIMIT", "10"))
+    AUTH_RESET_RATE_WINDOW = int(os.getenv("AUTH_RESET_RATE_WINDOW", "3600"))
 
     CORS_ORIGINS = _csv_env(
         "CORS_ORIGINS",

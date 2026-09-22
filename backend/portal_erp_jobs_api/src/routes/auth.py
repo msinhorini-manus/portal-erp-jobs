@@ -1,38 +1,138 @@
-from flask import Blueprint, request, jsonify
+import hashlib
+import ipaddress
+import secrets
+import uuid
+from datetime import datetime, timedelta
+from urllib.parse import quote
+
+from flask import Blueprint, current_app, request, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_jwt_extended import create_access_token, create_refresh_token, jwt_required, get_jwt, get_jwt_identity
 from src.models.user import User
+from src.models.session_family import SessionFamily
 from src.models.company import Company, CompanyStatus
 from src.models.candidate import Candidate
 from src.models.company_user import CompanyUser, CompanyUserRole
 from src.config import db
+from src.rate_limit import auth_rate_limiter
 from src.regional_access import ensure_candidate_site, ensure_company_site, get_active_user, token_claims
 from src.regional_context import get_current_site
-from datetime import timedelta, datetime
+from src.services.email import (
+    EmailDeliveryUnavailable,
+    configured_email_provider,
+    send_password_reset_email,
+)
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/api/auth')
 
+INVALID_CREDENTIALS = {'error': 'Email ou senha inválidos'}
+GENERIC_RECOVERY = {
+    'message': 'Se o email estiver cadastrado, você receberá instruções para redefinir sua senha.'
+}
+RECOVERY_UNAVAILABLE = {
+    'error': 'Serviço de recuperação temporariamente indisponível. Tente novamente mais tarde.'
+}
+_DUMMY_PASSWORD_HASH = generate_password_hash('not-a-real-password')
+
+
+def _password_policy_error(password):
+    value = password or ''
+    if (
+        len(value) < 8
+        or not any(character.isupper() for character in value)
+        or not any(character.islower() for character in value)
+        or not any(character.isdigit() for character in value)
+    ):
+        return 'A senha deve ter ao menos 8 caracteres, com maiúscula, minúscula e número'
+    return None
+
+
+def _rate_limit(scope, email, limit_key, window_key):
+    allowed, retry_after = auth_rate_limiter.check(
+        scope=scope,
+        ip_address=request.remote_addr or 'unknown',
+        email=email,
+        limit=current_app.config[limit_key],
+        window_seconds=current_app.config[window_key],
+    )
+    if allowed:
+        return None
+    response = jsonify({'error': 'Muitas tentativas. Tente novamente mais tarde.'})
+    response.headers['Retry-After'] = str(retry_after)
+    return response, 429
+
+
+def _authenticate_user(email, password, *, expected_type=None):
+    """Authenticate without account enumeration and persist lockout changes."""
+    normalized_email = (email or '').strip().lower()
+    user = User.query.filter(db.func.lower(User.email) == normalized_email).first()
+
+    if user and user.is_locked():
+        return None
+
+    if not user:
+        check_password_hash(_DUMMY_PASSWORD_HASH, password or '')
+        return None
+
+    valid_password = user.check_password(password or '')
+    if not user.is_active or (expected_type and user.user_type != expected_type) or not valid_password:
+        user.record_failed_login()
+        db.session.commit()
+        return None
+
+    user.record_successful_login()
+    db.session.commit()
+    return user
+
+
+def _client_ip_prefix():
+    try:
+        address = ipaddress.ip_address(request.remote_addr or '')
+    except ValueError:
+        return None
+    prefix = 24 if address.version == 4 else 64
+    return str(ipaddress.ip_network(f'{address}/{prefix}', strict=False))
+
+
+def _user_agent_hash():
+    value = request.headers.get('User-Agent', '').strip()
+    return hashlib.sha256(value.encode('utf-8')).hexdigest() if value else None
+
 
 def _issue_tokens(user, site, *, company=None, candidate=None, admin=None):
+    family_id = str(uuid.uuid4())
+    refresh_jti = str(uuid.uuid4())
+    refresh_lifetime = current_app.config['JWT_REFRESH_TOKEN_EXPIRES']
     claims = token_claims(
         user,
         site,
         company=company,
         candidate=candidate,
         admin=admin,
+        family_id=family_id,
     )
-    return (
-        create_access_token(
-            identity=str(user.id),
-            additional_claims=claims,
-            expires_delta=timedelta(hours=24),
-        ),
-        create_refresh_token(
-            identity=str(user.id),
-            additional_claims=claims,
-            expires_delta=timedelta(days=30),
-        ),
+    family = SessionFamily(
+        user_id=user.id,
+        site_id=site.id,
+        family_id=family_id,
+        current_refresh_jti=refresh_jti,
+        expires_at=datetime.utcnow() + refresh_lifetime,
+        user_agent_hash=_user_agent_hash(),
+        ip_prefix=_client_ip_prefix(),
     )
+    db.session.add(family)
+    access_token = create_access_token(
+        identity=str(user.id),
+        additional_claims=claims,
+        expires_delta=current_app.config['JWT_ACCESS_TOKEN_EXPIRES'],
+    )
+    refresh_token = create_refresh_token(
+        identity=str(user.id),
+        additional_claims={**claims, 'jti': refresh_jti},
+        expires_delta=refresh_lifetime,
+    )
+    db.session.commit()
+    return access_token, refresh_token
 
 # ============================================
 # COMPANY REGISTRATION & LOGIN
@@ -50,6 +150,9 @@ def register_company():
         # Validar dados obrigatórios
         if not data.get('email') or not data.get('password'):
             return jsonify({'error': 'Email e senha são obrigatórios'}), 400
+        password_error = _password_policy_error(data['password'])
+        if password_error:
+            return jsonify({'error': password_error}), 400
 
         # Verificar se email já existe
         existing_user = User.query.filter_by(email=data['email']).first()
@@ -134,17 +237,21 @@ def login_company():
     """
     try:
         site = get_current_site()
-        data = request.get_json()
+        data = request.get_json(silent=True) or {}
+        email = data.get('email', '')
+        limited = _rate_limit(
+            'login-company', email, 'AUTH_LOGIN_RATE_LIMIT', 'AUTH_LOGIN_RATE_WINDOW'
+        )
+        if limited:
+            return limited
 
         # Validar dados
         if not data.get('email') or not data.get('password'):
             return jsonify({'error': 'Email e senha são obrigatórios'}), 400
 
-        # Buscar usuário
-        user = User.query.filter_by(email=data['email'], user_type='company').first()
-
-        if not user or not user.is_active or not check_password_hash(user.password_hash, data['password']):
-            return jsonify({'error': 'Email ou senha inválidos'}), 401
+        user = _authenticate_user(email, data['password'], expected_type='company')
+        if not user:
+            return jsonify(INVALID_CREDENTIALS), 401
 
         # Buscar empresa
         company = Company.query.filter_by(user_id=user.id).first()
@@ -164,7 +271,6 @@ def login_company():
                 is_active=True,
                 invitation_accepted=True,
             ))
-        user.record_successful_login()
         db.session.commit()
 
         access_token, refresh_token = _issue_tokens(user, site, company=company)
@@ -205,6 +311,9 @@ def register_candidate():
         # Validar dados obrigatórios
         if not data.get('email') or not data.get('password'):
             return jsonify({'error': 'Email e senha são obrigatórios'}), 400
+        password_error = _password_policy_error(data['password'])
+        if password_error:
+            return jsonify({'error': password_error}), 400
 
         # Verificar se email já existe
         existing_user = User.query.filter_by(email=data['email']).first()
@@ -286,17 +395,21 @@ def login_candidate():
     """
     try:
         site = get_current_site()
-        data = request.get_json()
+        data = request.get_json(silent=True) or {}
+        email = data.get('email', '')
+        limited = _rate_limit(
+            'login-candidate', email, 'AUTH_LOGIN_RATE_LIMIT', 'AUTH_LOGIN_RATE_WINDOW'
+        )
+        if limited:
+            return limited
 
         # Validar dados
         if not data.get('email') or not data.get('password'):
             return jsonify({'error': 'Email e senha são obrigatórios'}), 400
 
-        # Buscar usuário
-        user = User.query.filter_by(email=data['email'], user_type='candidate').first()
-
-        if not user or not user.is_active or not check_password_hash(user.password_hash, data['password']):
-            return jsonify({'error': 'Email ou senha inválidos'}), 401
+        user = _authenticate_user(email, data['password'], expected_type='candidate')
+        if not user:
+            return jsonify(INVALID_CREDENTIALS), 401
 
         # Buscar candidato
         candidate = Candidate.query.filter_by(user_id=user.id).first()
@@ -305,7 +418,6 @@ def login_candidate():
             return jsonify({'error': 'Candidato não encontrado'}), 404
 
         candidate_site = ensure_candidate_site(candidate, site)
-        user.record_successful_login()
         db.session.commit()
         access_token, refresh_token = _issue_tokens(user, site, candidate=candidate)
 
@@ -334,7 +446,7 @@ def login_candidate():
 # ============================================
 
 @auth_bp.route('/refresh', methods=['POST'])
-@jwt_required(refresh=True)
+@jwt_required(refresh=True, verify_type=True, skip_revocation_check=True)
 def refresh():
     """
     Renovar access token usando refresh token
@@ -344,11 +456,29 @@ def refresh():
         current_claims = get_jwt()
         if current_claims.get('site_id') != site.id or current_claims.get('site_code') != site.code:
             return jsonify({'error': 'Sessão não pertence a este site regional'}), 403
-        current_user_id = get_jwt_identity()
-        user = User.query.get(current_user_id)
+        try:
+            current_user_id = int(get_jwt_identity())
+        except (TypeError, ValueError):
+            return jsonify({'error': 'Sessão inválida ou revogada. Faça login novamente.'}), 401
+
+        family = SessionFamily.query.filter_by(
+            family_id=current_claims.get('family_id'),
+            user_id=current_user_id,
+            site_id=site.id,
+        ).first()
+        if not family or not family.is_valid():
+            return jsonify({'error': 'Sessão inválida ou revogada. Faça login novamente.'}), 401
+        if not family.accepts_refresh_jti(current_claims.get('jti')):
+            family.revoke()
+            db.session.commit()
+            return jsonify({'error': 'Reutilização de token detectada. Sessão revogada.'}), 401
+
+        user = db.session.get(User, current_user_id)
 
         if not user or not user.is_active:
-            return jsonify({'error': 'Usuário não encontrado'}), 404
+            family.revoke()
+            db.session.commit()
+            return jsonify({'error': 'Sessão inválida ou revogada. Faça login novamente.'}), 401
 
         company = Company.query.filter_by(user_id=user.id).first() if user.user_type == 'company' else None
         candidate = Candidate.query.filter_by(user_id=user.id).first() if user.user_type == 'candidate' else None
@@ -356,19 +486,55 @@ def refresh():
         if user.user_type == 'admin':
             from src.models.admin import Admin
             admin = Admin.query.filter_by(user_id=user.id).first()
-        claims = token_claims(user, site, company=company, candidate=candidate, admin=admin)
+        claims = token_claims(
+            user,
+            site,
+            company=company,
+            candidate=candidate,
+            admin=admin,
+            family_id=family.family_id,
+        )
+        new_refresh_jti = str(uuid.uuid4())
+        refresh_lifetime = current_app.config['JWT_REFRESH_TOKEN_EXPIRES']
+        if not family.rotate(
+            current_claims.get('jti'),
+            new_refresh_jti,
+            datetime.utcnow() + refresh_lifetime,
+        ):
+            db.session.commit()
+            return jsonify({'error': 'Reutilização de token detectada. Sessão revogada.'}), 401
         access_token = create_access_token(
             identity=str(user.id),
             additional_claims=claims,
-            expires_delta=timedelta(hours=24)
+            expires_delta=current_app.config['JWT_ACCESS_TOKEN_EXPIRES'],
         )
+        refresh_token = create_refresh_token(
+            identity=str(user.id),
+            additional_claims={**claims, 'jti': new_refresh_jti},
+            expires_delta=refresh_lifetime,
+        )
+        db.session.commit()
 
         return jsonify({
-            'access_token': access_token
+            'access_token': access_token,
+            'refresh_token': refresh_token,
         }), 200
 
     except Exception as e:
+        db.session.rollback()
         return jsonify({'error': str(e)}), 500
+
+
+@auth_bp.route('/logout', methods=['POST'])
+@jwt_required(verify_type=False, skip_revocation_check=True)
+def logout():
+    """Revoke the family represented by either an access or refresh token."""
+    claims = get_jwt()
+    family = SessionFamily.query.filter_by(family_id=claims.get('family_id')).first()
+    if family:
+        family.revoke()
+        db.session.commit()
+    return jsonify({'message': 'Logout realizado com sucesso'}), 200
 
 
 @auth_bp.route('/me', methods=['GET'])
@@ -414,8 +580,13 @@ def change_password():
         if not check_password_hash(user.password_hash, data['current_password']):
             return jsonify({'error': 'Senha atual incorreta'}), 401
 
-        # Atualizar senha
-        user.password_hash = generate_password_hash(data['new_password'])
+        password_error = _password_policy_error(data['new_password'])
+        if password_error:
+            return jsonify({'error': password_error}), 400
+
+        # Atualizar senha e invalidar todas as sessões, inclusive a atual.
+        user.set_password(data['new_password'])
+        user.revoke_all_sessions()
         db.session.commit()
 
         return jsonify({'message': 'Senha alterada com sucesso'}), 200
@@ -437,25 +608,21 @@ def login_admin():
     """
     try:
         site = get_current_site()
-        data = request.get_json()
+        data = request.get_json(silent=True) or {}
+        email = data.get('email', '')
+        limited = _rate_limit(
+            'login-admin', email, 'AUTH_LOGIN_RATE_LIMIT', 'AUTH_LOGIN_RATE_WINDOW'
+        )
+        if limited:
+            return limited
 
         # Validar dados
         if not data.get('email') or not data.get('password'):
             return jsonify({'error': 'Email e senha são obrigatórios'}), 400
 
-        # Buscar usuário
-        user = User.query.filter_by(email=data['email']).first()
-
+        user = _authenticate_user(email, data['password'], expected_type='admin')
         if not user:
-            return jsonify({'error': 'Email ou senha inválidos'}), 401
-
-        # Verificar se é admin
-        if not user.is_active or user.user_type != 'admin':
-            return jsonify({'error': 'Acesso negado. Apenas administradores podem acessar este painel.'}), 403
-
-        # Verificar senha
-        if not check_password_hash(user.password_hash, data['password']):
-            return jsonify({'error': 'Email ou senha inválidos'}), 401
+            return jsonify(INVALID_CREDENTIALS), 401
 
         # Buscar perfil admin
         from src.models.admin import Admin
@@ -464,8 +631,6 @@ def login_admin():
         if not admin:
             return jsonify({'error': 'Perfil de administrador não encontrado'}), 404
 
-        user.record_successful_login()
-        db.session.commit()
         access_token, refresh_token = _issue_tokens(user, site, admin=admin)
 
         return jsonify({
@@ -495,26 +660,22 @@ def login_generic():
     """
     try:
         site = get_current_site()
-        data = request.get_json()
+        data = request.get_json(silent=True) or {}
+        email = data.get('email', '')
+        limited = _rate_limit(
+            'login-generic', email, 'AUTH_LOGIN_RATE_LIMIT', 'AUTH_LOGIN_RATE_WINDOW'
+        )
+        if limited:
+            return limited
 
         # Validar dados
         if not data.get('email') or not data.get('password'):
             return jsonify({'error': 'Email e senha são obrigatórios'}), 400
 
-        # Buscar usuário
-        user = User.query.filter_by(email=data['email']).first()
-
-        if not user or not user.is_active:
-            return jsonify({'error': 'Email ou senha inválidos'}), 401
-
-        # Verificar senha
-        if not check_password_hash(user.password_hash, data['password']):
-            return jsonify({'error': 'Email ou senha inválidos'}), 401
-
-        # Se user_type foi especificado, validar
         requested_type = data.get('user_type')
-        if requested_type and user.user_type != requested_type:
-            return jsonify({'error': f'Este usuário não é do tipo {requested_type}'}), 403
+        user = _authenticate_user(email, data['password'], expected_type=requested_type)
+        if not user:
+            return jsonify(INVALID_CREDENTIALS), 401
 
         # Preparar resposta baseada no tipo de usuário
         response_data = {
@@ -559,7 +720,6 @@ def login_generic():
         else:
             return jsonify({'error': 'Tipo de usuário inválido'}), 400
 
-        user.record_successful_login()
         db.session.commit()
         access_token, refresh_token = _issue_tokens(
             user,
@@ -591,31 +751,50 @@ def forgot_password():
     Solicitar recuperação de senha
     """
     try:
-        data = request.get_json()
+        site = get_current_site()
+        data = request.get_json(silent=True) or {}
         email = data.get('email', '').lower().strip()
+        limited = _rate_limit(
+            'forgot-password', email, 'AUTH_FORGOT_RATE_LIMIT', 'AUTH_FORGOT_RATE_WINDOW'
+        )
+        if limited:
+            return limited
 
         if not email:
             return jsonify({'error': 'Email é obrigatório'}), 400
+
+        if configured_email_provider() is None:
+            return jsonify(RECOVERY_UNAVAILABLE), 503
 
         user = User.query.filter_by(email=email).first()
 
         # Sempre retorna sucesso para evitar enumeração de emails
         if not user:
-            return jsonify({
-                'message': 'Se o email estiver cadastrado, você receberá instruções para redefinir sua senha.'
-            }), 200
+            return jsonify(GENERIC_RECOVERY), 200
 
-        # A entrega por email será habilitada quando o provedor transacional
-        # estiver configurado. Até lá, não mantenha tokens utilizáveis pendentes.
-        user.clear_reset_token()
+        if not site.canonical_origin:
+            return jsonify(RECOVERY_UNAVAILABLE), 503
+
+        raw_token = user.generate_reset_token()
+        reset_url = (
+            f"{site.canonical_origin.rstrip('/')}/redefinir-senha?token={quote(raw_token)}"
+        )
+        try:
+            send_password_reset_email(
+                recipient=user.email,
+                reset_url=reset_url,
+                site_name=site.name,
+            )
+        except EmailDeliveryUnavailable:
+            db.session.rollback()
+            return jsonify(RECOVERY_UNAVAILABLE), 503
+
         db.session.commit()
+        return jsonify(GENERIC_RECOVERY), 200
 
-        return jsonify({
-            'message': 'Se o email estiver cadastrado, você receberá instruções para redefinir sua senha.'
-        }), 200
-
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    except Exception:
+        db.session.rollback()
+        return jsonify(RECOVERY_UNAVAILABLE), 503
 
 
 @auth_bp.route('/reset-password', methods=['POST'])
@@ -624,34 +803,34 @@ def reset_password():
     Redefinir senha usando token
     """
     try:
-        data = request.get_json()
-        email = data.get('email', '').lower().strip()
+        data = request.get_json(silent=True) or {}
         token = data.get('token', '')
         new_password = data.get('new_password', '')
+        limited = _rate_limit(
+            'reset-password', token, 'AUTH_RESET_RATE_LIMIT', 'AUTH_RESET_RATE_WINDOW'
+        )
+        if limited:
+            return limited
 
-        if not email or not token or not new_password:
-            return jsonify({'error': 'Email, token e nova senha são obrigatórios'}), 400
+        if not token or not new_password:
+            return jsonify({'error': 'Token e nova senha são obrigatórios'}), 400
 
-        if len(new_password) < 8:
-            return jsonify({'error': 'Senha deve ter pelo menos 8 caracteres'}), 400
+        password_error = _password_policy_error(new_password)
+        if password_error:
+            return jsonify({'error': password_error}), 400
 
-        user = User.query.filter_by(email=email).first()
+        token_hash = hashlib.sha256(token.encode('utf-8')).hexdigest()
+        user = User.query.filter_by(reset_token=token_hash).first()
 
-        if not user:
+        if not user or not user.verify_reset_token(token):
             return jsonify({'error': 'Token inválido ou expirado'}), 400
 
-        if not user.verify_reset_token(token):
-            return jsonify({'error': 'Token inválido ou expirado'}), 400
-
-        # Redefinir senha
-        user.password_hash = generate_password_hash(new_password)
+        # Redefinir senha, consumir token e revogar todas as sessões.
+        user.set_password(new_password)
         user.clear_reset_token()
-
-        # Limpar bloqueio se existir
-        if hasattr(user, 'failed_login_attempts'):
-            user.failed_login_attempts = 0
-        if hasattr(user, 'locked_until'):
-            user.locked_until = None
+        user.failed_login_attempts = 0
+        user.locked_until = None
+        user.revoke_all_sessions()
 
         db.session.commit()
 
@@ -659,8 +838,9 @@ def reset_password():
             'message': 'Senha redefinida com sucesso. Você já pode fazer login.'
         }), 200
 
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    except Exception:
+        db.session.rollback()
+        return jsonify({'error': 'Não foi possível redefinir a senha'}), 500
 
 
 # ============================================
@@ -953,8 +1133,9 @@ def register_admin():
         if not email or not password or not name:
             return jsonify({'error': 'Email, senha e nome são obrigatórios'}), 400
 
-        if len(password) < 8:
-            return jsonify({'error': 'Senha deve ter pelo menos 8 caracteres'}), 400
+        password_error = _password_policy_error(password)
+        if password_error:
+            return jsonify({'error': password_error}), 400
 
         if User.query.filter_by(email=email).first():
             return jsonify({'error': 'Email já cadastrado'}), 409

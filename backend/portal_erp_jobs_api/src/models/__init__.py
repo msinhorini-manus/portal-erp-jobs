@@ -21,6 +21,7 @@ from .software import Software
 from .technology import Technology
 from .tag import Tag
 from .site import Site, SiteDomain, SiteLocale
+from .session_family import SessionFamily
 
 __all__ = [
     'User',
@@ -52,5 +53,6 @@ __all__ = [
     'Tag',
     'Site',
     'SiteDomain',
-    'SiteLocale'
+    'SiteLocale',
+    'SessionFamily'
 ]

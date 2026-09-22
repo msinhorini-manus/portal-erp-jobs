@@ -6,8 +6,8 @@ Fonte canônica da plataforma **Portal ERP Jobs** implantada em `jobs.portalerp.
 
 | Diretório | Função |
 |---|---|
-| `next/` | Páginas públicas em Next.js 16 |
-| `frontend/` | SPA React/Vite temporária para candidato, empresa e admin |
+| `next/` | Páginas públicas, autenticação e dashboard candidato em Next.js 16 |
+| `frontend/` | SPA React/Vite temporária para currículo, empresa e admin |
 | `backend/portal_erp_jobs_api/` | API Flask e modelos SQLAlchemy |
 | `ops/` | Configuração e documentação operacional |
 
@@ -36,6 +36,16 @@ A identidade do usuário permanece global, mas suas regras operacionais pertence
 - `ApplicationStatusEvent`: trilha de auditoria das mudanças de estado.
 
 As migrations `20260922_03` e `20260922_04` implementam esse contrato. A especificação e as evidências estão em [`docs/WAVE2_REGIONAL_ACTORS_2026-09-22.md`](docs/WAVE2_REGIONAL_ACTORS_2026-09-22.md).
+
+## Autenticação e área candidata
+
+A autenticação candidata usa o BFF do Next em `/bff/*`. Access e refresh tokens nunca são devolvidos ao JavaScript do browser: ficam em cookies `HttpOnly`, `Secure` e `SameSite=Strict`. Mutações exigem double-submit CSRF. O access token expira em 15 minutos; o refresh, em sete dias, é rotativo e pertence a uma família persistida e revogável.
+
+As rotas `/candidato/login`, `/candidato/cadastro` e `/candidato/dashboard` são servidas pelo Next. O currículo permanece temporariamente na SPA em `/candidato/curriculo`, mas todas as suas chamadas autenticadas passam pelo mesmo BFF e não usam JWT em `localStorage`.
+
+A migration `20260922_05` cria `auth_session_families` e `users.password_changed_at`. Logout, troca e reset de senha revogam as famílias aplicáveis; reuso de refresh token revoga a cadeia inteira. Login e recuperação têm rate limiting e lockout persistente. Recuperação por e-mail só fica disponível quando SMTP ou Resend está completamente configurado; sem provedor, a API falha de forma segura com `503` e não cria token.
+
+A especificação e as evidências da implementação estão em [`docs/WAVE3_CANDIDATE_AUTH_DASHBOARD_2026-09-22.md`](docs/WAVE3_CANDIDATE_AUTH_DASHBOARD_2026-09-22.md).
 
 ## Segurança de configuração
 

@@ -35,7 +35,7 @@ export function AuthProvider({ children }) {
         return false;
       }
       return !!localStorage.getItem('authToken');
-    } catch (error) {
+    } catch {
       return false;
     }
   });
@@ -346,6 +346,7 @@ export function AuthProvider({ children }) {
 
   // Logout
   const logout = () => {
+    void authAPI.logout();
     clearAuthData();
     setUser(null);
     setIsAuthenticated(false);
