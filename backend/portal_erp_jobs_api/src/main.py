@@ -27,6 +27,7 @@ from src.models.education import Education
 from src.models.certification import Certification
 from src.models.project import Project
 from src.models.language import Language
+from src.models.site import Site, SiteDomain, SiteLocale
 
 # Import routes
 from src.routes.auth import auth_bp
@@ -38,6 +39,8 @@ from src.routes.resume import resume_bp
 from src.routes.admin import admin_bp
 from src.routes.stats import stats_bp
 from src.routes.config import config_bp
+from src.routes.sites import sites_bp
+from src.regional_context import init_regional_context
 
 # Initialize Flask app
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
@@ -53,11 +56,14 @@ CORS(app,
      supports_credentials=False)
 jwt = JWTManager(app)
 
-# Initialize i18n
-init_i18n(app)
-
 # Initialize database
 db.init_app(app)
+
+# Resolve the authoritative regional site before locale and route handlers.
+init_regional_context(app)
+
+# Initialize i18n
+init_i18n(app)
 
 # Register blueprints
 app.register_blueprint(auth_bp)
@@ -69,6 +75,7 @@ app.register_blueprint(resume_bp)
 app.register_blueprint(admin_bp)
 app.register_blueprint(stats_bp)
 app.register_blueprint(config_bp)
+app.register_blueprint(sites_bp)
 
 # API root endpoint
 @app.route('/api')

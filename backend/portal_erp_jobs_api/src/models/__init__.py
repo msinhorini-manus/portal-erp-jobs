@@ -20,6 +20,7 @@ from .work_modality import WorkModality
 from .software import Software
 from .technology import Technology
 from .tag import Tag
+from .site import Site, SiteDomain, SiteLocale
 
 __all__ = [
     'User',
@@ -44,5 +45,8 @@ __all__ = [
     'WorkModality',
     'Software',
     'Technology',
-    'Tag'
+    'Tag',
+    'Site',
+    'SiteDomain',
+    'SiteLocale'
 ]

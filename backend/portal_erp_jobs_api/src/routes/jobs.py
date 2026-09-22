@@ -7,6 +7,7 @@ from src.models.job_area import JobArea
 from src.config import db
 from sqlalchemy import or_, and_
 from datetime import datetime
+from src.regional_context import get_current_site
 
 jobs_bp = Blueprint('jobs', __name__, url_prefix='/api/jobs')
 
@@ -17,6 +18,7 @@ def get_all_jobs():
     Suporta filtros avançados por tecnologia, área e faixa salarial exata
     """
     try:
+        site = get_current_site()
         # Parâmetros de busca
         query = request.args.get('q', '')
         city = request.args.get('city', '')
@@ -37,7 +39,7 @@ def get_all_jobs():
         salary_exact_max = request.args.get('salary_max_exact', type=int)  # Salário máximo exato
 
         # Construir query - apenas vagas ativas
-        jobs_query = Job.query.filter_by(is_active=True)
+        jobs_query = Job.query.filter_by(site_id=site.id, is_active=True)
 
         # Filtro de texto (título ou descrição)
         if query:
@@ -151,7 +153,8 @@ def get_job_by_id(job_id):
     Obter detalhes de uma vaga específica
     """
     try:
-        job = Job.query.get(job_id)
+        site = get_current_site()
+        job = Job.query.filter_by(id=job_id, site_id=site.id).first()
 
         if not job:
             return jsonify({'error': 'Vaga não encontrada'}), 404
@@ -169,6 +172,7 @@ def create_job():
     Criar nova vaga (apenas empresas)
     """
     try:
+        site = get_current_site()
         current_user_id = get_jwt_identity()
         claims = get_jwt()
 
@@ -210,6 +214,7 @@ def create_job():
 
         new_job = Job(
             company_id=company.id,
+            site_id=site.id,
             title=data.get('title'),
             description=data.get('description'),
             requirements=data.get('requirements'),
@@ -280,6 +285,7 @@ def update_job(job_id):
     Atualizar vaga existente (apenas empresa dona da vaga)
     """
     try:
+        site = get_current_site()
         current_user_id = get_jwt_identity()
         claims = get_jwt()
 
@@ -293,7 +299,7 @@ def update_job(job_id):
             return jsonify({'error': 'Perfil de empresa não encontrado'}), 404
 
         # Buscar vaga
-        job = Job.query.get(job_id)
+        job = Job.query.filter_by(id=job_id, site_id=site.id).first()
         if not job:
             return jsonify({'error': 'Vaga não encontrada'}), 404
 
@@ -382,6 +388,7 @@ def delete_job(job_id):
     Deletar vaga (apenas empresa dona da vaga)
     """
     try:
+        site = get_current_site()
         current_user_id = get_jwt_identity()
         claims = get_jwt()
 
@@ -395,7 +402,7 @@ def delete_job(job_id):
             return jsonify({'error': 'Perfil de empresa não encontrado'}), 404
 
         # Buscar vaga
-        job = Job.query.get(job_id)
+        job = Job.query.filter_by(id=job_id, site_id=site.id).first()
         if not job:
             return jsonify({'error': 'Vaga não encontrada'}), 404
 
@@ -420,6 +427,7 @@ def get_my_company_jobs():
     Listar todas as vagas da empresa autenticada
     """
     try:
+        site = get_current_site()
         current_user_id = get_jwt_identity()
         claims = get_jwt()
 
@@ -437,7 +445,7 @@ def get_my_company_jobs():
         per_page = request.args.get('per_page', 20, type=int)
         status = request.args.get('status', '')
 
-        jobs_query = Job.query.filter_by(company_id=company.id)
+        jobs_query = Job.query.filter_by(company_id=company.id, site_id=site.id)
 
         if status:
             # Converter status string para is_active boolean
@@ -467,6 +475,7 @@ def get_job_applications(job_id):
     Listar todas as candidaturas de uma vaga (apenas empresa dona)
     """
     try:
+        site = get_current_site()
         current_user_id = get_jwt_identity()
         claims = get_jwt()
 
@@ -480,7 +489,7 @@ def get_job_applications(job_id):
             return jsonify({'error': 'Perfil de empresa não encontrado'}), 404
 
         # Buscar vaga
-        job = Job.query.get(job_id)
+        job = Job.query.filter_by(id=job_id, site_id=site.id).first()
         if not job:
             return jsonify({'error': 'Vaga não encontrada'}), 404
 
@@ -522,6 +531,7 @@ def toggle_job_status(job_id):
     Alternar status da vaga (ativar/pausar)
     """
     try:
+        site = get_current_site()
         current_user_id = get_jwt_identity()
         claims = get_jwt()
 
@@ -534,8 +544,8 @@ def toggle_job_status(job_id):
         if not company:
             return jsonify({'error': 'Perfil de empresa não encontrado'}), 404
 
-        # Buscar vaga
-        job = Job.query.get(job_id)
+        # Buscar vaga dentro do site atual
+        job = Job.query.filter_by(id=job_id, site_id=site.id).first()
         if not job:
             return jsonify({'error': 'Vaga não encontrada'}), 404
 

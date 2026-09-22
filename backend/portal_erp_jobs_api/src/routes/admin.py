@@ -17,7 +17,7 @@ def admin_required(fn):
         current_user_id = get_jwt_identity()
         user = User.query.get(current_user_id)
 
-        if not user or user.user_type != 'admin':
+        if not user or not user.is_active or user.user_type != 'admin':
             return jsonify({'error': 'Admin access required'}), 403
 
         return fn(*args, **kwargs)
@@ -1048,7 +1048,7 @@ def super_admin_required(fn):
         current_user_id = get_jwt_identity()
         user = User.query.get(current_user_id)
 
-        if not user or user.user_type != 'admin':
+        if not user or not user.is_active or user.user_type != 'admin':
             return jsonify({'error': 'Admin access required'}), 403
 
         admin = Admin.query.filter_by(user_id=current_user_id).first()
