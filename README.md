@@ -13,6 +13,18 @@ Fonte canônica da plataforma **Portal ERP Jobs** implantada em `jobs.portalerp.
 
 O destino aprovado é uma única aplicação Next.js para todas as páginas, mantendo o Flask como autoridade de regras e o banco atual durante a primeira fase. A SPA é temporária e será portada por domínio.
 
+## Contrato regional
+
+A plataforma usa **um Next.js, um Flask e um banco**. O Flask resolve o site pelo hostname cadastrado e entrega um contrato único com `code`, `country_code`, `locale`, `currency_code`, `timezone`, `canonical_origin` e `is_active`. O browser não pode informar `site_id` como autoridade.
+
+O catálogo inicial possui doze sites (`BR`, `MX`, `AR`, `CO`, `CL`, `PE`, `EC`, `ES`, `PT`, `US`, `CA` e `AU`). Somente o Brasil está ativo. O México está preparado com `es-MX`, `MXN` e `America/Mexico_City`, mas permanece sem domínio, fora do seletor e sem indexação até homologação formal.
+
+Endpoints:
+
+- `GET /api/context`: contexto do site resolvido pelo servidor.
+- `GET /api/sites`: somente sites públicos ativos.
+- `/api/admin/sites`: CRUD protegido para superadministradores.
+
 ## Segurança de configuração
 
 O Flask falha fechado se `SECRET_KEY` ou `JWT_SECRET_KEY` tiverem menos de 32 caracteres. Valores reais nunca devem ser versionados. Use `.env.example` apenas como referência de nomes.
@@ -26,6 +38,8 @@ cd backend/portal_erp_jobs_api
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt pip-audit
 .venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v
+.venv/bin/alembic upgrade head
+.venv/bin/alembic check
 .venv/bin/pip-audit -r requirements.txt
 ```
 
@@ -37,6 +51,7 @@ corepack enable
 corepack prepare pnpm@11.24.0 --activate
 pnpm install --frozen-lockfile
 pnpm peers check
+pnpm test
 pnpm audit --prod
 pnpm run build
 ```

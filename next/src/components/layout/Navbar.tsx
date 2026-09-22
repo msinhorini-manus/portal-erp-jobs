@@ -3,6 +3,8 @@
 import Link from 'next/link'
 import { useState } from 'react'
 import { Menu, X, Search, Building2, User } from 'lucide-react'
+import type { RegionalSite } from '@/lib/site'
+import { SiteSelector } from './SiteSelector'
 
 const navLinks = [
   { href: '/vagas', label: 'Vagas' },
@@ -13,7 +15,12 @@ const navLinks = [
   { href: '/conteudo', label: 'Conteúdo' },
 ]
 
-export function Navbar() {
+type NavbarProps = {
+  currentSite: RegionalSite
+  sites: RegionalSite[]
+}
+
+export function Navbar({ currentSite, sites }: NavbarProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   return (
@@ -45,6 +52,7 @@ export function Navbar() {
 
           {/* Actions */}
           <div className="hidden md:flex items-center gap-3">
+            <SiteSelector currentSite={currentSite} sites={sites} />
             <Link
               href="/candidato/login"
               className="flex items-center gap-1.5 text-sm text-white/90 hover:text-white transition-colors"
@@ -74,6 +82,7 @@ export function Navbar() {
         {mobileMenuOpen && (
           <nav className="md:hidden mt-4 pb-4 border-t border-white/10 pt-4">
             <div className="flex flex-col gap-3">
+              <SiteSelector currentSite={currentSite} sites={sites} compact />
               {navLinks.map((link) => (
                 <Link
                   key={link.href}

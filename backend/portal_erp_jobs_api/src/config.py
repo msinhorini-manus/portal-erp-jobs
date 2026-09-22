@@ -2,10 +2,13 @@
 Configuration file for Portal ERP Jobs API.
 """
 import os
+import sqlite3
 from datetime import timedelta
 
 from dotenv import load_dotenv
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
 
 load_dotenv()
 
@@ -28,7 +31,8 @@ class Config:
     """Production-safe application configuration."""
 
     SECRET_KEY = _required_secret("SECRET_KEY")
-    DEBUG = os.getenv("FLASK_ENV", "production") == "development"
+    ENVIRONMENT = os.getenv("FLASK_ENV", "production")
+    DEBUG = ENVIRONMENT == "development"
 
     db_path = os.path.join(BASE_DIR, "database", "app.db")
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
@@ -49,9 +53,22 @@ class Config:
         "https://jobs.portalerp.com.br",
     )
     ALLOW_ADMIN_SETUP = os.getenv("ALLOW_ADMIN_SETUP", "false").lower() == "true"
+    REGIONAL_ALLOW_DEVELOPMENT_FALLBACK = (
+        ENVIRONMENT != "production"
+        and os.getenv("REGIONAL_ALLOW_DEVELOPMENT_FALLBACK", "true").lower() == "true"
+    )
 
     APP_NAME = os.getenv("APP_NAME", "Portal ERP Jobs")
     APP_VERSION = os.getenv("APP_VERSION", "1.0.1")
 
 
 db = SQLAlchemy()
+
+
+@event.listens_for(Engine, "connect")
+def enable_sqlite_foreign_keys(dbapi_connection, _connection_record):
+    """Ensure ORM foreign keys are enforced by every SQLite connection."""
+    if isinstance(dbapi_connection, sqlite3.Connection):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()

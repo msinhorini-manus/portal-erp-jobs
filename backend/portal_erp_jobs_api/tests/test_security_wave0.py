@@ -15,6 +15,9 @@ os.environ["FLASK_ENV"] = "testing"
 from src.config import _required_secret, db  # noqa: E402
 from src.main import app  # noqa: E402
 from src.models.user import User  # noqa: E402
+from src.models.company import Company  # noqa: E402
+from src.models.job import Job  # noqa: E402
+from src.models.site import Site, SiteDomain, SiteLocale  # noqa: E402
 
 
 class WaveZeroSecurityTests(unittest.TestCase):
@@ -24,9 +27,72 @@ class WaveZeroSecurityTests(unittest.TestCase):
         cls.client = app.test_client()
         with app.app_context():
             db.create_all()
+            br = Site(
+                code="BR",
+                name="Brasil",
+                country_code="BR",
+                default_locale="pt-BR",
+                currency_code="BRL",
+                timezone="America/Sao_Paulo",
+                canonical_origin="https://jobs.portalerp.com.br",
+                is_active=True,
+            )
+            br.domains.append(
+                SiteDomain(
+                    hostname="jobs.portalerp.com.br",
+                    is_primary=True,
+                    is_active=True,
+                )
+            )
+            br.locales.append(
+                SiteLocale(locale="pt-BR", is_default=True, is_active=True)
+            )
+            mx = Site(
+                code="MX",
+                name="México",
+                country_code="MX",
+                default_locale="es-MX",
+                currency_code="MXN",
+                timezone="America/Mexico_City",
+                is_active=False,
+            )
+            mx.domains.append(
+                SiteDomain(
+                    hostname="jobs-mx.invalid",
+                    is_primary=True,
+                    is_active=True,
+                )
+            )
+            mx.locales.append(
+                SiteLocale(locale="es-MX", is_default=True, is_active=True)
+            )
+            db.session.add_all([br, mx])
+
             user = User(email="security-test@example.com", user_type="candidate")
             user.set_password("ValidPassword123")
-            db.session.add(user)
+            company_user = User(email="company-test@example.com", user_type="company")
+            company_user.set_password("ValidPassword123")
+            db.session.add_all([user, company_user])
+            db.session.flush()
+            company = Company(user_id=company_user.id, company_name="Regional Test Company")
+            db.session.add(company)
+            db.session.flush()
+            db.session.add_all([
+                Job(
+                    site_id=br.id,
+                    company_id=company.id,
+                    title="BR Job",
+                    description="Brazilian job",
+                    is_active=True,
+                ),
+                Job(
+                    site_id=mx.id,
+                    company_id=company.id,
+                    title="MX Job",
+                    description="Mexican job",
+                    is_active=True,
+                ),
+            ])
             db.session.commit()
 
     @classmethod
@@ -121,6 +187,84 @@ class WaveZeroSecurityTests(unittest.TestCase):
             headers={"Origin": "https://evil.example"},
         )
         self.assertIsNone(untrusted.headers.get("Access-Control-Allow-Origin"))
+
+    def test_public_context_returns_only_server_resolved_site(self):
+        response = self.client.get(
+            "/api/context",
+            headers={"Host": "jobs.portalerp.com.br"},
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["site"]["code"], "BR")
+        self.assertEqual(payload["site"]["locale"], "pt-BR")
+        self.assertEqual(payload["site"]["currency_code"], "BRL")
+
+    def test_public_sites_exclude_inactive_mexico(self):
+        response = self.client.get(
+            "/api/sites",
+            headers={"Host": "jobs.portalerp.com.br"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([item["code"] for item in response.get_json()["sites"]], ["BR"])
+
+    def test_inactive_mexico_fails_closed(self):
+        response = self.client.get(
+            "/api/context",
+            headers={"Host": "jobs-mx.invalid"},
+        )
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.get_json()["error"]["code"], "site_not_available")
+
+    def test_unknown_host_fails_closed_when_fallback_disabled(self):
+        previous = app.config["REGIONAL_ALLOW_DEVELOPMENT_FALLBACK"]
+        app.config["REGIONAL_ALLOW_DEVELOPMENT_FALLBACK"] = False
+        try:
+            response = self.client.get("/api/context", headers={"Host": "unknown.invalid"})
+            self.assertEqual(response.status_code, 404)
+            self.assertEqual(response.get_json()["error"]["code"], "site_not_found")
+        finally:
+            app.config["REGIONAL_ALLOW_DEVELOPMENT_FALLBACK"] = previous
+
+    def test_client_cannot_override_site_authority(self):
+        response = self.client.get(
+            "/api/jobs/?site_id=2",
+            headers={"Host": "jobs.portalerp.com.br"},
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.get_json()["error"]["code"],
+            "client_site_authority_forbidden",
+        )
+
+        header_response = self.client.get(
+            "/api/context",
+            headers={
+                "Host": "jobs.portalerp.com.br",
+                "X-Regional-Host": "jobs-mx.invalid",
+            },
+        )
+        self.assertEqual(header_response.status_code, 400)
+
+    def test_loopback_next_can_forward_the_regional_host(self):
+        response = self.client.get(
+            "/api/context",
+            headers={
+                "Host": "127.0.0.1:5000",
+                "X-Regional-Host": "jobs.portalerp.com.br",
+            },
+            environ_base={"REMOTE_ADDR": "127.0.0.1"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["site"]["code"], "BR")
+
+    def test_jobs_are_filtered_by_resolved_site(self):
+        response = self.client.get(
+            "/api/jobs/",
+            headers={"Host": "jobs.portalerp.com.br"},
+        )
+        self.assertEqual(response.status_code, 200)
+        titles = [job["title"] for job in response.get_json()["jobs"]]
+        self.assertEqual(titles, ["BR Job"])
 
 
 if __name__ == "__main__":

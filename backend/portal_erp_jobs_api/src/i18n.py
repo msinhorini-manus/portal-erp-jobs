@@ -7,11 +7,21 @@ import os
 from flask import request, g
 
 # Supported languages
-SUPPORTED_LANGUAGES = ['pt-BR', 'en-US', 'es-ES']
+SUPPORTED_LANGUAGES = [
+    'pt-BR', 'pt-PT',
+    'en-US', 'en-CA', 'en-AU',
+    'es-MX', 'es-AR', 'es-CO', 'es-CL', 'es-PE', 'es-EC', 'es-ES',
+]
 DEFAULT_LANGUAGE = 'pt-BR'
 
 # Load translations
 TRANSLATIONS = {}
+
+TRANSLATION_FALLBACKS = {
+    'pt': 'pt-BR',
+    'es': 'es-ES',
+    'en': 'en-US',
+}
 
 def load_translations():
     """Load translations from JSON file"""
@@ -119,7 +129,12 @@ def get_locale():
     2. 'Accept-Language' header
     3. Default language (pt-BR)
     """
-    # Check query parameter
+    # The resolved site is authoritative on all regional API requests.
+    site = getattr(g, 'site', None)
+    if site is not None:
+        return site.default_locale
+
+    # Compatibility fallback for non-regional local tooling only.
     lang = request.args.get('lang')
     if lang and lang in SUPPORTED_LANGUAGES:
         return lang
@@ -160,6 +175,9 @@ def translate(key, lang=None):
     if lang is None:
         lang = getattr(g, 'locale', DEFAULT_LANGUAGE)
 
+    if lang not in TRANSLATIONS:
+        lang = TRANSLATION_FALLBACKS.get(lang.split('-')[0], DEFAULT_LANGUAGE)
+
     # Split key into parts (e.g., "success.created" -> ["success", "created"])
     parts = key.split('.')
 
@@ -187,7 +205,8 @@ def init_i18n(app):
     @app.before_request
     def before_request():
         """Set locale for each request"""
-        g.locale = get_locale()
+        if not getattr(g, 'locale', None):
+            g.locale = get_locale()
 
     # Add translate function to Jinja2 context
     app.jinja_env.globals['translate'] = translate

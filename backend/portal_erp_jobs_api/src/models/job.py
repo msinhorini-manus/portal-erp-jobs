@@ -10,6 +10,12 @@ class Job(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     company_id = db.Column(db.Integer, db.ForeignKey('companies.id'), nullable=False)
+    site_id = db.Column(
+        db.Integer,
+        db.ForeignKey('sites.id', ondelete='RESTRICT'),
+        nullable=False,
+        index=True,
+    )
 
     # Job Info
     title = db.Column(db.String(100), nullable=False)
@@ -48,6 +54,7 @@ class Job(db.Model):
     skills = db.relationship('JobSkill', backref='job', cascade='all, delete-orphan')
     applications = db.relationship('Application', backref='job', cascade='all, delete-orphan')
     job_area = db.relationship('JobArea', backref='jobs')
+    site = db.relationship('Site', back_populates='jobs')
 
     def to_dict(self, include_details=False):
         """Convert to dictionary"""
@@ -99,6 +106,7 @@ class Job(db.Model):
         data = {
             'id': self.id,
             'company_id': self.company_id,
+            'site_code': self.site.code if self.site else None,
             'company_name': company_name,
             'title': self.title,
             'area': area_name,

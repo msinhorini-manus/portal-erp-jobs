@@ -1,30 +1,50 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://jobs.portalerp.com.br/api'
+import { getSiteContext } from './site-resolver.server'
+import { requireCanonicalOrigin } from './site'
 
-export async function fetchAPI(endpoint: string, options?: RequestInit) {
-  const url = `${API_BASE}${endpoint}`
-  const res = await fetch(url, {
-    ...options,
-    next: { revalidate: 60 }, // Cache por 60 segundos
-  })
-  if (!res.ok) {
-    throw new Error(`API error: ${res.status} ${res.statusText}`)
+type SiteFetchOptions = RequestInit & {
+  next?: {
+    revalidate?: number
+    tags?: string[]
   }
-  return res.json()
 }
 
-// Áreas de Atuação
+export async function fetchAPI(endpoint: string, options: SiteFetchOptions = {}) {
+  const { site } = await getSiteContext()
+  const publicOrigin = requireCanonicalOrigin(site)
+  const internalOrigin = process.env.NEXT_INTERNAL_API_ORIGIN?.replace(/\/$/, '') || publicOrigin
+  const url = `${internalOrigin}/api${endpoint}`
+  const tags = [...(options.next?.tags || []), `site:${site.code}`]
+  const siteHost = new URL(publicOrigin).host
+  const requestHeaders = new Headers(options.headers)
+  if (internalOrigin !== publicOrigin) {
+    requestHeaders.set('X-Regional-Host', siteHost)
+  }
+
+  const response = await fetch(url, {
+    ...options,
+    headers: requestHeaders,
+    next: {
+      revalidate: options.next?.revalidate ?? 60,
+      tags,
+    },
+  })
+
+  if (!response.ok) {
+    throw new Error(`API error for site ${site.code}: ${response.status} ${response.statusText}`)
+  }
+  return response.json()
+}
+
 export async function getAreas() {
   return fetchAPI('/config/areas')
 }
 
-// Tecnologias
 export async function getTechnologies() {
   return fetchAPI('/config/technologies')
 }
 
-// Vagas
 export async function getJobs(params?: Record<string, string>) {
-  const searchParams = params ? '?' + new URLSearchParams(params).toString() : ''
+  const searchParams = params ? `?${new URLSearchParams(params).toString()}` : ''
   return fetchAPI(`/jobs/${searchParams}`)
 }
 
@@ -32,7 +52,6 @@ export async function getJobById(id: string) {
   return fetchAPI(`/jobs/${id}`)
 }
 
-// Empresas
 export async function getCompanies() {
   return fetchAPI('/companies/search')
 }
@@ -41,7 +60,6 @@ export async function getCompanyById(id: string) {
   return fetchAPI(`/companies/${id}`)
 }
 
-// Config geral
 export async function getLevels() {
   return fetchAPI('/config/levels')
 }
