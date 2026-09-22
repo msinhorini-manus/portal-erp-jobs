@@ -25,6 +25,18 @@ Endpoints:
 - `GET /api/sites`: somente sites públicos ativos.
 - `/api/admin/sites`: CRUD protegido para superadministradores.
 
+## Atores e candidaturas regionais
+
+A identidade do usuário permanece global, mas suas regras operacionais pertencem ao site atual:
+
+- `CompanySite`: aprovação, perfil público, membresia e limite de vagas;
+- `CandidateSite`: ativação, descoberta opt-in, pretensão e disponibilidade;
+- `Job.site_id`: vaga vinculada à presença regional da empresa;
+- `Application.site_id`: candidatura vinculada simultaneamente à vaga e ao candidato do mesmo site;
+- `ApplicationStatusEvent`: trilha de auditoria das mudanças de estado.
+
+As migrations `20260922_03` e `20260922_04` implementam esse contrato. A especificação e as evidências estão em [`docs/WAVE2_REGIONAL_ACTORS_2026-09-22.md`](docs/WAVE2_REGIONAL_ACTORS_2026-09-22.md).
+
 ## Segurança de configuração
 
 O Flask falha fechado se `SECRET_KEY` ou `JWT_SECRET_KEY` tiverem menos de 32 caracteres. Valores reais nunca devem ser versionados. Use `.env.example` apenas como referência de nomes.

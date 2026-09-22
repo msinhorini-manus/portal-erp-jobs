@@ -7,6 +7,15 @@ from src.config import db
 class Job(db.Model):
     """Job posting model"""
     __tablename__ = 'jobs'
+    __table_args__ = (
+        db.UniqueConstraint('id', 'site_id', name='uq_jobs_id_site'),
+        db.ForeignKeyConstraint(
+            ['company_id', 'site_id'],
+            ['company_sites.company_id', 'company_sites.site_id'],
+            name='fk_jobs_company_site',
+            ondelete='RESTRICT',
+        ),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     company_id = db.Column(db.Integer, db.ForeignKey('companies.id'), nullable=False)
@@ -52,7 +61,12 @@ class Job(db.Model):
 
     # Relationships
     skills = db.relationship('JobSkill', backref='job', cascade='all, delete-orphan')
-    applications = db.relationship('Application', backref='job', cascade='all, delete-orphan')
+    applications = db.relationship(
+        'Application',
+        backref='job',
+        cascade='all, delete-orphan',
+        foreign_keys='Application.job_id',
+    )
     job_area = db.relationship('JobArea', backref='jobs')
     site = db.relationship('Site', back_populates='jobs')
 
@@ -82,10 +96,14 @@ class Job(db.Model):
 
         # Formatar salário
         salary = ''
+        currency_symbol = {'BRL': 'R$', 'MXN': 'MX$', 'USD': '$', 'EUR': '€'}.get(
+            self.salary_currency,
+            self.salary_currency or '',
+        )
         if self.min_salary and self.max_salary:
-            salary = f"R$ {int(self.min_salary):,} - R$ {int(self.max_salary):,}".replace(',', '.')
+            salary = f"{currency_symbol} {int(self.min_salary):,} - {currency_symbol} {int(self.max_salary):,}".replace(',', '.')
         elif self.min_salary:
-            salary = f"A partir de R$ {int(self.min_salary):,}".replace(',', '.')
+            salary = f"{currency_symbol} {int(self.min_salary):,}+".replace(',', '.')
         else:
             salary = 'A combinar'
 
@@ -138,7 +156,18 @@ class Job(db.Model):
             data['benefits'] = self.benefits
             data['expires_at'] = self.expires_at.isoformat() if self.expires_at else None
             data['skills_detailed'] = [skill.to_dict() for skill in self.skills]
-            data['company'] = self.company.to_dict() if self.company and not self.is_company_hidden else None
+            membership = None
+            if self.company:
+                membership = next(
+                    (item for item in self.company.site_memberships if item.site_id == self.site_id),
+                    None,
+                )
+            data['company'] = (
+                self.company.to_public_dict(membership)
+                if self.company and membership and not self.is_company_hidden
+                else None
+            )
+            data['company_name'] = data['company']['company_name'] if data['company'] else None
 
         return data
 

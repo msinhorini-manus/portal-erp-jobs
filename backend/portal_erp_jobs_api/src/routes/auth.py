@@ -1,13 +1,38 @@
 from flask import Blueprint, request, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
-from flask_jwt_extended import create_access_token, create_refresh_token, jwt_required, get_jwt_identity
+from flask_jwt_extended import create_access_token, create_refresh_token, jwt_required, get_jwt, get_jwt_identity
 from src.models.user import User
-from src.models.company import Company
+from src.models.company import Company, CompanyStatus
 from src.models.candidate import Candidate
+from src.models.company_user import CompanyUser, CompanyUserRole
 from src.config import db
+from src.regional_access import ensure_candidate_site, ensure_company_site, get_active_user, token_claims
+from src.regional_context import get_current_site
 from datetime import timedelta, datetime
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/api/auth')
+
+
+def _issue_tokens(user, site, *, company=None, candidate=None, admin=None):
+    claims = token_claims(
+        user,
+        site,
+        company=company,
+        candidate=candidate,
+        admin=admin,
+    )
+    return (
+        create_access_token(
+            identity=str(user.id),
+            additional_claims=claims,
+            expires_delta=timedelta(hours=24),
+        ),
+        create_refresh_token(
+            identity=str(user.id),
+            additional_claims=claims,
+            expires_delta=timedelta(days=30),
+        ),
+    )
 
 # ============================================
 # COMPANY REGISTRATION & LOGIN
@@ -19,6 +44,7 @@ def register_company():
     Registrar nova empresa
     """
     try:
+        site = get_current_site()
         data = request.get_json()
 
         # Validar dados obrigatórios
@@ -49,7 +75,7 @@ def register_company():
             sector=data.get('sector', ''),
             company_size=data.get('company_size', ''),
             description=data.get('description', ''),
-            country=data.get('country', 'Brasil'),
+            country=site.name,
             state=data.get('state', ''),
             city=data.get('city', ''),
             street_address=data.get('address', ''),
@@ -57,17 +83,27 @@ def register_company():
         )
 
         db.session.add(new_company)
+        db.session.flush()
+        company_site = ensure_company_site(
+            new_company,
+            site,
+            status=CompanyStatus.PENDING,
+        )
+        db.session.add(CompanyUser(
+            company_id=new_company.id,
+            user_id=new_user.id,
+            role=CompanyUserRole.OWNER,
+            name=new_company.company_name,
+            position='Owner',
+            is_active=True,
+            invitation_accepted=True,
+        ))
         db.session.commit()
 
-        # Gerar tokens (identity deve ser string)
-        access_token = create_access_token(
-            identity=str(new_user.id),
-            additional_claims={'user_type': 'company', 'company_id': new_company.id},
-            expires_delta=timedelta(hours=24)
-        )
-        refresh_token = create_refresh_token(
-            identity=str(new_user.id),
-            expires_delta=timedelta(days=30)
+        access_token, refresh_token = _issue_tokens(
+            new_user,
+            site,
+            company=new_company,
         )
 
         return jsonify({
@@ -77,7 +113,9 @@ def register_company():
                 'email': new_user.email,
                 'user_type': 'company',
                 'company_id': new_company.id,
-                'company_name': new_company.company_name
+                'company_name': new_company.company_name,
+                'site_code': site.code,
+                'site_status': company_site.status
             },
             'access_token': access_token,
             'refresh_token': refresh_token
@@ -95,6 +133,7 @@ def login_company():
     Login de empresa
     """
     try:
+        site = get_current_site()
         data = request.get_json()
 
         # Validar dados
@@ -104,7 +143,7 @@ def login_company():
         # Buscar usuário
         user = User.query.filter_by(email=data['email'], user_type='company').first()
 
-        if not user or not check_password_hash(user.password_hash, data['password']):
+        if not user or not user.is_active or not check_password_hash(user.password_hash, data['password']):
             return jsonify({'error': 'Email ou senha inválidos'}), 401
 
         # Buscar empresa
@@ -113,16 +152,22 @@ def login_company():
         if not company:
             return jsonify({'error': 'Empresa não encontrada'}), 404
 
-        # Gerar tokens (identity deve ser string)
-        access_token = create_access_token(
-            identity=str(user.id),
-            additional_claims={'user_type': 'company', 'company_id': company.id},
-            expires_delta=timedelta(hours=24)
-        )
-        refresh_token = create_refresh_token(
-            identity=str(user.id),
-            expires_delta=timedelta(days=30)
-        )
+        company_site = ensure_company_site(company, site)
+        owner = CompanyUser.query.filter_by(company_id=company.id, user_id=user.id).first()
+        if not owner:
+            db.session.add(CompanyUser(
+                company_id=company.id,
+                user_id=user.id,
+                role=CompanyUserRole.OWNER,
+                name=company.company_name,
+                position='Owner',
+                is_active=True,
+                invitation_accepted=True,
+            ))
+        user.record_successful_login()
+        db.session.commit()
+
+        access_token, refresh_token = _issue_tokens(user, site, company=company)
 
         return jsonify({
             'message': 'Login realizado com sucesso',
@@ -131,7 +176,9 @@ def login_company():
                 'email': user.email,
                 'user_type': 'company',
                 'company_id': company.id,
-                'company_name': company.company_name
+                'company_name': company.company_name,
+                'site_code': site.code,
+                'site_status': company_site.status
             },
             'access_token': access_token,
             'refresh_token': refresh_token
@@ -152,6 +199,7 @@ def register_candidate():
     Registrar novo candidato
     """
     try:
+        site = get_current_site()
         data = request.get_json()
 
         # Validar dados obrigatórios
@@ -189,7 +237,7 @@ def register_candidate():
             phone=data.get('phone', ''),
             city=data.get('city', ''),
             state=data.get('state', ''),
-            country=data.get('country', 'Brasil'),
+            country=site.name,
             current_title=data.get('current_position', ''),
             professional_summary=data.get('professional_summary', ''),
             years_experience=data.get('years_of_experience', 0),
@@ -200,17 +248,14 @@ def register_candidate():
         )
 
         db.session.add(new_candidate)
+        db.session.flush()
+        candidate_site = ensure_candidate_site(new_candidate, site)
         db.session.commit()
 
-        # Gerar tokens (identity deve ser string)
-        access_token = create_access_token(
-            identity=str(new_user.id),
-            additional_claims={'user_type': 'candidate', 'candidate_id': new_candidate.id},
-            expires_delta=timedelta(hours=24)
-        )
-        refresh_token = create_refresh_token(
-            identity=str(new_user.id),
-            expires_delta=timedelta(days=30)
+        access_token, refresh_token = _issue_tokens(
+            new_user,
+            site,
+            candidate=new_candidate,
         )
 
         return jsonify({
@@ -220,7 +265,9 @@ def register_candidate():
                 'email': new_user.email,
                 'user_type': 'candidate',
                 'candidate_id': new_candidate.id,
-                'name': f"{new_candidate.first_name} {new_candidate.last_name}"
+                'name': f"{new_candidate.first_name} {new_candidate.last_name}",
+                'site_code': site.code,
+                'is_discoverable': candidate_site.is_discoverable
             },
             'access_token': access_token,
             'refresh_token': refresh_token
@@ -238,6 +285,7 @@ def login_candidate():
     Login de candidato
     """
     try:
+        site = get_current_site()
         data = request.get_json()
 
         # Validar dados
@@ -247,7 +295,7 @@ def login_candidate():
         # Buscar usuário
         user = User.query.filter_by(email=data['email'], user_type='candidate').first()
 
-        if not user or not check_password_hash(user.password_hash, data['password']):
+        if not user or not user.is_active or not check_password_hash(user.password_hash, data['password']):
             return jsonify({'error': 'Email ou senha inválidos'}), 401
 
         # Buscar candidato
@@ -256,16 +304,10 @@ def login_candidate():
         if not candidate:
             return jsonify({'error': 'Candidato não encontrado'}), 404
 
-        # Gerar tokens
-        access_token = create_access_token(
-            identity=str(user.id),
-            additional_claims={'user_type': 'candidate', 'candidate_id': candidate.id},
-            expires_delta=timedelta(hours=24)
-        )
-        refresh_token = create_refresh_token(
-            identity=str(user.id),
-            expires_delta=timedelta(days=30)
-        )
+        candidate_site = ensure_candidate_site(candidate, site)
+        user.record_successful_login()
+        db.session.commit()
+        access_token, refresh_token = _issue_tokens(user, site, candidate=candidate)
 
         return jsonify({
             'message': 'Login realizado com sucesso',
@@ -274,7 +316,9 @@ def login_candidate():
                 'email': user.email,
                 'user_type': 'candidate',
                 'candidate_id': candidate.id,
-                'full_name': f"{candidate.first_name} {candidate.last_name}"
+                'full_name': f"{candidate.first_name} {candidate.last_name}",
+                'site_code': site.code,
+                'is_discoverable': candidate_site.is_discoverable
             },
             'access_token': access_token,
             'refresh_token': refresh_token
@@ -296,16 +340,26 @@ def refresh():
     Renovar access token usando refresh token
     """
     try:
+        site = get_current_site()
+        current_claims = get_jwt()
+        if current_claims.get('site_id') != site.id or current_claims.get('site_code') != site.code:
+            return jsonify({'error': 'Sessão não pertence a este site regional'}), 403
         current_user_id = get_jwt_identity()
         user = User.query.get(current_user_id)
 
-        if not user:
+        if not user or not user.is_active:
             return jsonify({'error': 'Usuário não encontrado'}), 404
 
-        # Gerar novo access token (identity deve ser string)
+        company = Company.query.filter_by(user_id=user.id).first() if user.user_type == 'company' else None
+        candidate = Candidate.query.filter_by(user_id=user.id).first() if user.user_type == 'candidate' else None
+        admin = None
+        if user.user_type == 'admin':
+            from src.models.admin import Admin
+            admin = Admin.query.filter_by(user_id=user.id).first()
+        claims = token_claims(user, site, company=company, candidate=candidate, admin=admin)
         access_token = create_access_token(
             identity=str(user.id),
-            additional_claims={'user_type': user.user_type},
+            additional_claims=claims,
             expires_delta=timedelta(hours=24)
         )
 
@@ -324,16 +378,15 @@ def get_current_user():
     Obter dados do usuário autenticado
     """
     try:
-        current_user_id = get_jwt_identity()
-        user = User.query.get(current_user_id)
-
-        if not user:
-            return jsonify({'error': 'Usuário não encontrado'}), 404
+        user, site, error, status = get_active_user()
+        if error:
+            return error, status
 
         return jsonify({
             'id': user.id,
             'email': user.email,
             'user_type': user.user_type,
+            'site_code': site.code,
             'created_at': user.created_at.isoformat()
         }), 200
 
@@ -348,18 +401,14 @@ def change_password():
     Alterar senha do usuário autenticado
     """
     try:
-        current_user_id = get_jwt_identity()
+        user, _, error, status = get_active_user()
+        if error:
+            return error, status
         data = request.get_json()
 
         # Validar dados
         if not data.get('current_password') or not data.get('new_password'):
             return jsonify({'error': 'Senha atual e nova senha são obrigatórias'}), 400
-
-        # Buscar usuário
-        user = User.query.get(current_user_id)
-
-        if not user:
-            return jsonify({'error': 'Usuário não encontrado'}), 404
 
         # Verificar senha atual
         if not check_password_hash(user.password_hash, data['current_password']):
@@ -387,6 +436,7 @@ def login_admin():
     Login de administrador
     """
     try:
+        site = get_current_site()
         data = request.get_json()
 
         # Validar dados
@@ -400,7 +450,7 @@ def login_admin():
             return jsonify({'error': 'Email ou senha inválidos'}), 401
 
         # Verificar se é admin
-        if user.user_type != 'admin':
+        if not user.is_active or user.user_type != 'admin':
             return jsonify({'error': 'Acesso negado. Apenas administradores podem acessar este painel.'}), 403
 
         # Verificar senha
@@ -414,16 +464,9 @@ def login_admin():
         if not admin:
             return jsonify({'error': 'Perfil de administrador não encontrado'}), 404
 
-        # Gerar tokens
-        access_token = create_access_token(
-            identity=str(user.id),
-            additional_claims={'user_type': 'admin', 'admin_id': admin.id},
-            expires_delta=timedelta(hours=24)
-        )
-        refresh_token = create_refresh_token(
-            identity=str(user.id),
-            expires_delta=timedelta(days=30)
-        )
+        user.record_successful_login()
+        db.session.commit()
+        access_token, refresh_token = _issue_tokens(user, site, admin=admin)
 
         return jsonify({
             'message': 'Login realizado com sucesso',
@@ -431,6 +474,7 @@ def login_admin():
             'email': user.email,
             'name': admin.name,
             'user_type': 'admin',
+            'site_code': site.code,
             'access_token': access_token,
             'refresh_token': refresh_token
         }), 200
@@ -450,6 +494,7 @@ def login_generic():
     Login genérico - detecta tipo de usuário e faz login apropriado
     """
     try:
+        site = get_current_site()
         data = request.get_json()
 
         # Validar dados
@@ -459,7 +504,7 @@ def login_generic():
         # Buscar usuário
         user = User.query.filter_by(email=data['email']).first()
 
-        if not user:
+        if not user or not user.is_active:
             return jsonify({'error': 'Email ou senha inválidos'}), 401
 
         # Verificar senha
@@ -475,25 +520,31 @@ def login_generic():
         response_data = {
             'user_id': user.id,
             'email': user.email,
-            'user_type': user.user_type
+            'user_type': user.user_type,
+            'site_code': site.code
         }
+        company = None
+        candidate = None
+        admin = None
 
         # Adicionar dados específicos do tipo
         if user.user_type == 'company':
             company = Company.query.filter_by(user_id=user.id).first()
             if company:
+                company_site = ensure_company_site(company, site)
                 response_data['company_id'] = company.id
                 response_data['name'] = company.company_name
-                additional_claims = {'user_type': 'company', 'company_id': company.id}
+                response_data['site_status'] = company_site.status
             else:
                 return jsonify({'error': 'Perfil de empresa não encontrado'}), 404
 
         elif user.user_type == 'candidate':
             candidate = Candidate.query.filter_by(user_id=user.id).first()
             if candidate:
+                candidate_site = ensure_candidate_site(candidate, site)
                 response_data['candidate_id'] = candidate.id
                 response_data['name'] = f"{candidate.first_name} {candidate.last_name}"
-                additional_claims = {'user_type': 'candidate', 'candidate_id': candidate.id}
+                response_data['is_discoverable'] = candidate_site.is_discoverable
             else:
                 return jsonify({'error': 'Perfil de candidato não encontrado'}), 404
 
@@ -503,21 +554,19 @@ def login_generic():
             if admin:
                 response_data['admin_id'] = admin.id
                 response_data['name'] = admin.name
-                additional_claims = {'user_type': 'admin', 'admin_id': admin.id}
             else:
                 return jsonify({'error': 'Perfil de administrador não encontrado'}), 404
         else:
             return jsonify({'error': 'Tipo de usuário inválido'}), 400
 
-        # Gerar tokens
-        access_token = create_access_token(
-            identity=str(user.id),
-            additional_claims=additional_claims,
-            expires_delta=timedelta(hours=24)
-        )
-        refresh_token = create_refresh_token(
-            identity=str(user.id),
-            expires_delta=timedelta(days=30)
+        user.record_successful_login()
+        db.session.commit()
+        access_token, refresh_token = _issue_tokens(
+            user,
+            site,
+            company=company,
+            candidate=candidate,
+            admin=admin,
         )
 
         response_data['access_token'] = access_token
@@ -624,6 +673,7 @@ def google_login():
     Login/Registro com Google OAuth
     """
     try:
+        site = get_current_site()
         data = request.get_json()
         google_token = data.get('token', '')
 
@@ -696,23 +746,15 @@ def google_login():
                 candidate.avatar_url = picture
 
             db.session.add(candidate)
-            db.session.commit()
+            db.session.flush()
 
+        candidate_site = ensure_candidate_site(candidate, site)
         # Atualizar último login
         if hasattr(user, 'last_login'):
             user.last_login = datetime.utcnow()
-            db.session.commit()
+        db.session.commit()
 
-        # Gerar tokens
-        access_token = create_access_token(
-            identity=str(user.id),
-            additional_claims={'user_type': 'candidate', 'candidate_id': candidate.id},
-            expires_delta=timedelta(hours=24)
-        )
-        refresh_token = create_refresh_token(
-            identity=str(user.id),
-            expires_delta=timedelta(days=30)
-        )
+        access_token, refresh_token = _issue_tokens(user, site, candidate=candidate)
 
         return jsonify({
             'message': 'Login realizado com sucesso',
@@ -722,7 +764,9 @@ def google_login():
                 'user_type': 'candidate',
                 'candidate_id': candidate.id,
                 'name': f"{candidate.first_name} {candidate.last_name}",
-                'auth_provider': 'google'
+                'auth_provider': 'google',
+                'site_code': site.code,
+                'is_discoverable': candidate_site.is_discoverable
             },
             'access_token': access_token,
             'refresh_token': refresh_token
@@ -744,6 +788,7 @@ def linkedin_login():
     Login/Registro com LinkedIn OAuth
     """
     try:
+        site = get_current_site()
         data = request.get_json()
         linkedin_code = data.get('code', '')
         redirect_uri = data.get('redirect_uri', '')
@@ -846,23 +891,15 @@ def linkedin_login():
                 candidate.linkedin_url = f"https://www.linkedin.com/in/{linkedin_id}"
 
             db.session.add(candidate)
-            db.session.commit()
+            db.session.flush()
 
+        candidate_site = ensure_candidate_site(candidate, site)
         # Atualizar último login
         if hasattr(user, 'last_login'):
             user.last_login = datetime.utcnow()
-            db.session.commit()
+        db.session.commit()
 
-        # Gerar tokens
-        access_token = create_access_token(
-            identity=str(user.id),
-            additional_claims={'user_type': 'candidate', 'candidate_id': candidate.id},
-            expires_delta=timedelta(hours=24)
-        )
-        refresh_token = create_refresh_token(
-            identity=str(user.id),
-            expires_delta=timedelta(days=30)
-        )
+        access_token, refresh_token = _issue_tokens(user, site, candidate=candidate)
 
         return jsonify({
             'message': 'Login realizado com sucesso',
@@ -872,7 +909,9 @@ def linkedin_login():
                 'user_type': 'candidate',
                 'candidate_id': candidate.id,
                 'name': f"{candidate.first_name} {candidate.last_name}",
-                'auth_provider': 'linkedin'
+                'auth_provider': 'linkedin',
+                'site_code': site.code,
+                'is_discoverable': candidate_site.is_discoverable
             },
             'access_token': access_token,
             'refresh_token': refresh_token
@@ -895,11 +934,9 @@ def register_admin():
     Registrar novo administrador (apenas super_admin pode fazer isso)
     """
     try:
-        current_user_id = get_jwt_identity()
-        current_user = User.query.get(current_user_id)
-
-        if not current_user or current_user.user_type != 'admin':
-            return jsonify({'error': 'Acesso negado'}), 403
+        current_user, _, error, status = get_active_user('admin')
+        if error:
+            return error, status
 
         from src.models.admin import Admin, AdminRole, DEFAULT_PERMISSIONS
         current_admin = Admin.query.filter_by(user_id=current_user.id).first()
@@ -972,11 +1009,9 @@ def list_admins():
     Listar todos os administradores (apenas super_admin)
     """
     try:
-        current_user_id = get_jwt_identity()
-        current_user = User.query.get(current_user_id)
-
-        if not current_user or current_user.user_type != 'admin':
-            return jsonify({'error': 'Acesso negado'}), 403
+        current_user, _, error, status = get_active_user('admin')
+        if error:
+            return error, status
 
         from src.models.admin import Admin
         current_admin = Admin.query.filter_by(user_id=current_user.id).first()

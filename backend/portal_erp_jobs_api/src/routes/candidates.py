@@ -1,392 +1,302 @@
-from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
-from src.models.candidate import Candidate, CandidateSkill
-from src.models.experience import Experience
-from src.models.education import Education
-from src.models.user import User
+"""Regional candidate profile, discovery and privacy routes."""
+from flask import Blueprint, jsonify, request
+from flask_jwt_extended import jwt_required
+
 from src.config import db
+from src.models.application import Application
+from src.models.candidate import Candidate, CandidateSite, CandidateSkill
+from src.models.education import Education
+from src.models.experience import Experience
+from src.models.job import Job
+from src.regional_access import get_candidate_access, get_company_access
+from src.regional_context import get_current_site
 
-candidates_bp = Blueprint('candidates', __name__, url_prefix='/api/candidates')
+candidates_bp = Blueprint("candidates", __name__, url_prefix="/api/candidates")
 
-@candidates_bp.route('/profile', methods=['GET'])
+
+def _public_candidate_query(site):
+    return (
+        db.session.query(Candidate, CandidateSite)
+        .join(CandidateSite, CandidateSite.candidate_id == Candidate.id)
+        .filter(
+            CandidateSite.site_id == site.id,
+            CandidateSite.is_active.is_(True),
+            CandidateSite.is_discoverable.is_(True),
+        )
+    )
+
+
+def _public_profile(candidate, membership, *, include_resume=False):
+    payload = candidate.to_public_dict(membership)
+    if include_resume:
+        payload["experiences"] = [item.to_dict() for item in candidate.experiences]
+        payload["educations"] = [item.to_dict() for item in candidate.educations]
+        payload["skills"] = [item.to_dict() for item in candidate.skills]
+        payload["certifications"] = [item.to_dict() for item in candidate.certifications]
+        payload["projects"] = [item.to_dict() for item in candidate.projects]
+        payload["languages"] = [item.to_dict() for item in candidate.languages]
+    return payload
+
+
+@candidates_bp.route("/profile", methods=["GET"])
 @jwt_required()
 def get_my_profile():
-    """
-    Obter perfil completo do candidato autenticado
-    """
+    """Return the candidate's private profile for the current site."""
     try:
-        current_user_id = get_jwt_identity()
-        claims = get_jwt()
-
-        # Verificar se é candidato
-        if claims.get('user_type') != 'candidate':
-            return jsonify({'error': 'Acesso negado. Apenas candidatos podem acessar'}), 403
-
-        # Buscar candidato
-        candidate = Candidate.query.filter_by(user_id=current_user_id).first()
-
-        if not candidate:
-            return jsonify({'error': 'Perfil de candidato não encontrado'}), 404
-
-        return jsonify(candidate.to_dict(include_details=True)), 200
-
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        candidate, membership, error, status = get_candidate_access()
+        if error:
+            return error, status
+        payload = candidate.to_dict(include_details=True, site_membership=membership)
+        payload["email"] = candidate.user.email
+        payload["site_membership"] = membership.to_dict()
+        return jsonify(payload), 200
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
 
 
-@candidates_bp.route('/profile', methods=['POST', 'PUT'])
+@candidates_bp.route("/profile", methods=["POST", "PUT"])
 @jwt_required()
 def create_or_update_profile():
-    """
-    Criar ou atualizar perfil do candidato
-    """
+    """Update global resume fields and site-local search preferences."""
     try:
-        current_user_id = get_jwt_identity()
-        claims = get_jwt()
+        candidate, membership, error, status = get_candidate_access()
+        if error:
+            return error, status
+        data = request.get_json() or {}
 
-        # Verificar se é candidato
-        if claims.get('user_type') != 'candidate':
-            return jsonify({'error': 'Acesso negado. Apenas candidatos podem acessar'}), 403
+        global_fields = {
+            "first_name": "first_name",
+            "last_name": "last_name",
+            "phone": "phone",
+            "photo_url": "photo_url",
+            "city": "city",
+            "state": "state",
+            "current_title": "current_title",
+            "professional_summary": "professional_summary",
+            "years_experience": "years_experience",
+            "linkedin_url": "linkedin_url",
+            "github_url": "github_url",
+            "portfolio_url": "portfolio_url",
+        }
+        regional_fields = {
+            "expected_salary": "expected_salary",
+            "salary_currency": "salary_currency",
+            "is_actively_looking": "is_actively_looking",
+            "available_immediately": "available_immediately",
+            "curriculo_publico": "is_discoverable",
+            "is_discoverable": "is_discoverable",
+        }
+        for source, target in global_fields.items():
+            if source in data:
+                setattr(candidate, target, data[source])
+        for source, target in regional_fields.items():
+            if source in data:
+                setattr(membership, target, data[source])
 
-        data = request.get_json()
-
-        # Buscar candidato existente
-        candidate = Candidate.query.filter_by(user_id=current_user_id).first()
-
-        if candidate:
-            # Atualizar
-            if 'first_name' in data:
-                candidate.first_name = data['first_name']
-            if 'last_name' in data:
-                candidate.last_name = data['last_name']
-            if 'phone' in data:
-                candidate.phone = data['phone']
-            if 'city' in data:
-                candidate.city = data['city']
-            if 'state' in data:
-                candidate.state = data['state']
-            if 'current_title' in data:
-                candidate.current_title = data['current_title']
-            if 'professional_summary' in data:
-                candidate.professional_summary = data['professional_summary']
-            if 'years_experience' in data:
-                candidate.years_experience = data['years_experience']
-            if 'expected_salary' in data:
-                candidate.expected_salary = data['expected_salary']
-            if 'linkedin_url' in data:
-                candidate.linkedin_url = data['linkedin_url']
-            if 'github_url' in data:
-                candidate.github_url = data['github_url']
-            if 'portfolio_url' in data:
-                candidate.portfolio_url = data['portfolio_url']
-            if 'is_actively_looking' in data:
-                candidate.is_actively_looking = data['is_actively_looking']
-            if 'available_immediately' in data:
-                candidate.available_immediately = data['available_immediately']
-
-            db.session.commit()
-
-            return jsonify({
-                'message': 'Perfil atualizado com sucesso',
-                'candidate': candidate.to_dict(include_details=True)
-            }), 200
-        else:
-            # Criar novo
-            new_candidate = Candidate(
-                user_id=current_user_id,
-                first_name=data.get('first_name', ''),
-                last_name=data.get('last_name', ''),
-                phone=data.get('phone'),
-                city=data.get('city'),
-                state=data.get('state'),
-                current_title=data.get('current_title'),
-                professional_summary=data.get('professional_summary'),
-                years_experience=data.get('years_experience'),
-                expected_salary=data.get('expected_salary'),
-                linkedin_url=data.get('linkedin_url'),
-                github_url=data.get('github_url'),
-                portfolio_url=data.get('portfolio_url'),
-                is_actively_looking=data.get('is_actively_looking', True),
-                available_immediately=data.get('available_immediately', True)
-            )
-
-            db.session.add(new_candidate)
-            db.session.commit()
-
-            return jsonify({
-                'message': 'Perfil criado com sucesso',
-                'candidate': new_candidate.to_dict(include_details=True)
-            }), 201
-
-    except Exception as e:
+        db.session.commit()
+        return jsonify({
+            "message": "Perfil atualizado com sucesso",
+            "candidate": candidate.to_dict(include_details=True, site_membership=membership),
+        }), 200
+    except Exception as exc:
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(exc)}), 500
 
 
-@candidates_bp.route('/search', methods=['GET'])
+@candidates_bp.route("/search", methods=["GET"])
 @jwt_required()
 def search_candidates():
-    """
-    Buscar candidatos (apenas empresas)
-    """
+    """Search opt-in candidates as an approved company in the current site."""
     try:
-        claims = get_jwt()
+        site = get_current_site()
+        _, _, _, error, status = get_company_access(
+            require_approved=True,
+            permission="view_candidates",
+        )
+        if error:
+            return error, status
 
-        # Verificar se é empresa
-        if claims.get('user_type') != 'company':
-            return jsonify({'error': 'Acesso negado. Apenas empresas podem buscar candidatos'}), 403
+        query_text = request.args.get("q", "").strip()
+        city = request.args.get("city", "").strip()
+        state = request.args.get("state", "").strip()
+        min_salary = request.args.get("min_salary", type=int)
+        max_salary = request.args.get("max_salary", type=int)
+        page = request.args.get("page", 1, type=int)
+        per_page = min(request.args.get("per_page", 20, type=int), 100)
 
-        # Parâmetros de busca
-        query = request.args.get('q', '')
-        city = request.args.get('city', '')
-        state = request.args.get('state', '')
-        min_salary = request.args.get('min_salary', type=int)
-        max_salary = request.args.get('max_salary', type=int)
-        page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 20, type=int)
-
-        # Construir query
-        candidates_query = Candidate.query
-
-        # Filtro de texto (nome ou título)
-        if query:
-            candidates_query = candidates_query.filter(
-                db.or_(
-                    Candidate.first_name.ilike(f'%{query}%'),
-                    Candidate.last_name.ilike(f'%{query}%'),
-                    Candidate.current_title.ilike(f'%{query}%')
-                )
-            )
-
-        # Filtro de localização
+        query = _public_candidate_query(site).filter(CandidateSite.is_actively_looking.is_(True))
+        if query_text:
+            query = query.filter(db.or_(
+                Candidate.first_name.ilike(f"%{query_text}%"),
+                Candidate.last_name.ilike(f"%{query_text}%"),
+                Candidate.current_title.ilike(f"%{query_text}%"),
+            ))
         if city:
-            candidates_query = candidates_query.filter(Candidate.city.ilike(f'%{city}%'))
+            query = query.filter(Candidate.city.ilike(f"%{city}%"))
         if state:
-            candidates_query = candidates_query.filter(Candidate.state.ilike(f'%{state}%'))
+            query = query.filter(Candidate.state.ilike(f"%{state}%"))
+        if min_salary is not None:
+            query = query.filter(CandidateSite.expected_salary >= min_salary)
+        if max_salary is not None:
+            query = query.filter(CandidateSite.expected_salary <= max_salary)
 
-        # Filtro de salário
-        if min_salary:
-            candidates_query = candidates_query.filter(Candidate.expected_salary >= min_salary)
-        if max_salary:
-            candidates_query = candidates_query.filter(Candidate.expected_salary <= max_salary)
-
-        # Apenas candidatos ativos
-        candidates_query = candidates_query.filter(Candidate.is_actively_looking == True)
-
-        # Paginação
-        pagination = candidates_query.paginate(page=page, per_page=per_page, error_out=False)
-
+        pagination = query.order_by(Candidate.updated_at.desc()).paginate(
+            page=page,
+            per_page=per_page,
+            error_out=False,
+        )
         return jsonify({
-            'candidates': [c.to_dict() for c in pagination.items],
-            'total': pagination.total,
-            'pages': pagination.pages,
-            'current_page': page,
-            'per_page': per_page
+            "candidates": [
+                _public_profile(candidate, membership)
+                for candidate, membership in pagination.items
+            ],
+            "total": pagination.total,
+            "pages": pagination.pages,
+            "current_page": page,
+            "per_page": per_page,
         }), 200
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
 
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
 
-
-@candidates_bp.route('/<int:candidate_id>', methods=['GET'])
+@candidates_bp.route("/<int:candidate_id>", methods=["GET"])
 @jwt_required()
 def get_candidate_by_id(candidate_id):
-    """
-    Obter candidato por ID (apenas empresas)
-    """
+    """Return a candidate to an approved company when discoverable or already applied."""
     try:
-        claims = get_jwt()
+        site = get_current_site()
+        company, _, _, error, status = get_company_access(
+            require_approved=True,
+            permission="view_candidates",
+        )
+        if error:
+            return error, status
 
-        # Verificar se é empresa
-        if claims.get('user_type') != 'company':
-            return jsonify({'error': 'Acesso negado. Apenas empresas podem ver perfis de candidatos'}), 403
+        result = (
+            db.session.query(Candidate, CandidateSite)
+            .join(CandidateSite, CandidateSite.candidate_id == Candidate.id)
+            .filter(
+                Candidate.id == candidate_id,
+                CandidateSite.site_id == site.id,
+                CandidateSite.is_active.is_(True),
+            )
+            .first()
+        )
+        if not result:
+            return jsonify({"error": "Candidato não encontrado"}), 404
+        candidate, membership = result
 
-        candidate = Candidate.query.get(candidate_id)
+        has_application = (
+            db.session.query(Application.id)
+            .join(Job, Application.job_id == Job.id)
+            .filter(
+                Application.candidate_id == candidate.id,
+                Application.site_id == site.id,
+                Job.company_id == company.id,
+            )
+            .first()
+            is not None
+        )
+        if not membership.is_discoverable and not has_application:
+            return jsonify({"error": "Este perfil é privado"}), 403
 
-        if not candidate:
-            return jsonify({'error': 'Candidato não encontrado'}), 404
+        if has_application:
+            payload = candidate.to_dict(include_details=True, site_membership=membership)
+            payload["email"] = candidate.user.email
+            return jsonify(payload), 200
+        return jsonify(_public_profile(candidate, membership, include_resume=True)), 200
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
 
-        return jsonify(candidate.to_dict(include_details=True)), 200
 
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-
-@candidates_bp.route('/<int:candidate_id>/profile', methods=['GET'])
+@candidates_bp.route("/<int:candidate_id>/profile", methods=["GET"])
 def get_candidate_public_profile(candidate_id):
-    """
-    Obter perfil público do candidato (para visualização por empresas)
-    Respeita a configuração de privacidade (curriculo_publico)
-    """
+    """Return an opt-in public resume without contact PII."""
     try:
-        # Buscar candidato
-        candidate = Candidate.query.get(candidate_id)
-
-        if not candidate:
-            return jsonify({'error': 'Candidato não encontrado'}), 404
-
-        # Verificar se o currículo é público
-        # Se não for público, só permite acesso se for uma empresa autenticada
-        # ou se o candidato se candidatou a uma vaga da empresa
-        if not candidate.curriculo_publico:
-            # TODO: Implementar lógica para verificar se a empresa tem acesso
-            # (ex: candidato se candidatou a uma vaga da empresa)
-            return jsonify({'error': 'Este perfil é privado'}), 403
-
-        # Buscar dados relacionados
-        user = User.query.get(candidate.user_id)
-        experiences = Experience.query.filter_by(candidate_id=candidate.id).order_by(Experience.start_date.desc()).all()
-        educations = Education.query.filter_by(candidate_id=candidate.id).order_by(Education.start_date.desc()).all()
-        skills = CandidateSkill.query.filter_by(candidate_id=candidate.id).all()
-
-        # Montar resposta completa
-        profile_data = candidate.to_dict(include_details=False)
-        profile_data['email'] = user.email if user else None
-        profile_data['experiences'] = [exp.to_dict() for exp in experiences]
-        profile_data['educations'] = [edu.to_dict() for edu in educations]
-        profile_data['skills'] = [skill.to_dict() for skill in skills]
-        profile_data['professional_summary'] = candidate.professional_summary
-
-        # TODO: Adicionar certificações, projetos e idiomas quando os modelos existirem
-        profile_data['certifications'] = []
-        profile_data['projects'] = []
-        profile_data['languages'] = []
-
-        return jsonify(profile_data), 200
-
-    except Exception as e:
-        print(f"Error getting candidate public profile: {e}")
-        return jsonify({'error': str(e)}), 500
+        site = get_current_site()
+        result = _public_candidate_query(site).filter(Candidate.id == candidate_id).first()
+        if not result:
+            return jsonify({"error": "Perfil não encontrado ou privado"}), 404
+        candidate, membership = result
+        return jsonify(_public_profile(candidate, membership, include_resume=True)), 200
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
 
 
-
-@candidates_bp.route('/me/privacy', methods=['PATCH'])
+@candidates_bp.route("/me/privacy", methods=["PATCH"])
 @jwt_required()
 def update_candidate_privacy():
-    """
-    Atualizar configuração de privacidade do currículo
-    Permite que o candidato torne seu currículo público ou privado
-    """
+    """Update discoverability only for the current regional site."""
     try:
-        # Obter ID do usuário autenticado
-        current_user_id = get_jwt_identity()
-
-        # Buscar candidato
-        candidate = Candidate.query.filter_by(user_id=current_user_id).first()
-
-        if not candidate:
-            return jsonify({'error': 'Candidato não encontrado'}), 404
-
-        # Obter dados da requisição
-        data = request.get_json()
-        curriculo_publico = data.get('curriculo_publico')
-
-        if curriculo_publico is None:
-            return jsonify({'error': 'Campo curriculo_publico é obrigatório'}), 400
-
-        # Atualizar privacidade
-        candidate.curriculo_publico = bool(curriculo_publico)
+        _, membership, error, status = get_candidate_access()
+        if error:
+            return error, status
+        data = request.get_json() or {}
+        value = data.get("curriculo_publico", data.get("is_discoverable"))
+        if value is None:
+            return jsonify({"error": "Campo curriculo_publico é obrigatório"}), 400
+        membership.is_discoverable = bool(value)
         db.session.commit()
-
         return jsonify({
-            'message': 'Configuração de privacidade atualizada com sucesso',
-            'curriculo_publico': candidate.curriculo_publico
+            "message": "Configuração de privacidade atualizada com sucesso",
+            "curriculo_publico": membership.is_discoverable,
+            "is_discoverable": membership.is_discoverable,
         }), 200
-
-    except Exception as e:
+    except Exception as exc:
         db.session.rollback()
-        print(f"Error updating candidate privacy: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(exc)}), 500
 
 
-@candidates_bp.route('/public', methods=['GET'])
+@candidates_bp.route("/public", methods=["GET"])
 def get_public_candidates():
-    """
-    Listar candidatos com currículo público (sem autenticação)
-    """
+    """List public candidate projections for the current site only."""
     try:
-        # Parâmetros de busca
-        query = request.args.get('q', '')
-        city = request.args.get('city', '')
-        page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 20, type=int)
+        site = get_current_site()
+        query_text = request.args.get("q", "").strip()
+        city = request.args.get("city", "").strip()
+        page = request.args.get("page", 1, type=int)
+        per_page = min(request.args.get("per_page", 20, type=int), 100)
 
-        # Construir query - apenas candidatos com currículo público
-        candidates_query = Candidate.query.filter(Candidate.curriculo_publico == True)
-
-        # Filtro de texto (nome ou título)
-        if query:
-            candidates_query = candidates_query.filter(
-                db.or_(
-                    Candidate.first_name.ilike(f'%{query}%'),
-                    Candidate.last_name.ilike(f'%{query}%'),
-                    Candidate.current_title.ilike(f'%{query}%')
-                )
-            )
-
-        # Filtro de localização
+        query = _public_candidate_query(site)
+        if query_text:
+            query = query.filter(db.or_(
+                Candidate.first_name.ilike(f"%{query_text}%"),
+                Candidate.last_name.ilike(f"%{query_text}%"),
+                Candidate.current_title.ilike(f"%{query_text}%"),
+            ))
         if city:
-            candidates_query = candidates_query.filter(Candidate.city.ilike(f'%{city}%'))
+            query = query.filter(Candidate.city.ilike(f"%{city}%"))
 
-        # Paginação
-        pagination = candidates_query.paginate(page=page, per_page=per_page, error_out=False)
-
-        # Buscar dados completos para cada candidato
-        candidates_data = []
-        for candidate in pagination.items:
-            user = User.query.get(candidate.user_id)
-            skills = CandidateSkill.query.filter_by(candidate_id=candidate.id).all()
-
-            candidate_dict = {
-                'id': candidate.id,
-                'name': f"{candidate.first_name or ''} {candidate.last_name or ''}".strip() or 'Candidato',
-                'title': candidate.current_title or 'Profissional',
-                'location': candidate.city or 'Brasil',
-                'cidade': candidate.city,
-                'estado': candidate.state,
-                'email': user.email if user else None,
-                'linkedin': candidate.linkedin_url,
-                'github': candidate.github_url,
-                'pretensao_salarial': candidate.expected_salary,
-                'disponibilidade': 'Imediata' if candidate.is_actively_looking else 'A combinar',
-                'technologies': [{'name': skill.skill_name, 'level': skill.proficiency_level} for skill in skills]
-            }
-            candidates_data.append(candidate_dict)
-
+        pagination = query.order_by(Candidate.updated_at.desc()).paginate(
+            page=page,
+            per_page=per_page,
+            error_out=False,
+        )
         return jsonify({
-            'candidates': candidates_data,
-            'total': pagination.total,
-            'pages': pagination.pages,
-            'current_page': page,
-            'per_page': per_page
+            "candidates": [
+                _public_profile(candidate, membership)
+                for candidate, membership in pagination.items
+            ],
+            "total": pagination.total,
+            "pages": pagination.pages,
+            "current_page": page,
+            "per_page": per_page,
         }), 200
-
-    except Exception as e:
-        print(f"Error getting public candidates: {e}")
-        return jsonify({'error': str(e)}), 500
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
 
 
-@candidates_bp.route('/me/privacy', methods=['GET'])
+@candidates_bp.route("/me/privacy", methods=["GET"])
 @jwt_required()
 def get_candidate_privacy():
-    """
-    Obter configuração de privacidade atual do currículo
-    """
+    """Return the privacy setting for this site only."""
     try:
-        # Obter ID do usuário autenticado
-        current_user_id = get_jwt_identity()
-
-        # Buscar candidato
-        candidate = Candidate.query.filter_by(user_id=current_user_id).first()
-
-        if not candidate:
-            return jsonify({'error': 'Candidato não encontrado'}), 404
-
+        _, membership, error, status = get_candidate_access()
+        if error:
+            return error, status
         return jsonify({
-            'curriculo_publico': candidate.curriculo_publico
+            "curriculo_publico": membership.is_discoverable,
+            "is_discoverable": membership.is_discoverable,
         }), 200
-
-    except Exception as e:
-        print(f"Error getting candidate privacy: {e}")
-        return jsonify({'error': str(e)}), 500
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500

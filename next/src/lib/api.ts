@@ -67,3 +67,7 @@ export async function getLevels() {
 export async function getModalities() {
   return fetchAPI('/config/modalities')
 }
+
+export async function getDashboardStats() {
+  return fetchAPI('/stats/dashboard')
+}

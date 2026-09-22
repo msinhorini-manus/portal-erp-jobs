@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { getAreas, getJobs } from '@/lib/api'
+import { getAreas, getDashboardStats, getJobs } from '@/lib/api'
 import { Search, MapPin, Code2, Settings, Headphones, Cloud, Database, Shield, Users, Smartphone, CheckCircle, Brain, Cpu, TrendingUp, FileText, Palette, Target, UserPlus, Megaphone, GraduationCap } from 'lucide-react'
 import { HeroSearch } from '@/components/HeroSearch'
 
@@ -26,6 +26,7 @@ const colorMap: Record<string, string> = {
 export default async function HomePage() {
   let areas: any[] = []
   let jobs: any[] = []
+  let stats: { active_jobs?: number; total_companies?: number; total_candidates?: number } = {}
 
   try {
     areas = await getAreas()
@@ -38,6 +39,12 @@ export default async function HomePage() {
     jobs = Array.isArray(jobsData) ? jobsData : jobsData?.jobs || []
   } catch (e) {
     console.error('Failed to fetch jobs:', e)
+  }
+
+  try {
+    stats = await getDashboardStats()
+  } catch (e) {
+    console.error('Failed to fetch dashboard stats:', e)
   }
 
   return (
@@ -60,15 +67,15 @@ export default async function HomePage() {
           {/* Stats */}
           <div className="flex justify-center gap-12 mt-10">
             <div className="text-center">
-              <div className="text-3xl font-bold">{jobs.length > 0 ? `${jobs.length}+` : '2+'}</div>
+              <div className="text-3xl font-bold">{stats.active_jobs ?? jobs.length}+</div>
               <div className="text-white/70 text-sm">Vagas ativas</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-bold">4+</div>
+              <div className="text-3xl font-bold">{stats.total_companies ?? 0}+</div>
               <div className="text-white/70 text-sm">Empresas cadastradas</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-bold">5+</div>
+              <div className="text-3xl font-bold">{stats.total_candidates ?? 0}+</div>
               <div className="text-white/70 text-sm">Profissionais cadastrados</div>
             </div>
           </div>

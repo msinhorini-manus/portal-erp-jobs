@@ -5,15 +5,47 @@ from flask import Blueprint, current_app, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from functools import wraps
 from src.config import db
-from src.models import User, Admin, Candidate, Company, Job, Application
+from src.models import (
+    User, Admin, Candidate, CandidateSite, Company, CompanySite,
+    CompanyStatus, Job, Application,
+)
+from src.regional_access import ensure_candidate_site, validate_session_site
+from src.regional_context import get_current_site
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/api/admin')
+
+
+def _site_company(company_id):
+    site = get_current_site()
+    return (
+        db.session.query(Company, CompanySite)
+        .join(CompanySite, CompanySite.company_id == Company.id)
+        .filter(Company.id == company_id, CompanySite.site_id == site.id)
+        .first()
+    )
+
+
+def _site_candidate(candidate_id):
+    site = get_current_site()
+    return (
+        db.session.query(Candidate, CandidateSite)
+        .join(CandidateSite, CandidateSite.candidate_id == Candidate.id)
+        .filter(Candidate.id == candidate_id, CandidateSite.site_id == site.id)
+        .first()
+    )
+
+
+def _site_job(job_id):
+    return Job.query.filter_by(id=job_id, site_id=get_current_site().id).first()
 
 def admin_required(fn):
     """Decorator to require admin access"""
     @wraps(fn)
     @jwt_required()
     def wrapper(*args, **kwargs):
+        _, error, status = validate_session_site()
+        if error:
+            return error, status
         current_user_id = get_jwt_identity()
         user = User.query.get(current_user_id)
 
@@ -29,20 +61,21 @@ def admin_required(fn):
 def get_stats():
     """Get platform statistics"""
     try:
-        total_companies = Company.query.count()
-        total_candidates = Candidate.query.count()
-        total_jobs = Job.query.count()
-        active_jobs = Job.query.filter_by(is_active=True).count()
-        total_applications = Application.query.count()
+        site = get_current_site()
+        total_companies = CompanySite.query.filter_by(site_id=site.id).count()
+        total_candidates = CandidateSite.query.filter_by(site_id=site.id).count()
+        total_jobs = Job.query.filter_by(site_id=site.id).count()
+        active_jobs = Job.query.filter_by(site_id=site.id, is_active=True).count()
+        total_applications = Application.query.filter_by(site_id=site.id).count()
 
         # Recent activity (last 24 hours)
         from datetime import datetime, timedelta
         yesterday = datetime.utcnow() - timedelta(days=1)
 
-        new_companies_today = Company.query.filter(Company.created_at >= yesterday).count()
-        new_candidates_today = Candidate.query.filter(Candidate.created_at >= yesterday).count()
-        new_jobs_today = Job.query.filter(Job.created_at >= yesterday).count()
-        new_applications_today = Application.query.filter(Application.applied_at >= yesterday).count()
+        new_companies_today = CompanySite.query.filter(CompanySite.site_id == site.id, CompanySite.created_at >= yesterday).count()
+        new_candidates_today = CandidateSite.query.filter(CandidateSite.site_id == site.id, CandidateSite.created_at >= yesterday).count()
+        new_jobs_today = Job.query.filter(Job.site_id == site.id, Job.created_at >= yesterday).count()
+        new_applications_today = Application.query.filter(Application.site_id == site.id, Application.applied_at >= yesterday).count()
 
         return jsonify({
             'total_companies': total_companies,
@@ -194,7 +227,7 @@ def get_all_jobs():
         per_page = request.args.get('per_page', 20, type=int)
         status = request.args.get('status', None)
 
-        query = Job.query
+        query = Job.query.filter_by(site_id=get_current_site().id)
 
         if status == 'active':
             query = query.filter_by(is_active=True)
@@ -221,7 +254,7 @@ def get_all_jobs():
 def delete_job(job_id):
     """Delete a job"""
     try:
-        job = Job.query.get(job_id)
+        job = _site_job(job_id)
 
         if not job:
             return jsonify({'error': 'Job not found'}), 404
@@ -243,12 +276,13 @@ def delete_job(job_id):
 def get_all_companies():
     """Get all companies for management"""
     try:
+        site = get_current_site()
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 20, type=int)
         search = request.args.get('search', '')
         status = request.args.get('status', None)  # active, inactive, all
 
-        query = Company.query
+        query = Company.query.join(CompanySite).filter(CompanySite.site_id == site.id)
 
         # Search filter
         if search:
@@ -272,25 +306,27 @@ def get_all_companies():
         companies_data = []
         for company in pagination.items:
             user = User.query.get(company.user_id)
-            jobs_count = Job.query.filter_by(company_id=company.id).count()
-            active_jobs = Job.query.filter_by(company_id=company.id, is_active=True).count()
+            membership = CompanySite.query.filter_by(company_id=company.id, site_id=site.id).one()
+            jobs_count = Job.query.filter_by(company_id=company.id, site_id=site.id).count()
+            active_jobs = Job.query.filter_by(company_id=company.id, site_id=site.id, is_active=True).count()
 
             companies_data.append({
                 'id': company.id,
                 'user_id': company.user_id,
-                'name': company.company_name,
+                'name': membership.display_name or company.company_name,
                 'cnpj': company.cnpj,
                 'email': user.email if user else None,
                 'phone': company.phone,
-                'sector': company.sector,
-                'size': company.company_size,
-                'city': company.city,
-                'state': company.state,
-                'website': company.website,
-                'description': company.description,
+                'sector': membership.sector or company.sector,
+                'size': membership.company_size or company.company_size,
+                'city': membership.city or company.city,
+                'state': membership.state or company.state,
+                'website': membership.website or company.website,
+                'description': membership.description or company.description,
                 'is_active': user.is_active if user else False,
-                'is_member': getattr(company, 'is_member', False),
-                'max_active_jobs': getattr(company, 'max_active_jobs', 3),
+                'site_status': membership.status,
+                'is_member': membership.is_member,
+                'max_active_jobs': membership.max_active_jobs,
                 'created_at': company.created_at.isoformat() if company.created_at else None,
                 'jobs_count': jobs_count,
                 'active_jobs': active_jobs
@@ -313,17 +349,19 @@ def get_all_companies():
 def get_company_details(company_id):
     """Get detailed company information"""
     try:
-        company = Company.query.get(company_id)
+        company_result = _site_company(company_id)
 
-        if not company:
+        if not company_result:
             return jsonify({'error': 'Company not found'}), 404
+        company, membership = company_result
 
+        site = get_current_site()
         user = User.query.get(company.user_id)
-        jobs = Job.query.filter_by(company_id=company.id).order_by(Job.created_at.desc()).all()
+        jobs = Job.query.filter_by(company_id=company.id, site_id=site.id).order_by(Job.created_at.desc()).all()
 
         jobs_data = []
         for job in jobs:
-            applications_count = Application.query.filter_by(job_id=job.id).count()
+            applications_count = Application.query.filter_by(job_id=job.id, site_id=site.id).count()
             jobs_data.append({
                 'id': job.id,
                 'title': job.title,
@@ -336,21 +374,22 @@ def get_company_details(company_id):
             'company': {
                 'id': company.id,
                 'user_id': company.user_id,
-                'name': company.company_name,
+                'name': membership.display_name or company.company_name,
                 'cnpj': company.cnpj,
                 'email': user.email if user else None,
                 'phone': company.phone,
-                'sector': company.sector,
-                'size': company.company_size,
-                'city': company.city,
-                'state': company.state,
-                'country': company.country,
-                'address': company.street_address,
-                'website': company.website,
-                'description': company.description,
+                'sector': membership.sector or company.sector,
+                'size': membership.company_size or company.company_size,
+                'city': membership.city or company.city,
+                'state': membership.state or company.state,
+                'country': membership.country or company.country,
+                'address': membership.street_address or company.street_address,
+                'website': membership.website or company.website,
+                'description': membership.description or company.description,
                 'is_active': user.is_active if user else False,
-                'is_member': company.is_member,
-                'max_active_jobs': company.max_active_jobs,
+                'site_status': membership.status,
+                'is_member': membership.is_member,
+                'max_active_jobs': membership.max_active_jobs,
                 'created_at': company.created_at.isoformat() if company.created_at else None,
                 'updated_at': company.updated_at.isoformat() if company.updated_at else None
             },
@@ -358,7 +397,7 @@ def get_company_details(company_id):
             'stats': {
                 'total_jobs': len(jobs),
                 'active_jobs': len([j for j in jobs if j.is_active]),
-                'total_applications': sum([Application.query.filter_by(job_id=j.id).count() for j in jobs])
+                'total_applications': sum([Application.query.filter_by(job_id=j.id, site_id=site.id).count() for j in jobs])
             }
         }), 200
 
@@ -371,17 +410,17 @@ def get_company_details(company_id):
 def update_company(company_id):
     """Update company information"""
     try:
-        company = Company.query.get(company_id)
+        company_result = _site_company(company_id)
 
-        if not company:
+        if not company_result:
             return jsonify({'error': 'Company not found'}), 404
+        company, membership = company_result
 
         data = request.get_json()
 
-        # Update allowed fields - map frontend names to model names
+        # Update site-local presentation fields.
         field_mapping = {
-            'name': 'company_name',
-            'phone': 'phone',
+            'name': 'display_name',
             'sector': 'sector',
             'size': 'company_size',
             'city': 'city',
@@ -394,13 +433,16 @@ def update_company(company_id):
 
         for frontend_field, model_field in field_mapping.items():
             if frontend_field in data:
-                setattr(company, model_field, data[frontend_field])
+                setattr(membership, model_field, data[frontend_field])
+
+        if 'phone' in data:
+            company.phone = data['phone']
 
         # Admin-only fields: membership and job limits
         if 'is_member' in data:
-            company.is_member = bool(data['is_member'])
+            membership.is_member = bool(data['is_member'])
         if 'max_active_jobs' in data:
-            company.max_active_jobs = int(data['max_active_jobs'])
+            membership.max_active_jobs = max(0, int(data['max_active_jobs']))
 
         company.updated_at = db.func.now()
         db.session.commit()
@@ -410,10 +452,11 @@ def update_company(company_id):
             'message': 'Company updated successfully',
             'company': {
                 'id': company.id,
-                'name': company.company_name,
+                'name': membership.display_name or company.company_name,
                 'email': user.email if user else None,
-                'is_member': company.is_member,
-                'max_active_jobs': company.max_active_jobs
+                'site_status': membership.status,
+                'is_member': membership.is_member,
+                'max_active_jobs': membership.max_active_jobs
             }
         }), 200
 
@@ -427,28 +470,28 @@ def update_company(company_id):
 def toggle_company_active(company_id):
     """Toggle company active status"""
     try:
-        company = Company.query.get(company_id)
+        company_result = _site_company(company_id)
 
-        if not company:
+        if not company_result:
             return jsonify({'error': 'Company not found'}), 404
+        company, membership = company_result
 
-        user = User.query.get(company.user_id)
-
-        if not user:
-            return jsonify({'error': 'User not found'}), 404
-
-        user.is_active = not user.is_active
-
-        # If deactivating company, also deactivate all their jobs
-        if not user.is_active:
-            Job.query.filter_by(company_id=company.id).update({'is_active': False})
+        site = get_current_site()
+        membership.status = (
+            CompanyStatus.SUSPENDED
+            if membership.status == CompanyStatus.APPROVED
+            else CompanyStatus.APPROVED
+        )
+        if membership.status != CompanyStatus.APPROVED:
+            Job.query.filter_by(company_id=company.id, site_id=site.id).update({'is_active': False})
 
         db.session.commit()
 
         return jsonify({
             'message': 'Company status updated',
-            'is_active': user.is_active,
-            'company_name': company.name
+            'is_active': membership.status == CompanyStatus.APPROVED,
+            'site_status': membership.status,
+            'company_name': membership.display_name or company.company_name
         }), 200
 
     except Exception as e:
@@ -461,31 +504,21 @@ def toggle_company_active(company_id):
 def delete_company(company_id):
     """Delete a company and all related data"""
     try:
-        company = Company.query.get(company_id)
+        company_result = _site_company(company_id)
 
-        if not company:
+        if not company_result:
             return jsonify({'error': 'Company not found'}), 404
+        company, membership = company_result
 
-        # Delete all applications for company's jobs
-        jobs = Job.query.filter_by(company_id=company.id).all()
-        for job in jobs:
-            Application.query.filter_by(job_id=job.id).delete()
-
-        # Delete all jobs
-        Job.query.filter_by(company_id=company.id).delete()
-
-        # Delete user
-        user = User.query.get(company.user_id)
-
-        # Delete company
-        db.session.delete(company)
-
-        if user:
-            db.session.delete(user)
+        # Preserve the global company and audit history; suspend only this site.
+        site = get_current_site()
+        membership.status = CompanyStatus.SUSPENDED
+        membership.approval_reason = 'Regional presence archived by administrator'
+        Job.query.filter_by(company_id=company.id, site_id=site.id).update({'is_active': False})
 
         db.session.commit()
 
-        return jsonify({'message': 'Company deleted successfully'}), 200
+        return jsonify({'message': 'Regional company presence suspended successfully'}), 200
 
     except Exception as e:
         db.session.rollback()
@@ -497,28 +530,30 @@ def delete_company(company_id):
 def get_company_jobs(company_id):
     """Get all jobs from a specific company"""
     try:
-        company = Company.query.get(company_id)
+        company_result = _site_company(company_id)
 
-        if not company:
+        if not company_result:
             return jsonify({'error': 'Company not found'}), 404
+        company, membership = company_result
 
+        site = get_current_site()
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 20, type=int)
 
-        pagination = Job.query.filter_by(company_id=company.id).order_by(
+        pagination = Job.query.filter_by(company_id=company.id, site_id=site.id).order_by(
             Job.created_at.desc()
         ).paginate(page=page, per_page=per_page, error_out=False)
 
         jobs_data = []
         for job in pagination.items:
-            applications_count = Application.query.filter_by(job_id=job.id).count()
+            applications_count = Application.query.filter_by(job_id=job.id, site_id=site.id).count()
             jobs_data.append({
                 **job.to_dict(),
                 'applications_count': applications_count
             })
 
         return jsonify({
-            'company': {'id': company.id, 'name': company.name},
+            'company': {'id': company.id, 'name': membership.display_name or company.company_name},
             'jobs': jobs_data,
             'total': pagination.total,
             'pages': pagination.pages,
@@ -534,12 +569,13 @@ def get_company_jobs(company_id):
 def get_all_candidates():
     """Get all candidates for management"""
     try:
+        site = get_current_site()
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 20, type=int)
         search = request.args.get('search', '')
         status = request.args.get('status', None)
 
-        query = Candidate.query
+        query = Candidate.query.join(CandidateSite).filter(CandidateSite.site_id == site.id)
 
         # Search filter
         if search:
@@ -563,17 +599,19 @@ def get_all_candidates():
         candidates_data = []
         for candidate in pagination.items:
             user = User.query.get(candidate.user_id)
-            applications_count = Application.query.filter_by(candidate_id=candidate.id).count()
+            membership = CandidateSite.query.filter_by(candidate_id=candidate.id, site_id=site.id).one()
+            applications_count = Application.query.filter_by(candidate_id=candidate.id, site_id=site.id).count()
 
             candidates_data.append({
                 'id': candidate.id,
                 'user_id': candidate.user_id,
                 'full_name': f"{candidate.first_name} {candidate.last_name}",
-                'email': candidate.email,
+                'email': user.email if user else None,
                 'phone': candidate.phone,
                 'city': candidate.city,
                 'state': candidate.state,
-                'is_active': user.is_active if user else False,
+                'is_active': membership.is_active and (user.is_active if user else False),
+                'is_discoverable': membership.is_discoverable,
                 'created_at': candidate.created_at.isoformat() if candidate.created_at else None,
                 'applications_count': applications_count
             })
@@ -595,22 +633,20 @@ def get_all_candidates():
 def toggle_candidate_active(candidate_id):
     """Toggle candidate active status"""
     try:
-        candidate = Candidate.query.get(candidate_id)
+        candidate_result = _site_candidate(candidate_id)
 
-        if not candidate:
+        if not candidate_result:
             return jsonify({'error': 'Candidate not found'}), 404
+        candidate, candidate_site = candidate_result
 
-        user = User.query.get(candidate.user_id)
-
-        if not user:
-            return jsonify({'error': 'User not found'}), 404
-
-        user.is_active = not user.is_active
+        candidate_site.is_active = not candidate_site.is_active
+        if not candidate_site.is_active:
+            candidate_site.is_discoverable = False
         db.session.commit()
 
         return jsonify({
             'message': 'Candidate status updated',
-            'is_active': user.is_active,
+            'is_active': candidate_site.is_active,
             'candidate_name': f"{candidate.first_name} {candidate.last_name}"
         }), 200
 
@@ -697,13 +733,15 @@ def setup_first_admin():
 def get_candidate_details(candidate_id):
     """Get detailed candidate information"""
     try:
-        candidate = Candidate.query.get(candidate_id)
+        candidate_result = _site_candidate(candidate_id)
 
-        if not candidate:
+        if not candidate_result:
             return jsonify({'error': 'Candidate not found'}), 404
+        candidate, candidate_site = candidate_result
 
+        site = get_current_site()
         user = User.query.get(candidate.user_id)
-        applications = Application.query.filter_by(candidate_id=candidate.id).all()
+        applications = Application.query.filter_by(candidate_id=candidate.id, site_id=site.id).all()
 
         applications_data = []
         for app in applications:
@@ -726,11 +764,12 @@ def get_candidate_details(candidate_id):
             'phone': candidate.phone,
             'city': candidate.city,
             'state': candidate.state,
-            'title': candidate.title,
-            'summary': candidate.summary,
-            'experience_years': candidate.experience_years,
-            'salary_expectation': candidate.salary_expectation,
-            'is_active': user.is_active if user else False,
+            'title': candidate.current_title,
+            'summary': candidate.professional_summary,
+            'experience_years': candidate.years_experience,
+            'salary_expectation': candidate_site.expected_salary,
+            'is_active': candidate_site.is_active and (user.is_active if user else False),
+            'is_discoverable': candidate_site.is_discoverable,
             'created_at': candidate.created_at.isoformat() if candidate.created_at else None,
             'applications': applications_data,
             'applications_count': len(applications_data)
@@ -745,25 +784,23 @@ def get_candidate_details(candidate_id):
 def toggle_candidate_status(candidate_id):
     """Toggle candidate active status (alternative endpoint)"""
     try:
-        candidate = Candidate.query.get(candidate_id)
+        candidate_result = _site_candidate(candidate_id)
 
-        if not candidate:
+        if not candidate_result:
             return jsonify({'error': 'Candidate not found'}), 404
-
-        user = User.query.get(candidate.user_id)
-
-        if not user:
-            return jsonify({'error': 'User not found'}), 404
+        candidate, candidate_site = candidate_result
 
         data = request.get_json()
-        is_active = data.get('is_active', not user.is_active)
+        is_active = data.get('is_active', not candidate_site.is_active)
 
-        user.is_active = is_active
+        candidate_site.is_active = bool(is_active)
+        if not candidate_site.is_active:
+            candidate_site.is_discoverable = False
         db.session.commit()
 
         return jsonify({
             'message': 'Candidate status updated',
-            'is_active': user.is_active,
+            'is_active': candidate_site.is_active,
             'candidate_name': f"{candidate.first_name} {candidate.last_name}"
         }), 200
 
@@ -777,13 +814,15 @@ def toggle_candidate_status(candidate_id):
 def get_job_details(job_id):
     """Get detailed job information for admin"""
     try:
-        job = Job.query.get(job_id)
+        job = _site_job(job_id)
 
         if not job:
             return jsonify({'error': 'Job not found'}), 404
 
-        company = Company.query.get(job.company_id) if job.company_id else None
-        applications = Application.query.filter_by(job_id=job.id).all()
+        company_result = _site_company(job.company_id) if job.company_id else None
+        company = company_result[0] if company_result else None
+        company_site = company_result[1] if company_result else None
+        applications = Application.query.filter_by(job_id=job.id, site_id=job.site_id).all()
 
         applications_data = []
         for app in applications:
@@ -805,19 +844,19 @@ def get_job_details(job_id):
             'requirements': job.requirements,
             'benefits': job.benefits,
             'area': job.area,
-            'level': job.level,
-            'modality': job.modality,
+            'level': job.seniority_level,
+            'modality': job.work_modality,
             'contract_type': job.contract_type,
-            'location': job.location,
+            'location': ', '.join(filter(None, [job.city, job.state])),
             'city': job.city,
             'state': job.state,
-            'salary_min': job.salary_min,
-            'salary_max': job.salary_max,
+            'salary_min': job.min_salary,
+            'salary_max': job.max_salary,
             'is_active': job.is_active,
             'is_featured': getattr(job, 'is_featured', False),
             'status': getattr(job, 'status', 'active' if job.is_active else 'inactive'),
             'company_id': job.company_id,
-            'company_name': company.name if company else 'N/A',
+            'company_name': (company_site.display_name or company.company_name) if company else 'N/A',
             'created_at': job.created_at.isoformat() if job.created_at else None,
             'applications': applications_data,
             'applications_count': len(applications_data)
@@ -832,7 +871,7 @@ def get_job_details(job_id):
 def update_job_status(job_id):
     """Update job status (approve, reject, pending, close)"""
     try:
-        job = Job.query.get(job_id)
+        job = _site_job(job_id)
 
         if not job:
             return jsonify({'error': 'Job not found'}), 404
@@ -872,7 +911,7 @@ def update_job_status(job_id):
 def toggle_job_featured(job_id):
     """Toggle job featured status"""
     try:
-        job = Job.query.get(job_id)
+        job = _site_job(job_id)
 
         if not job:
             return jsonify({'error': 'Job not found'}), 404
@@ -909,8 +948,15 @@ def get_pending_companies():
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 20, type=int)
 
-        # Get companies with pending approval status
-        query = Company.query.filter_by(approval_status='pending')
+        site = get_current_site()
+        query = (
+            Company.query
+            .join(CompanySite)
+            .filter(
+                CompanySite.site_id == site.id,
+                CompanySite.status == CompanyStatus.PENDING,
+            )
+        )
 
         pagination = query.order_by(Company.created_at.desc()).paginate(
             page=page, per_page=per_page, error_out=False
@@ -919,17 +965,18 @@ def get_pending_companies():
         companies_data = []
         for company in pagination.items:
             user = User.query.get(company.user_id)
+            membership = CompanySite.query.filter_by(company_id=company.id, site_id=site.id).one()
             companies_data.append({
                 'id': company.id,
-                'name': company.company_name,
+                'name': membership.display_name or company.company_name,
                 'cnpj': company.cnpj,
                 'email': user.email if user else None,
                 'phone': company.phone,
-                'sector': company.sector,
-                'city': company.city,
-                'state': company.state,
+                'sector': membership.sector or company.sector,
+                'city': membership.city or company.city,
+                'state': membership.state or company.state,
                 'created_at': company.created_at.isoformat() if company.created_at else None,
-                'approval_status': company.approval_status
+                'approval_status': membership.status
             })
 
         return jsonify({
@@ -948,28 +995,21 @@ def get_pending_companies():
 def approve_company(company_id):
     """Approve a company registration"""
     try:
-        company = Company.query.get(company_id)
+        company_result = _site_company(company_id)
 
-        if not company:
+        if not company_result:
             return jsonify({'error': 'Company not found'}), 404
+        company, membership = company_result
 
         user = User.query.get(company.user_id)
 
         if not user:
             return jsonify({'error': 'User not found'}), 404
 
-        # Update approval status
-        company.approval_status = 'approved'
-        company.approved_at = db.func.now()
-
         # Get current admin ID
         current_user_id = get_jwt_identity()
         admin = Admin.query.filter_by(user_id=current_user_id).first()
-        if admin:
-            company.approved_by = admin.id
-
-        # Activate user account
-        user.is_active = True
+        membership.approve(admin.id if admin else None)
 
         db.session.commit()
 
@@ -979,8 +1019,8 @@ def approve_company(company_id):
             'message': 'Company approved successfully',
             'company': {
                 'id': company.id,
-                'name': company.company_name,
-                'approval_status': company.approval_status
+                'name': membership.display_name or company.company_name,
+                'approval_status': membership.status
             }
         }), 200
 
@@ -994,29 +1034,23 @@ def approve_company(company_id):
 def reject_company(company_id):
     """Reject a company registration"""
     try:
-        company = Company.query.get(company_id)
+        company_result = _site_company(company_id)
 
-        if not company:
+        if not company_result:
             return jsonify({'error': 'Company not found'}), 404
+        company, membership = company_result
 
         data = request.get_json() or {}
         rejection_reason = data.get('reason', '')
 
-        # Update approval status
-        company.approval_status = 'rejected'
-        company.rejection_reason = rejection_reason
-        company.approved_at = db.func.now()
-
         # Get current admin ID
         current_user_id = get_jwt_identity()
         admin = Admin.query.filter_by(user_id=current_user_id).first()
-        if admin:
-            company.approved_by = admin.id
-
-        # Keep user inactive
-        user = User.query.get(company.user_id)
-        if user:
-            user.is_active = False
+        membership.reject(admin.id if admin else None, rejection_reason)
+        Job.query.filter_by(
+            company_id=company.id,
+            site_id=get_current_site().id,
+        ).update({'is_active': False})
 
         db.session.commit()
 
@@ -1026,8 +1060,8 @@ def reject_company(company_id):
             'message': 'Company rejected',
             'company': {
                 'id': company.id,
-                'name': company.company_name,
-                'approval_status': company.approval_status
+                'name': membership.display_name or company.company_name,
+                'approval_status': membership.status
             }
         }), 200
 
@@ -1045,6 +1079,9 @@ def super_admin_required(fn):
     @wraps(fn)
     @jwt_required()
     def wrapper(*args, **kwargs):
+        _, error, status = validate_session_site()
+        if error:
+            return error, status
         current_user_id = get_jwt_identity()
         user = User.query.get(current_user_id)
 
@@ -1294,14 +1331,26 @@ def create_job():
         if not data.get('company_id'):
             return jsonify({'error': 'Empresa é obrigatória'}), 400
 
-        # Verificar se a empresa existe
-        company = Company.query.get(data['company_id'])
-        if not company:
+        # A empresa deve existir e estar aprovada no site atual.
+        site = get_current_site()
+        company_result = _site_company(data['company_id'])
+        if not company_result:
             return jsonify({'error': 'Empresa não encontrada'}), 404
+        company, company_site = company_result
+        if company_site.status != CompanyStatus.APPROVED:
+            return jsonify({'error': 'Empresa não aprovada neste site'}), 403
+        active_jobs = Job.query.filter_by(
+            company_id=company.id,
+            site_id=site.id,
+            is_active=True,
+        ).count()
+        if active_jobs >= company_site.max_active_jobs:
+            return jsonify({'error': 'Limite regional de vagas ativas atingido'}), 409
 
         # Criar a vaga
         job = Job(
             company_id=data['company_id'],
+            site_id=site.id,
             title=data['title'],
             description=data.get('description', ''),
             requirements=data.get('requirements', ''),
@@ -1312,8 +1361,10 @@ def create_job():
             contract_type=data.get('contract_type', ''),
             min_salary=float(data['salary_min']) if data.get('salary_min') else None,
             max_salary=float(data['salary_max']) if data.get('salary_max') else None,
+            salary_currency=site.currency_code,
             city=data.get('city', ''),
             state=data.get('state', ''),
+            country=site.name,
             is_active=True
         )
 
@@ -1335,7 +1386,7 @@ def create_job():
 def update_job(job_id):
     """Update a job"""
     try:
-        job = Job.query.get(job_id)
+        job = _site_job(job_id)
 
         if not job:
             return jsonify({'error': 'Vaga não encontrada'}), 404
@@ -1385,7 +1436,7 @@ def update_job(job_id):
 def toggle_job_status_simple(job_id):
     """Toggle job active status"""
     try:
-        job = Job.query.get(job_id)
+        job = _site_job(job_id)
 
         if not job:
             return jsonify({'error': 'Vaga não encontrada'}), 404
@@ -1412,6 +1463,7 @@ def toggle_job_status_simple(job_id):
 def create_candidate():
     """Create a new candidate"""
     try:
+        site = get_current_site()
         data = request.get_json()
 
         # Validar campos obrigatórios
@@ -1451,15 +1503,18 @@ def create_candidate():
             linkedin_url=data.get('linkedin_url', ''),
             github_url=data.get('github_url', ''),
             portfolio_url=data.get('portfolio_url', ''),
-            bio=data.get('bio', ''),
-            current_position=data.get('current_position', ''),
+            professional_summary=data.get('bio', ''),
+            current_title=data.get('current_position', ''),
             years_experience=int(data['years_experience']) if data.get('years_experience') else None,
             expected_salary=float(data['expected_salary']) if data.get('expected_salary') else None,
-            is_available=data.get('is_available', True),
-            preferred_modality=data.get('preferred_modality', '')
+            is_actively_looking=data.get('is_available', True),
+            country=site.name,
+            salary_currency=site.currency_code,
         )
 
         db.session.add(candidate)
+        db.session.flush()
+        ensure_candidate_site(candidate, site)
         db.session.commit()
 
         return jsonify({
@@ -1481,10 +1536,11 @@ def create_candidate():
 def update_candidate(candidate_id):
     """Update a candidate"""
     try:
-        candidate = Candidate.query.get(candidate_id)
+        candidate_result = _site_candidate(candidate_id)
 
-        if not candidate:
+        if not candidate_result:
             return jsonify({'error': 'Candidato não encontrado'}), 404
+        candidate, candidate_site = candidate_result
 
         data = request.get_json()
         user = User.query.get(candidate.user_id)
@@ -1507,24 +1563,24 @@ def update_candidate(candidate_id):
         if 'portfolio_url' in data:
             candidate.portfolio_url = data['portfolio_url']
         if 'bio' in data:
-            candidate.bio = data['bio']
+            candidate.professional_summary = data['bio']
         if 'current_position' in data:
-            candidate.current_position = data['current_position']
+            candidate.current_title = data['current_position']
         if 'years_experience' in data:
             candidate.years_experience = int(data['years_experience']) if data['years_experience'] else None
         if 'expected_salary' in data:
-            candidate.expected_salary = float(data['expected_salary']) if data['expected_salary'] else None
+            candidate_site.expected_salary = float(data['expected_salary']) if data['expected_salary'] else None
         if 'is_available' in data:
-            candidate.is_available = data['is_available']
-        if 'preferred_modality' in data:
-            candidate.preferred_modality = data['preferred_modality']
+            candidate_site.is_actively_looking = bool(data['is_available'])
+        if 'is_discoverable' in data:
+            candidate_site.is_discoverable = bool(data['is_discoverable'])
 
         # Atualizar campos do usuário
         if user:
             if 'email' in data:
                 user.email = data['email']
             if 'is_active' in data:
-                user.is_active = data['is_active']
+                candidate_site.is_active = bool(data['is_active'])
 
         db.session.commit()
 
@@ -1542,21 +1598,18 @@ def update_candidate(candidate_id):
 def delete_candidate(candidate_id):
     """Delete a candidate"""
     try:
-        candidate = Candidate.query.get(candidate_id)
+        candidate_result = _site_candidate(candidate_id)
 
-        if not candidate:
+        if not candidate_result:
             return jsonify({'error': 'Candidato não encontrado'}), 404
+        candidate, candidate_site = candidate_result
 
-        user = User.query.get(candidate.user_id)
-
-        # Deletar candidato e usuário
-        db.session.delete(candidate)
-        if user:
-            db.session.delete(user)
+        candidate_site.is_active = False
+        candidate_site.is_discoverable = False
 
         db.session.commit()
 
-        return jsonify({'message': 'Candidato excluído com sucesso'}), 200
+        return jsonify({'message': 'Presença regional do candidato desativada com sucesso'}), 200
 
     except Exception as e:
         db.session.rollback()

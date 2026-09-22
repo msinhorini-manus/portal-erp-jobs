@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 // PortalHeader removido - agora está no layout global (Navbar)
 
@@ -8,8 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
  * Gestão de currículo e busca de vagas
  */
 export default function CandidateDashboardPage() {
-  const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('vagas');
   const [jobs, setJobs] = useState([]);
   const [myApplications, setMyApplications] = useState([]);
@@ -160,11 +159,6 @@ export default function CandidateDashboardPage() {
       setErrorMessage('❌ Erro ao atualizar perfil. Tente novamente.');
       setTimeout(() => setErrorMessage(''), 3000);
     }
-  };
-
-  const handleLogout = () => {
-    logout();
-    navigate('/');
   };
 
   const handleApply = async (jobId) => {
@@ -548,9 +542,12 @@ export default function CandidateDashboardPage() {
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                     >
                       <option value="">Todos os status</option>
-                      <option value="pending">Pendente</option>
-                      <option value="approved">Aprovado</option>
+                      <option value="applied">Enviada</option>
+                      <option value="reviewing">Em análise</option>
+                      <option value="interview">Entrevista</option>
+                      <option value="accepted">Aceita</option>
                       <option value="rejected">Rejeitado</option>
+                      <option value="withdrawn">Retirada</option>
                     </select>
                   </div>
                   <div>
@@ -587,8 +584,8 @@ export default function CandidateDashboardPage() {
                 {myApplications
                   .filter(app => !filterApplicationStatus || app.status === filterApplicationStatus)
                   .sort((a, b) => {
-                    const dateA = new Date(a.created_at || a.createdAt);
-                    const dateB = new Date(b.created_at || b.createdAt);
+                    const dateA = new Date(a.applied_at || a.created_at || a.createdAt);
+                    const dateB = new Date(b.applied_at || b.created_at || b.createdAt);
                     return sortApplications === 'recent' ? dateB - dateA : dateA - dateB;
                   })
                   .map(application => {
@@ -602,7 +599,7 @@ export default function CandidateDashboardPage() {
                         <div className="flex-1">
                           <h3 className="text-xl font-semibold text-gray-900 mb-2">{job.title}</h3>
                           <div className="flex items-center space-x-4 text-sm text-gray-600 mb-3">
-                            <span>🏢 {job.company || 'Empresa'}</span>
+                            <span>🏢 {job.company_name || job.company?.company_name || 'Empresa'}</span>
                             <span>📍 {job.location}</span>
                             <span>💰 {job.salary}</span>
                           </div>
@@ -612,15 +609,24 @@ export default function CandidateDashboardPage() {
                         </div>
                         <div>
                           <span className={`px-4 py-2 rounded-full text-sm font-medium ${
-                            application.status === 'pending'
+                            application.status === 'applied'
                               ? 'bg-yellow-100 text-yellow-700'
-                              : application.status === 'approved'
+                              : application.status === 'reviewing'
+                              ? 'bg-blue-100 text-blue-700'
+                              : application.status === 'interview'
+                              ? 'bg-purple-100 text-purple-700'
+                              : application.status === 'accepted'
                               ? 'bg-green-100 text-green-700'
+                              : application.status === 'withdrawn'
+                              ? 'bg-gray-100 text-gray-700'
                               : 'bg-red-100 text-red-700'
                           }`}>
-                            {application.status === 'pending' && '⏳ Aguardando'}
-                            {application.status === 'approved' && '✓ Aprovado'}
+                            {application.status === 'applied' && '⏳ Enviada'}
+                            {application.status === 'reviewing' && '🔎 Em análise'}
+                            {application.status === 'interview' && '📅 Entrevista'}
+                            {application.status === 'accepted' && '✓ Aceita'}
                             {application.status === 'rejected' && '✗ Rejeitado'}
+                            {application.status === 'withdrawn' && '↩ Retirada'}
                           </span>
                         </div>
                       </div>

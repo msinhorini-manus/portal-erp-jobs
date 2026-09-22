@@ -1,7 +1,7 @@
+/* global process */
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -36,8 +36,8 @@ app.use(express.static(path.join(__dirname, 'dist'), {
   lastModified: true
 }));
 
-// Todas as outras rotas devem retornar o index.html (para SPA)
-app.get('*', (req, res) => {
+// Todas as outras rotas devem retornar o index.html (Express 5 wildcard).
+app.get('/{*splat}', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
