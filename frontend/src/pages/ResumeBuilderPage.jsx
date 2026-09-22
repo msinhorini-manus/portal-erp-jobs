@@ -29,7 +29,11 @@ export default function ResumeBuilderPage() {
   useEffect(() => {
     const loadResume = async () => {
       try {
-        const data = await resumeAPI.get()
+        const [data, sessionResponse] = await Promise.all([
+          resumeAPI.get(),
+          fetch('/bff/auth/me', { credentials: 'same-origin', cache: 'no-store' })
+        ])
+        const session = sessionResponse.ok ? await sessionResponse.json() : {}
         if (data && data.candidate) {
           const candidate = data.candidate
           const fullName = `${candidate.first_name || ''} ${candidate.last_name || ''}`.trim()
@@ -37,7 +41,7 @@ export default function ResumeBuilderPage() {
           setResume({
             personal: {
               fullName: fullName,
-              email: candidate.email || '',
+              email: session.email || candidate.email || '',
               phone: candidate.phone || '',
               city: candidate.city || '',
               state: candidate.state || '',
