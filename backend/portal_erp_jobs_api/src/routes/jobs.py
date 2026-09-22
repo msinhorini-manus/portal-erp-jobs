@@ -1,13 +1,14 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from src.models.job import Job, JobSkill, Skill
-from src.models.company import Company
-from src.models.application import Application
+from src.models.company import CompanySite, CompanyStatus
+from src.models.application import Application, ApplicationStatus
 from src.models.job_area import JobArea
 from src.config import db
 from sqlalchemy import or_, and_
 from datetime import datetime
 from src.regional_context import get_current_site
+from src.regional_access import get_company_access
 
 jobs_bp = Blueprint('jobs', __name__, url_prefix='/api/jobs')
 
@@ -38,8 +39,22 @@ def get_all_jobs():
         salary_exact_min = request.args.get('salary_min_exact', type=int)  # Salário mínimo exato
         salary_exact_max = request.args.get('salary_max_exact', type=int)  # Salário máximo exato
 
-        # Construir query - apenas vagas ativas
-        jobs_query = Job.query.filter_by(site_id=site.id, is_active=True)
+        # Apenas vagas ativas de empresas aprovadas no site atual.
+        jobs_query = (
+            Job.query
+            .join(
+                CompanySite,
+                and_(
+                    CompanySite.company_id == Job.company_id,
+                    CompanySite.site_id == Job.site_id,
+                ),
+            )
+            .filter(
+                Job.site_id == site.id,
+                Job.is_active.is_(True),
+                CompanySite.status == CompanyStatus.APPROVED,
+            )
+        )
 
         # Filtro de texto (título ou descrição)
         if query:
@@ -154,7 +169,22 @@ def get_job_by_id(job_id):
     """
     try:
         site = get_current_site()
-        job = Job.query.filter_by(id=job_id, site_id=site.id).first()
+        job = (
+            Job.query
+            .join(
+                CompanySite,
+                and_(
+                    CompanySite.company_id == Job.company_id,
+                    CompanySite.site_id == Job.site_id,
+                ),
+            )
+            .filter(
+                Job.id == job_id,
+                Job.site_id == site.id,
+                CompanySite.status == CompanyStatus.APPROVED,
+            )
+            .first()
+        )
 
         if not job:
             return jsonify({'error': 'Vaga não encontrada'}), 404
@@ -173,24 +203,25 @@ def create_job():
     """
     try:
         site = get_current_site()
-        current_user_id = get_jwt_identity()
-        claims = get_jwt()
+        company, company_site, _, error, status = get_company_access(
+            require_approved=True,
+            permission='manage_jobs',
+        )
+        if error:
+            return error, status
 
-        # Verificar se é empresa
-        if claims.get('user_type') != 'company':
-            return jsonify({'error': 'Acesso negado. Apenas empresas podem criar vagas'}), 403
-
-        # Buscar empresa
-        company = Company.query.filter_by(user_id=current_user_id).first()
-        if not company:
-            return jsonify({'error': 'Perfil de empresa não encontrado. Crie um perfil primeiro'}), 404
+        active_jobs = Job.query.filter_by(
+            company_id=company.id,
+            site_id=site.id,
+            is_active=True,
+        ).count()
+        if active_jobs >= company_site.max_active_jobs:
+            return jsonify({'error': 'Limite regional de vagas ativas atingido'}), 409
 
         data = request.get_json()
-        print(f"[DEBUG] Received data for job creation: {data}")
 
         # Validar dados obrigatórios
         if not data.get('title') or not data.get('description'):
-            print("[ERROR] Missing title or description")
             return jsonify({'error': 'Título e descrição são obrigatórios'}), 400
 
         # Criar nova vaga
@@ -226,13 +257,13 @@ def create_job():
             contract_type=data.get('contract_type', 'clt'),
             min_salary=min_salary,
             max_salary=max_salary,
+            salary_currency=site.currency_code,
             city=data.get('city'),
             state=data.get('state'),
-            country=data.get('country', 'Brasil'),
+            country=site.name,
             is_active=True
         )
 
-        print(f"[DEBUG] Creating job with data: title={data.get('title')}, work_mode={data.get('work_mode')}, contract_type={data.get('contract_type')}, area_id={area_id}")
         db.session.add(new_job)
         db.session.flush()  # Para obter o ID da vaga
 
@@ -262,7 +293,6 @@ def create_job():
                         db.session.add(job_skill)
 
         db.session.commit()
-        print("[DEBUG] Job created successfully!")
 
         return jsonify({
             'message': 'Vaga criada com sucesso',
@@ -271,10 +301,6 @@ def create_job():
 
     except Exception as e:
         db.session.rollback()
-        print(f"[ERROR] Failed to create job: {str(e)}")
-        print(f"[ERROR] Exception type: {type(e).__name__}")
-        import traceback
-        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 
@@ -286,17 +312,12 @@ def update_job(job_id):
     """
     try:
         site = get_current_site()
-        current_user_id = get_jwt_identity()
-        claims = get_jwt()
-
-        # Verificar se é empresa
-        if claims.get('user_type') != 'company':
-            return jsonify({'error': 'Acesso negado'}), 403
-
-        # Buscar empresa
-        company = Company.query.filter_by(user_id=current_user_id).first()
-        if not company:
-            return jsonify({'error': 'Perfil de empresa não encontrado'}), 404
+        company, _, _, error, status = get_company_access(
+            require_approved=True,
+            permission='manage_jobs',
+        )
+        if error:
+            return error, status
 
         # Buscar vaga
         job = Job.query.filter_by(id=job_id, site_id=site.id).first()
@@ -389,17 +410,12 @@ def delete_job(job_id):
     """
     try:
         site = get_current_site()
-        current_user_id = get_jwt_identity()
-        claims = get_jwt()
-
-        # Verificar se é empresa
-        if claims.get('user_type') != 'company':
-            return jsonify({'error': 'Acesso negado'}), 403
-
-        # Buscar empresa
-        company = Company.query.filter_by(user_id=current_user_id).first()
-        if not company:
-            return jsonify({'error': 'Perfil de empresa não encontrado'}), 404
+        company, _, _, error, status = get_company_access(
+            require_approved=True,
+            permission='manage_jobs',
+        )
+        if error:
+            return error, status
 
         # Buscar vaga
         job = Job.query.filter_by(id=job_id, site_id=site.id).first()
@@ -428,17 +444,11 @@ def get_my_company_jobs():
     """
     try:
         site = get_current_site()
-        current_user_id = get_jwt_identity()
-        claims = get_jwt()
-
-        # Verificar se é empresa
-        if claims.get('user_type') != 'company':
-            return jsonify({'error': 'Acesso negado'}), 403
-
-        # Buscar empresa
-        company = Company.query.filter_by(user_id=current_user_id).first()
-        if not company:
-            return jsonify({'error': 'Perfil de empresa não encontrado'}), 404
+        company, company_site, _, error, status_code = get_company_access(
+            permission='manage_jobs',
+        )
+        if error:
+            return error, status_code
 
         # Buscar vagas da empresa
         page = request.args.get('page', 1, type=int)
@@ -461,7 +471,9 @@ def get_my_company_jobs():
             'total': pagination.total,
             'pages': pagination.pages,
             'current_page': page,
-            'per_page': per_page
+            'per_page': per_page,
+            'site_status': company_site.status,
+            'max_active_jobs': company_site.max_active_jobs
         }), 200
 
     except Exception as e:
@@ -476,17 +488,12 @@ def get_job_applications(job_id):
     """
     try:
         site = get_current_site()
-        current_user_id = get_jwt_identity()
-        claims = get_jwt()
-
-        # Verificar se é empresa
-        if claims.get('user_type') != 'company':
-            return jsonify({'error': 'Acesso negado'}), 403
-
-        # Buscar empresa
-        company = Company.query.filter_by(user_id=current_user_id).first()
-        if not company:
-            return jsonify({'error': 'Perfil de empresa não encontrado'}), 404
+        company, _, _, error, status_code = get_company_access(
+            require_approved=True,
+            permission='view_candidates',
+        )
+        if error:
+            return error, status_code
 
         # Buscar vaga
         job = Job.query.filter_by(id=job_id, site_id=site.id).first()
@@ -502,17 +509,32 @@ def get_job_applications(job_id):
         per_page = request.args.get('per_page', 20, type=int)
         status = request.args.get('status', '')
 
-        applications_query = Application.query.filter_by(job_id=job_id)
+        applications_query = Application.query.filter_by(job_id=job_id, site_id=site.id)
 
         if status:
-            applications_query = applications_query.filter_by(status=status)
+            normalized_status = ApplicationStatus.normalize(status)
+            applications_query = applications_query.filter_by(status=normalized_status)
 
         applications_query = applications_query.order_by(Application.applied_at.desc())
 
         pagination = applications_query.paginate(page=page, per_page=per_page, error_out=False)
 
+        applications = []
+        for application in pagination.items:
+            item = application.to_dict()
+            candidate = application.candidate
+            item.update({
+                'candidate_name': f"{candidate.first_name} {candidate.last_name}".strip(),
+                'candidate_email': candidate.user.email,
+                'candidate_phone': candidate.phone,
+                'candidate_city': candidate.city,
+                'candidate_title': candidate.current_title,
+                'resume_url': candidate.resume_url,
+            })
+            applications.append(item)
+
         return jsonify({
-            'applications': [a.to_dict() for a in pagination.items],
+            'applications': applications,
             'total': pagination.total,
             'pages': pagination.pages,
             'current_page': page,
@@ -532,17 +554,12 @@ def toggle_job_status(job_id):
     """
     try:
         site = get_current_site()
-        current_user_id = get_jwt_identity()
-        claims = get_jwt()
-
-        # Verificar se é empresa
-        if claims.get('user_type') != 'company':
-            return jsonify({'error': 'Acesso negado'}), 403
-
-        # Buscar empresa
-        company = Company.query.filter_by(user_id=int(current_user_id)).first()
-        if not company:
-            return jsonify({'error': 'Perfil de empresa não encontrado'}), 404
+        company, company_site, _, error, status_code = get_company_access(
+            require_approved=True,
+            permission='manage_jobs',
+        )
+        if error:
+            return error, status_code
 
         # Buscar vaga dentro do site atual
         job = Job.query.filter_by(id=job_id, site_id=site.id).first()
@@ -552,6 +569,15 @@ def toggle_job_status(job_id):
         # Verificar se a vaga pertence à empresa
         if job.company_id != company.id:
             return jsonify({'error': 'Você não tem permissão para alterar esta vaga'}), 403
+
+        if not job.is_active:
+            active_jobs = Job.query.filter_by(
+                company_id=company.id,
+                site_id=site.id,
+                is_active=True,
+            ).count()
+            if active_jobs >= company_site.max_active_jobs:
+                return jsonify({'error': 'Limite regional de vagas ativas atingido'}), 409
 
         # Alternar status
         job.is_active = not job.is_active

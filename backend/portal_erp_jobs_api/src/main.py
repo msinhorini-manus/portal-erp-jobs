@@ -18,10 +18,10 @@ from src.i18n import init_i18n
 
 # Import all models
 from src.models.user import User
-from src.models.candidate import Candidate, CandidateSkill
-from src.models.company import Company
+from src.models.candidate import Candidate, CandidateSite, CandidateSkill
+from src.models.company import Company, CompanySite
 from src.models.job import Job, Skill
-from src.models.application import Application
+from src.models.application import Application, ApplicationStatusEvent
 from src.models.experience import Experience
 from src.models.education import Education
 from src.models.certification import Certification

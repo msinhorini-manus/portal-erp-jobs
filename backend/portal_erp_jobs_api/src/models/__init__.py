@@ -3,11 +3,11 @@ Models package for Portal ERP Jobs
 """
 
 from .user import User
-from .candidate import Candidate
-from .company import Company, CompanyStatus
+from .candidate import Candidate, CandidateSite
+from .company import Company, CompanySite, CompanyStatus
 from .company_user import CompanyUser, CompanyUserRole
 from .job import Job
-from .application import Application
+from .application import Application, ApplicationStatus, ApplicationStatusEvent
 from .experience import Experience
 from .education import Education
 from .certification import Certification
@@ -25,12 +25,16 @@ from .site import Site, SiteDomain, SiteLocale
 __all__ = [
     'User',
     'Candidate',
+    'CandidateSite',
     'Company',
+    'CompanySite',
     'CompanyStatus',
     'CompanyUser',
     'CompanyUserRole',
     'Job',
     'Application',
+    'ApplicationStatus',
+    'ApplicationStatusEvent',
     'Experience',
     'Education',
     'Certification',

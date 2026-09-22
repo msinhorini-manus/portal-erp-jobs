@@ -1,6 +1,8 @@
 import os
 import tempfile
 import unittest
+from flask_jwt_extended import create_access_token
+from sqlalchemy.exc import IntegrityError
 
 fd, database_path = tempfile.mkstemp(prefix="portal-erp-jobs-wave0-", suffix=".db")
 os.close(fd)
@@ -15,8 +17,11 @@ os.environ["FLASK_ENV"] = "testing"
 from src.config import _required_secret, db  # noqa: E402
 from src.main import app  # noqa: E402
 from src.models.user import User  # noqa: E402
-from src.models.company import Company  # noqa: E402
+from src.models.candidate import Candidate, CandidateSite  # noqa: E402
+from src.models.company import Company, CompanySite, CompanyStatus  # noqa: E402
+from src.models.company_user import CompanyUser, CompanyUserRole  # noqa: E402
 from src.models.job import Job  # noqa: E402
+from src.models.application import Application, ApplicationStatus, ApplicationStatusEvent  # noqa: E402
 from src.models.site import Site, SiteDomain, SiteLocale  # noqa: E402
 
 
@@ -75,7 +80,55 @@ class WaveZeroSecurityTests(unittest.TestCase):
             db.session.add_all([user, company_user])
             db.session.flush()
             company = Company(user_id=company_user.id, company_name="Regional Test Company")
-            db.session.add(company)
+            candidate = Candidate(
+                user_id=user.id,
+                first_name="Maria",
+                last_name="Regional",
+                city="São Paulo",
+                current_title="Consultora ERP",
+            )
+            db.session.add_all([company, candidate])
+            db.session.flush()
+            db.session.add_all([
+                CompanySite(
+                    company_id=company.id,
+                    site_id=br.id,
+                    status=CompanyStatus.APPROVED,
+                    display_name=company.company_name,
+                    max_active_jobs=3,
+                ),
+                CompanySite(
+                    company_id=company.id,
+                    site_id=mx.id,
+                    status=CompanyStatus.APPROVED,
+                    display_name=company.company_name,
+                    max_active_jobs=3,
+                ),
+                CompanyUser(
+                    company_id=company.id,
+                    user_id=company_user.id,
+                    role=CompanyUserRole.OWNER,
+                    name="Regional Test Owner",
+                    is_active=True,
+                    invitation_accepted=True,
+                ),
+                CandidateSite(
+                    candidate_id=candidate.id,
+                    site_id=br.id,
+                    is_active=True,
+                    is_discoverable=False,
+                    expected_salary=10000,
+                    salary_currency="BRL",
+                ),
+                CandidateSite(
+                    candidate_id=candidate.id,
+                    site_id=mx.id,
+                    is_active=True,
+                    is_discoverable=False,
+                    expected_salary=30000,
+                    salary_currency="MXN",
+                ),
+            ])
             db.session.flush()
             db.session.add_all([
                 Job(
@@ -102,6 +155,40 @@ class WaveZeroSecurityTests(unittest.TestCase):
             db.drop_all()
         if os.path.exists(database_path):
             os.unlink(database_path)
+
+    def setUp(self):
+        with app.app_context():
+            ApplicationStatusEvent.query.delete()
+            Application.query.delete()
+            CandidateSite.query.update({"is_active": True, "is_discoverable": False})
+            CompanySite.query.update({
+                "status": CompanyStatus.APPROVED,
+                "max_active_jobs": 3,
+            })
+            mexico = Site.query.filter_by(code="MX").one()
+            mexico.is_active = False
+            db.session.commit()
+
+    def _token(self, user_type, site_code="BR"):
+        with app.app_context():
+            site = Site.query.filter_by(code=site_code).one()
+            user = User.query.filter_by(user_type=user_type).first()
+            claims = {
+                "user_type": user_type,
+                "site_id": site.id,
+                "site_code": site.code,
+                "locale": site.default_locale,
+                "currency_code": site.currency_code,
+            }
+            if user_type == "candidate":
+                claims["candidate_id"] = user.candidate.id
+            elif user_type == "company":
+                claims["company_id"] = user.company.id
+            return create_access_token(identity=str(user.id), additional_claims=claims)
+
+    @staticmethod
+    def _authorization(token):
+        return {"Authorization": f"Bearer {token}", "Host": "jobs.portalerp.com.br"}
 
     def test_required_secret_fails_closed(self):
         original = os.environ.pop("WAVE0_MISSING_SECRET", None)
@@ -265,6 +352,148 @@ class WaveZeroSecurityTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         titles = [job["title"] for job in response.get_json()["jobs"]]
         self.assertEqual(titles, ["BR Job"])
+
+    def test_public_candidate_directory_is_opt_in_and_has_no_contact_pii(self):
+        private_response = self.client.get(
+            "/api/candidates/public",
+            headers={"Host": "jobs.portalerp.com.br"},
+        )
+        self.assertEqual(private_response.status_code, 200)
+        self.assertEqual(private_response.get_json()["candidates"], [])
+
+        token = self._token("candidate")
+        opt_in = self.client.patch(
+            "/api/candidates/me/privacy",
+            json={"curriculo_publico": True},
+            headers=self._authorization(token),
+        )
+        self.assertEqual(opt_in.status_code, 200)
+
+        public_response = self.client.get(
+            "/api/candidates/public",
+            headers={"Host": "jobs.portalerp.com.br"},
+        )
+        self.assertEqual(public_response.status_code, 200)
+        candidates = public_response.get_json()["candidates"]
+        self.assertEqual(len(candidates), 1)
+        for forbidden in ("email", "phone", "resume_url", "current_salary", "user_id"):
+            self.assertNotIn(forbidden, candidates[0])
+
+    def test_application_flow_is_site_scoped_and_audited(self):
+        candidate_token = self._token("candidate")
+        company_token = self._token("company")
+        with app.app_context():
+            job_id = Job.query.filter_by(title="BR Job").one().id
+
+        created = self.client.post(
+            "/api/applications/",
+            json={"job_id": job_id},
+            headers=self._authorization(candidate_token),
+        )
+        self.assertEqual(created.status_code, 201, created.get_json())
+        application = created.get_json()["application"]
+        self.assertEqual(application["status"], ApplicationStatus.APPLIED)
+        self.assertEqual(len(application["history"]), 1)
+
+        duplicate = self.client.post(
+            "/api/applications/",
+            json={"job_id": job_id},
+            headers=self._authorization(candidate_token),
+        )
+        self.assertEqual(duplicate.status_code, 409)
+
+        reviewed = self.client.put(
+            f"/api/applications/{application['id']}/status",
+            json={"status": "reviewing", "reason": "Triagem iniciada"},
+            headers=self._authorization(company_token),
+        )
+        self.assertEqual(reviewed.status_code, 200, reviewed.get_json())
+        self.assertEqual(reviewed.get_json()["application"]["status"], ApplicationStatus.REVIEWING)
+        self.assertEqual(len(reviewed.get_json()["application"]["history"]), 2)
+
+        invalid = self.client.put(
+            f"/api/applications/{application['id']}/status",
+            json={"status": "applied"},
+            headers=self._authorization(company_token),
+        )
+        self.assertEqual(invalid.status_code, 409)
+
+        company_view = self.client.get(
+            "/api/applications/company",
+            headers=self._authorization(company_token),
+        )
+        self.assertEqual(company_view.status_code, 200)
+        self.assertEqual(company_view.get_json()["total"], 1)
+        self.assertEqual(
+            company_view.get_json()["applications"][0]["candidate"]["email"],
+            "security-test@example.com",
+        )
+
+    def test_jwt_and_company_approval_cannot_cross_sites(self):
+        with app.app_context():
+            mexico = Site.query.filter_by(code="MX").one()
+            mexico.is_active = True
+            company_site = CompanySite.query.filter_by(site_id=mexico.id).one()
+            company_site.status = CompanyStatus.PENDING
+            db.session.commit()
+
+        br_candidate_token = self._token("candidate", "BR")
+        crossed = self.client.get(
+            "/api/candidates/profile",
+            headers={
+                "Authorization": f"Bearer {br_candidate_token}",
+                "Host": "jobs-mx.invalid",
+            },
+        )
+        self.assertEqual(crossed.status_code, 403)
+
+        mx_company_token = self._token("company", "MX")
+        blocked_publish = self.client.post(
+            "/api/jobs/",
+            json={"title": "Blocked MX", "description": "Pending company"},
+            headers={
+                "Authorization": f"Bearer {mx_company_token}",
+                "Host": "jobs-mx.invalid",
+            },
+        )
+        self.assertEqual(blocked_publish.status_code, 403)
+
+        public_jobs = self.client.get(
+            "/api/jobs/",
+            headers={"Host": "jobs-mx.invalid"},
+        )
+        self.assertEqual(public_jobs.status_code, 200)
+        self.assertEqual(public_jobs.get_json()["jobs"], [])
+
+    def test_database_rejects_application_site_mismatch(self):
+        with app.app_context():
+            candidate = Candidate.query.filter_by(first_name="Maria").one()
+            br_job = Job.query.filter_by(title="BR Job").one()
+            mexico = Site.query.filter_by(code="MX").one()
+            db.session.add(Application(
+                candidate_id=candidate.id,
+                job_id=br_job.id,
+                site_id=mexico.id,
+                status=ApplicationStatus.APPLIED,
+            ))
+            with self.assertRaises(IntegrityError):
+                db.session.commit()
+            db.session.rollback()
+
+    def test_regional_job_limit_is_enforced(self):
+        token = self._token("company")
+        with app.app_context():
+            br = Site.query.filter_by(code="BR").one()
+            membership = CompanySite.query.filter_by(site_id=br.id).one()
+            membership.max_active_jobs = 1
+            db.session.commit()
+
+        response = self.client.post(
+            "/api/jobs/",
+            json={"title": "Over limit", "description": "Should not be created"},
+            headers=self._authorization(token),
+        )
+        self.assertEqual(response.status_code, 409)
 
 
 if __name__ == "__main__":

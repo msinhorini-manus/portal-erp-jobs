@@ -9,7 +9,6 @@ import { useAuth } from '@/contexts/AuthContext'
 export default function CompanyCandidatesPage() {
   const navigate = useNavigate()
   const { token } = useAuth()
-  const [candidates, setCandidates] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [applications, setApplications] = useState([])
@@ -131,7 +130,7 @@ export default function CompanyCandidatesPage() {
               <div>
                 <p className="text-sm text-gray-500">Pendentes</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  {applications.filter(a => a.status === 'pending').length}
+                  {applications.filter(a => a.status === 'applied').length}
                 </p>
               </div>
               <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
@@ -216,16 +215,19 @@ export default function CompanyCandidatesPage() {
 
                     <div className="flex items-center gap-2">
                       <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        application.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                        application.status === 'applied' ? 'bg-yellow-100 text-yellow-700' :
                         application.status === 'reviewing' ? 'bg-blue-100 text-blue-700' :
-                        application.status === 'approved' ? 'bg-green-100 text-green-700' :
+                        application.status === 'interview' ? 'bg-purple-100 text-purple-700' :
+                        application.status === 'accepted' ? 'bg-green-100 text-green-700' :
                         application.status === 'rejected' ? 'bg-red-100 text-red-700' :
                         'bg-gray-100 text-gray-700'
                       }`}>
-                        {application.status === 'pending' ? 'Pendente' :
+                        {application.status === 'applied' ? 'Enviada' :
                          application.status === 'reviewing' ? 'Em Análise' :
-                         application.status === 'approved' ? 'Aprovado' :
+                         application.status === 'interview' ? 'Entrevista' :
+                         application.status === 'accepted' ? 'Aceita' :
                          application.status === 'rejected' ? 'Rejeitado' :
+                         application.status === 'withdrawn' ? 'Retirada' :
                          application.status}
                       </span>
 

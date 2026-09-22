@@ -1,291 +1,301 @@
-from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
-from src.models.application import Application
-from src.models.candidate import Candidate
-from src.models.job import Job
-from src.models.company import Company
+"""Regional application routes for candidates and companies."""
+from flask import Blueprint, jsonify, request
+from flask_jwt_extended import get_jwt_identity, jwt_required
+from sqlalchemy import and_
+
 from src.config import db
-from datetime import datetime
+from src.models.application import Application, ApplicationStatus
+from src.models.candidate import CandidateSite
+from src.models.company import CompanySite, CompanyStatus
+from src.models.job import Job
+from src.regional_access import get_candidate_access, get_company_access
+from src.regional_context import get_current_site
 
-applications_bp = Blueprint('applications', __name__, url_prefix='/api/applications')
+applications_bp = Blueprint("applications", __name__, url_prefix="/api/applications")
 
-@applications_bp.route('/', methods=['POST'])
+
+def _approved_job_query(site):
+    return (
+        Job.query
+        .join(
+            CompanySite,
+            and_(
+                CompanySite.company_id == Job.company_id,
+                CompanySite.site_id == Job.site_id,
+            ),
+        )
+        .filter(
+            Job.site_id == site.id,
+            CompanySite.status == CompanyStatus.APPROVED,
+        )
+    )
+
+
+def _application_payload(application, *, include_candidate=False, include_history=False):
+    data = application.to_dict(include_history=include_history)
+    data["job"] = {
+        "id": application.job.id,
+        "title": application.job.title,
+        "company_name": application.job.company.company_name if application.job.company else None,
+        "city": application.job.city,
+        "state": application.job.state,
+        "work_modality": application.job.work_modality,
+    }
+    if include_candidate:
+        presence = CandidateSite.query.filter_by(
+            candidate_id=application.candidate_id,
+            site_id=application.site_id,
+        ).first()
+        candidate_data = application.candidate.to_dict(
+            include_details=True,
+            site_membership=presence,
+        )
+        candidate_data["email"] = application.candidate.user.email
+        data["candidate"] = candidate_data
+    return data
+
+
+@applications_bp.route("/", methods=["POST"])
 @jwt_required()
 def apply_to_job():
-    """
-    Candidatar-se a uma vaga (apenas candidatos)
-    """
+    """Create a same-site application for the authenticated candidate."""
     try:
-        current_user_id = get_jwt_identity()
-        claims = get_jwt()
+        site = get_current_site()
+        candidate, candidate_site, error, status = get_candidate_access()
+        if error:
+            return error, status
 
-        # Verificar se é candidato
-        if claims.get('user_type') != 'candidate':
-            return jsonify({'error': 'Acesso negado. Apenas candidatos podem se candidatar'}), 403
+        data = request.get_json() or {}
+        job_id = data.get("job_id")
+        if not job_id:
+            return jsonify({"error": "ID da vaga é obrigatório"}), 400
 
-        # Buscar candidato
-        candidate = Candidate.query.filter_by(user_id=current_user_id).first()
-        if not candidate:
-            return jsonify({'error': 'Perfil de candidato não encontrado. Complete seu perfil primeiro'}), 404
-
-        data = request.get_json()
-
-        # Validar dados obrigatórios
-        if not data.get('job_id'):
-            return jsonify({'error': 'ID da vaga é obrigatório'}), 400
-
-        job_id = data.get('job_id')
-
-        # Verificar se a vaga existe e está ativa
-        job = Job.query.get(job_id)
+        job = _approved_job_query(site).filter(Job.id == job_id, Job.is_active.is_(True)).first()
         if not job:
-            return jsonify({'error': 'Vaga não encontrada'}), 404
-        if not job.is_active:
-            return jsonify({'error': 'Esta vaga não está mais ativa'}), 400
+            return jsonify({"error": "Vaga não encontrada ou não está ativa"}), 404
 
-        # Verificar se já se candidatou
-        existing_application = Application.query.filter_by(
-            job_id=job_id,
-            candidate_id=candidate.id
-        ).first()
-
-        if existing_application:
-            return jsonify({'error': 'Você já se candidatou a esta vaga'}), 409
-
-        # Criar candidatura
-        new_application = Application(
-            job_id=job_id,
+        existing = Application.query.filter_by(
+            job_id=job.id,
             candidate_id=candidate.id,
-            status='applied'
-        )
+            site_id=site.id,
+        ).first()
+        if existing:
+            return jsonify({"error": "Você já se candidatou a esta vaga"}), 409
 
-        db.session.add(new_application)
+        application = Application(
+            job_id=job.id,
+            candidate_id=candidate.id,
+            site_id=site.id,
+            status=ApplicationStatus.APPLIED,
+        )
+        db.session.add(application)
+        db.session.flush()
+        application.add_created_event(int(get_jwt_identity()), "candidate")
         db.session.commit()
 
         return jsonify({
-            'message': 'Candidatura enviada com sucesso',
-            'application': new_application.to_dict()
+            "message": "Candidatura enviada com sucesso",
+            "application": _application_payload(application, include_history=True),
         }), 201
-
-    except Exception as e:
+    except Exception as exc:
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(exc)}), 500
 
 
-@applications_bp.route('/my-applications', methods=['GET'])
+@applications_bp.route("/", methods=["GET"])
+@applications_bp.route("/my-applications", methods=["GET"])
 @jwt_required()
 def get_my_applications():
-    """
-    Listar todas as candidaturas do candidato autenticado
-    """
+    """List only the candidate's applications in the current site."""
     try:
-        current_user_id = get_jwt_identity()
-        claims = get_jwt()
+        site = get_current_site()
+        candidate, _, error, status = get_candidate_access()
+        if error:
+            return error, status
 
-        # Verificar se é candidato
-        if claims.get('user_type') != 'candidate':
-            return jsonify({'error': 'Acesso negado'}), 403
+        page = request.args.get("page", 1, type=int)
+        per_page = min(request.args.get("per_page", 20, type=int), 100)
+        status_filter = ApplicationStatus.normalize(request.args.get("status"))
 
-        # Buscar candidato
-        candidate = Candidate.query.filter_by(user_id=current_user_id).first()
-        if not candidate:
-            return jsonify({'error': 'Perfil de candidato não encontrado'}), 404
+        query = Application.query.filter_by(candidate_id=candidate.id, site_id=site.id)
+        if status_filter:
+            if status_filter not in ApplicationStatus.ALL:
+                return jsonify({"error": "Status inválido"}), 400
+            query = query.filter_by(status=status_filter)
 
-        # Parâmetros de paginação e filtro
-        page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 20, type=int)
-        status = request.args.get('status', '')
-
-        # Buscar candidaturas
-        applications_query = Application.query.filter_by(candidate_id=candidate.id)
-
-        if status:
-            applications_query = applications_query.filter_by(status=status)
-
-        applications_query = applications_query.order_by(Application.applied_at.desc())
-
-        pagination = applications_query.paginate(page=page, per_page=per_page, error_out=False)
-
+        pagination = query.order_by(Application.applied_at.desc()).paginate(
+            page=page,
+            per_page=per_page,
+            error_out=False,
+        )
         return jsonify({
-            'applications': [a.to_dict() for a in pagination.items],
-            'total': pagination.total,
-            'pages': pagination.pages,
-            'current_page': page,
-            'per_page': per_page
+            "applications": [_application_payload(item) for item in pagination.items],
+            "total": pagination.total,
+            "pages": pagination.pages,
+            "current_page": page,
+            "per_page": per_page,
         }), 200
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
 
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
 
-
-@applications_bp.route('/<int:application_id>', methods=['GET'])
+@applications_bp.route("/<int:application_id>", methods=["GET"])
 @jwt_required()
-def get_application_by_id(application_id):
-    """
-    Obter detalhes de uma candidatura específica
-    """
+def get_application(application_id):
+    """Return one application only to its candidate owner in this site."""
     try:
-        current_user_id = get_jwt_identity()
-        claims = get_jwt()
+        site = get_current_site()
+        candidate, _, error, status = get_candidate_access()
+        if error:
+            return error, status
 
-        # Buscar candidatura
-        application = Application.query.get(application_id)
+        application = Application.query.filter_by(
+            id=application_id,
+            candidate_id=candidate.id,
+            site_id=site.id,
+        ).first()
         if not application:
-            return jsonify({'error': 'Candidatura não encontrada'}), 404
-
-        # Verificar permissão
-        if claims.get('user_type') == 'candidate':
-            candidate = Candidate.query.filter_by(user_id=current_user_id).first()
-            if not candidate or application.candidate_id != candidate.id:
-                return jsonify({'error': 'Acesso negado'}), 403
-        elif claims.get('user_type') == 'company':
-            company = Company.query.filter_by(user_id=current_user_id).first()
-            if not company or application.job.company_id != company.id:
-                return jsonify({'error': 'Acesso negado'}), 403
-        else:
-            return jsonify({'error': 'Acesso negado'}), 403
-
-        return jsonify(application.to_dict()), 200
-
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+            return jsonify({"error": "Candidatura não encontrada"}), 404
+        return jsonify(_application_payload(application, include_history=True)), 200
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
 
 
-@applications_bp.route('/<int:application_id>/status', methods=['PUT'])
+@applications_bp.route("/<int:application_id>/status", methods=["PUT"])
+@applications_bp.route("/<int:application_id>", methods=["PUT"])
 @jwt_required()
 def update_application_status(application_id):
-    """
-    Atualizar status de uma candidatura (apenas empresa dona da vaga)
-    """
+    """Allow an approved company to transition an application for its own job."""
     try:
-        current_user_id = get_jwt_identity()
-        claims = get_jwt()
+        site = get_current_site()
+        company, _, _, error, status_code = get_company_access(
+            require_approved=True,
+            permission="view_candidates",
+        )
+        if error:
+            return error, status_code
 
-        # Verificar se é empresa
-        if claims.get('user_type') != 'company':
-            return jsonify({'error': 'Acesso negado. Apenas empresas podem atualizar status'}), 403
-
-        # Buscar empresa
-        company = Company.query.filter_by(user_id=current_user_id).first()
-        if not company:
-            return jsonify({'error': 'Perfil de empresa não encontrado'}), 404
-
-        # Buscar candidatura
-        application = Application.query.get(application_id)
+        application = (
+            Application.query
+            .join(Job, Application.job_id == Job.id)
+            .filter(
+                Application.id == application_id,
+                Application.site_id == site.id,
+                Job.site_id == site.id,
+                Job.company_id == company.id,
+            )
+            .first()
+        )
         if not application:
-            return jsonify({'error': 'Candidatura não encontrada'}), 404
+            return jsonify({"error": "Candidatura não encontrada"}), 404
 
-        # Verificar se a vaga pertence à empresa
-        if application.job.company_id != company.id:
-            return jsonify({'error': 'Você não tem permissão para atualizar esta candidatura'}), 403
+        data = request.get_json() or {}
+        requested_status = ApplicationStatus.normalize(data.get("status"))
+        if requested_status not in ApplicationStatus.ALL:
+            return jsonify({"error": "Status inválido"}), 400
+        if not application.can_transition_to(requested_status):
+            return jsonify({
+                "error": f"Transição inválida: {application.status} -> {requested_status}",
+            }), 409
 
-        data = request.get_json()
-
-        # Validar novo status
-        valid_statuses = ['pending', 'reviewing', 'interview', 'approved', 'rejected']
-        new_status = data.get('status')
-
-        if not new_status or new_status not in valid_statuses:
-            return jsonify({'error': f'Status inválido. Use um dos seguintes: {", ".join(valid_statuses)}'}), 400
-
-        # Atualizar status
-        application.status = new_status
-        application.updated_at = datetime.utcnow()
-
+        application.transition_to(
+            requested_status,
+            int(get_jwt_identity()),
+            "company",
+            reason=data.get("reason"),
+        )
         db.session.commit()
-
         return jsonify({
-            'message': 'Status atualizado com sucesso',
-            'application': application.to_dict()
+            "message": "Status atualizado com sucesso",
+            "application": _application_payload(application, include_history=True),
         }), 200
-
-    except Exception as e:
+    except Exception as exc:
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(exc)}), 500
 
 
-@applications_bp.route('/<int:application_id>', methods=['DELETE'])
+@applications_bp.route("/<int:application_id>", methods=["DELETE"])
 @jwt_required()
 def withdraw_application(application_id):
-    """
-    Retirar candidatura (apenas candidato dono da candidatura)
-    """
+    """Withdraw, rather than destroy, a candidate-owned application."""
     try:
-        current_user_id = get_jwt_identity()
-        claims = get_jwt()
+        site = get_current_site()
+        candidate, _, error, status = get_candidate_access()
+        if error:
+            return error, status
 
-        # Verificar se é candidato
-        if claims.get('user_type') != 'candidate':
-            return jsonify({'error': 'Acesso negado'}), 403
-
-        # Buscar candidato
-        candidate = Candidate.query.filter_by(user_id=current_user_id).first()
-        if not candidate:
-            return jsonify({'error': 'Perfil de candidato não encontrado'}), 404
-
-        # Buscar candidatura
-        application = Application.query.get(application_id)
+        application = Application.query.filter_by(
+            id=application_id,
+            candidate_id=candidate.id,
+            site_id=site.id,
+        ).first()
         if not application:
-            return jsonify({'error': 'Candidatura não encontrada'}), 404
+            return jsonify({"error": "Candidatura não encontrada"}), 404
+        if application.status == ApplicationStatus.WITHDRAWN:
+            return jsonify({"message": "Candidatura já retirada"}), 200
+        if not application.can_transition_to(ApplicationStatus.WITHDRAWN):
+            return jsonify({"error": "Esta candidatura não pode mais ser retirada"}), 409
 
-        # Verificar se a candidatura pertence ao candidato
-        if application.candidate_id != candidate.id:
-            return jsonify({'error': 'Você não tem permissão para retirar esta candidatura'}), 403
-
-        db.session.delete(application)
+        application.transition_to(
+            ApplicationStatus.WITHDRAWN,
+            int(get_jwt_identity()),
+            "candidate",
+        )
         db.session.commit()
-
-        return jsonify({'message': 'Candidatura retirada com sucesso'}), 200
-
-    except Exception as e:
+        return jsonify({"message": "Candidatura retirada com sucesso"}), 200
+    except Exception as exc:
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(exc)}), 500
 
 
-def calculate_match_percentage(candidate, job):
-    """
-    Calcular percentual de match entre candidato e vaga
-    Algoritmo simplificado - pode ser melhorado
-    """
+@applications_bp.route("/company", methods=["GET"])
+@jwt_required()
+def get_company_applications():
+    """List candidates only for the approved company's jobs in this site."""
     try:
-        match_score = 0
-        total_factors = 0
+        site = get_current_site()
+        company, _, _, error, status_code = get_company_access(
+            require_approved=True,
+            permission="view_candidates",
+        )
+        if error:
+            return error, status_code
 
-        # Fator 1: Localização (peso 20%)
-        total_factors += 20
-        if candidate.city and job.city:
-            if candidate.city.lower() == job.city.lower():
-                match_score += 20
-            elif candidate.state and job.state and candidate.state.lower() == job.state.lower():
-                match_score += 10
+        page = request.args.get("page", 1, type=int)
+        per_page = min(request.args.get("per_page", 20, type=int), 100)
+        status_filter = ApplicationStatus.normalize(request.args.get("status"))
+        job_id = request.args.get("job_id", type=int)
 
-        # Fator 2: Pretensão salarial (peso 20%)
-        total_factors += 20
-        if candidate.salary_expectation and job.salary_min and job.salary_max:
-            if job.salary_min <= candidate.salary_expectation <= job.salary_max:
-                match_score += 20
-            elif candidate.salary_expectation <= job.salary_max * 1.2:
-                match_score += 10
+        query = (
+            Application.query
+            .join(Job, Application.job_id == Job.id)
+            .filter(
+                Application.site_id == site.id,
+                Job.site_id == site.id,
+                Job.company_id == company.id,
+            )
+        )
+        if status_filter:
+            if status_filter not in ApplicationStatus.ALL:
+                return jsonify({"error": "Status inválido"}), 400
+            query = query.filter(Application.status == status_filter)
+        if job_id:
+            query = query.filter(Application.job_id == job_id)
 
-        # Fator 3: Tecnologias (peso 60%)
-        total_factors += 60
-        if job.technologies:
-            candidate_tech_ids = [skill.technology_id for skill in candidate.skills]
-            job_tech_ids = [jt.technology_id for jt in job.technologies]
-
-            if job_tech_ids:
-                matching_techs = set(candidate_tech_ids) & set(job_tech_ids)
-                tech_match_percentage = (len(matching_techs) / len(job_tech_ids)) * 60
-                match_score += tech_match_percentage
-
-        # Calcular percentual final
-        if total_factors > 0:
-            final_percentage = int((match_score / total_factors) * 100)
-        else:
-            final_percentage = 50  # Default se não houver fatores
-
-        return min(100, max(0, final_percentage))
-
-    except Exception as e:
-        print(f"Erro ao calcular match: {e}")
-        return 50  # Retornar 50% em caso de erro
+        pagination = query.order_by(Application.applied_at.desc()).paginate(
+            page=page,
+            per_page=per_page,
+            error_out=False,
+        )
+        return jsonify({
+            "applications": [
+                _application_payload(item, include_candidate=True)
+                for item in pagination.items
+            ],
+            "total": pagination.total,
+            "pages": pagination.pages,
+            "current_page": page,
+            "per_page": per_page,
+        }), 200
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500

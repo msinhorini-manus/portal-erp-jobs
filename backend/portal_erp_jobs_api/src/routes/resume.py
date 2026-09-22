@@ -14,6 +14,7 @@ from src.models.language import Language
 from src.models.job import Skill
 from src.config import db
 from datetime import datetime
+from src.regional_access import get_candidate_access
 
 resume_bp = Blueprint('resume', __name__, url_prefix='/api/resume')
 
@@ -36,17 +37,8 @@ PROFICIENCY_MAPPING = {
 
 def get_authenticated_candidate():
     """Get authenticated candidate or return error response"""
-    current_user_id = int(get_jwt_identity())
-    claims = get_jwt()
-
-    if claims.get('user_type') != 'candidate':
-        return None, jsonify({'error': 'Acesso negado'}), 403
-
-    candidate = Candidate.query.filter_by(user_id=current_user_id).first()
-    if not candidate:
-        return None, jsonify({'error': 'Candidato não encontrado'}), 404
-
-    return candidate, None, None
+    candidate, _, error_response, status_code = get_candidate_access()
+    return candidate, error_response, status_code
 
 
 def parse_date(date_string):
