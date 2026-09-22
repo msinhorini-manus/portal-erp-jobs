@@ -15,7 +15,7 @@ export default function CompanyProfilePage() {
   const [editing, setEditing] = useState(false)
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(null)
-  
+
   const [formData, setFormData] = useState({
     company_name: '',
     description: '',
@@ -41,7 +41,7 @@ export default function CompanyProfilePage() {
           'Authorization': `Bearer ${token}`
         }
       })
-      
+
       if (response.ok) {
         const data = await response.json()
         setCompany(data)
@@ -71,7 +71,7 @@ export default function CompanyProfilePage() {
     try {
       setSaving(true)
       setError(null)
-      
+
       const response = await fetch(`${API_BASE}/api/companies/me`, {
         method: 'PUT',
         headers: {
@@ -80,7 +80,7 @@ export default function CompanyProfilePage() {
         },
         body: JSON.stringify(formData)
       })
-      
+
       if (response.ok) {
         const data = await response.json()
         setCompany(data)
@@ -127,9 +127,9 @@ export default function CompanyProfilePage() {
                 <p className="text-gray-500">{company?.sector || 'Setor não informado'}</p>
               </div>
             </div>
-            
+
             {!editing ? (
-              <Button 
+              <Button
                 onClick={() => setEditing(true)}
                 className="bg-[#F7941D] hover:bg-[#e8850d] gap-2"
               >
@@ -138,7 +138,7 @@ export default function CompanyProfilePage() {
               </Button>
             ) : (
               <div className="flex gap-2">
-                <Button 
+                <Button
                   onClick={() => setEditing(false)}
                   variant="outline"
                   className="gap-2"
@@ -146,7 +146,7 @@ export default function CompanyProfilePage() {
                   <X size={16} />
                   Cancelar
                 </Button>
-                <Button 
+                <Button
                   onClick={handleSave}
                   disabled={saving}
                   className="bg-green-600 hover:bg-green-700 gap-2"
@@ -169,7 +169,7 @@ export default function CompanyProfilePage() {
             {error}
           </div>
         )}
-        
+
         {success && (
           <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg mb-6">
             {success}
@@ -182,7 +182,7 @@ export default function CompanyProfilePage() {
             <Building2 size={20} className="text-[#F7941D]" />
             Informações da Empresa
           </h2>
-          
+
           <div className="grid md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -200,7 +200,7 @@ export default function CompanyProfilePage() {
                 <p className="text-gray-900">{company?.company_name || '-'}</p>
               )}
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Setor
@@ -217,7 +217,7 @@ export default function CompanyProfilePage() {
                 <p className="text-gray-900">{company?.sector || '-'}</p>
               )}
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Porte da Empresa
@@ -239,7 +239,7 @@ export default function CompanyProfilePage() {
                 <p className="text-gray-900">{company?.company_size || '-'}</p>
               )}
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Website
@@ -263,7 +263,7 @@ export default function CompanyProfilePage() {
                 </p>
               )}
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Telefone
@@ -281,7 +281,7 @@ export default function CompanyProfilePage() {
               )}
             </div>
           </div>
-          
+
           <div className="mt-6">
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Descrição da Empresa
@@ -307,7 +307,7 @@ export default function CompanyProfilePage() {
             <MapPin size={20} className="text-[#F7941D]" />
             Localização
           </h2>
-          
+
           <div className="grid md:grid-cols-2 gap-6">
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -325,7 +325,7 @@ export default function CompanyProfilePage() {
                 <p className="text-gray-900">{company?.street_address || '-'}</p>
               )}
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Cidade
@@ -342,7 +342,7 @@ export default function CompanyProfilePage() {
                 <p className="text-gray-900">{company?.city || '-'}</p>
               )}
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Estado
@@ -359,7 +359,7 @@ export default function CompanyProfilePage() {
                 <p className="text-gray-900">{company?.state || '-'}</p>
               )}
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 CEP
@@ -381,7 +381,7 @@ export default function CompanyProfilePage() {
 
         {/* Botão Voltar */}
         <div className="mt-6">
-          <Button 
+          <Button
             onClick={() => navigate('/empresa/dashboard')}
             variant="outline"
             className="gap-2"

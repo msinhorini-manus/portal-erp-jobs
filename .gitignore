@@ -1,0 +1,47 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Databases and runtime data
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+**/database/*
+!**/database/.gitkeep
+uploads/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node
+node_modules/
+.next/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Logs and process state
+*.log
+logs/
+.pm2/
+
+# Editors and OS
+.DS_Store
+.vscode/
+.idea/
+
+# Backups
+*.bak
+*.backup
+*.tar.gz
+*.zip

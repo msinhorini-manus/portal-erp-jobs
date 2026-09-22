@@ -42,9 +42,6 @@ import ArticlePage from './pages/ArticlePage'
 import CompanyDetailPage from './pages/CompanyDetailPage'
 import CompanyProfilePage from './pages/CompanyProfilePage'
 import CompanyCandidatesPage from './pages/CompanyCandidatesPage'
-import CandidateApplicationsPage from './pages/CandidateApplicationsPage'
-import CandidateSavedJobsPage from './pages/CandidateSavedJobsPage'
-import CandidateSettingsPage from './pages/CandidateProfilePage'
 
 // Componentes wrapper para páginas admin (removem o layout interno)
 import AdminDashboardContent from './pages/admin/AdminDashboardContent'
@@ -79,9 +76,9 @@ function App() {
 
           {/* Admin Routes - Com layout próprio */}
           <Route path="/admin/login" element={<AdminLoginPage />} />
-          
+
           {/* Admin Routes - Protegidas com AdminLayout */}
-          <Route 
+          <Route
             element={
               <ProtectedRoute requiredType="admin">
                 <AdminLayout />
@@ -116,166 +113,98 @@ function App() {
             <Route path="/candidato/:id" element={<CandidateProfilePage />} />
             <Route path="/candidato/perfil/:id" element={<CandidatePublicProfilePage />} />
             <Route path="/buscar-candidatos" element={<CompanySearchPage />} />
-            
+
             {/* Company Routes - Public (legacy, redirect to new) */}
             <Route path="/empresa/cadastro" element={<CompanyRegisterPage />} />
             <Route path="/empresa/login" element={<CompanyLoginPage />} />
-            
+
             {/* Company Routes - Protected */}
-            <Route 
-              path="/empresa/dashboard" 
+            <Route
+              path="/empresa/dashboard"
               element={
                 <ProtectedRoute requiredType="company">
                   <CompanyDashboardPage />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/empresa/publicar-vaga" 
+            <Route
+              path="/empresa/publicar-vaga"
               element={
                 <ProtectedRoute requiredType="company">
                   <PostJobPage />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/empresa/vagas" 
+            <Route
+              path="/empresa/vagas"
               element={
                 <ProtectedRoute requiredType="company">
                   <MyJobsPage />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/empresa/vagas/nova" 
+            <Route
+              path="/empresa/vagas/nova"
               element={
                 <ProtectedRoute requiredType="company">
                   <PostJobPage />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/empresa/vagas/:id/editar" 
+            <Route
+              path="/empresa/vagas/:id/editar"
               element={
                 <ProtectedRoute requiredType="company">
                   <PostJobPage />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/empresa/usuarios" 
+            <Route
+              path="/empresa/usuarios"
               element={
                 <ProtectedRoute requiredType="company">
                   <CompanyUsersPage />
                 </ProtectedRoute>
-              } 
+              }
             />
-            
-            <Route 
-              path="/empresa/perfil" 
+
+            <Route
+              path="/empresa/perfil"
               element={
                 <ProtectedRoute requiredType="company">
                   <CompanyProfilePage />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/empresa/candidatos" 
+            <Route
+              path="/empresa/candidatos"
               element={
                 <ProtectedRoute requiredType="company">
                   <CompanyCandidatesPage />
                 </ProtectedRoute>
-              } 
+              }
             />
-            
+
             {/* Candidate Routes - Public (legacy, redirect to new) */}
             <Route path="/candidato/cadastro" element={<CandidateRegisterPage />} />
             <Route path="/candidato/login" element={<CandidateLoginPage />} />
-            
+
             {/* Candidate Routes - Protected */}
-            <Route 
-              path="/candidato/dashboard" 
+            <Route
+              path="/candidato/dashboard"
               element={
                 <ProtectedRoute requiredType="candidate">
                   <CandidateDashboardPage />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/candidato/curriculo" 
+            <Route
+              path="/candidato/curriculo"
               element={
                 <ProtectedRoute requiredType="candidate">
                   <ResumeBuilderPage />
                 </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/candidato/candidaturas" 
-              element={
-                <ProtectedRoute requiredType="candidate">
-                  <CandidateApplicationsPage />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/candidato/vagas-salvas" 
-              element={
-                <ProtectedRoute requiredType="candidate">
-                  <CandidateSavedJobsPage />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/candidato/perfil" 
-              element={
-                <ProtectedRoute requiredType="candidate">
-                  <CandidateSettingsPage />
-                </ProtectedRoute>
-              } 
-            />
-            
-            {/* Rotas alternativas para profissional (alias para candidato) */}
-            <Route path="/profissional/login" element={<CandidateLoginPage />} />
-            <Route path="/profissional/cadastro" element={<CandidateRegisterPage />} />
-            <Route 
-              path="/profissional/dashboard" 
-              element={
-                <ProtectedRoute requiredType="candidate">
-                  <CandidateDashboardPage />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/profissional/curriculo" 
-              element={
-                <ProtectedRoute requiredType="candidate">
-                  <ResumeBuilderPage />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/profissional/candidaturas" 
-              element={
-                <ProtectedRoute requiredType="candidate">
-                  <CandidateApplicationsPage />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/profissional/vagas-salvas" 
-              element={
-                <ProtectedRoute requiredType="candidate">
-                  <CandidateSavedJobsPage />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/profissional/perfil" 
-              element={
-                <ProtectedRoute requiredType="candidate">
-                  <CandidateSettingsPage />
-                </ProtectedRoute>
-              } 
+              }
             />
           </Route>
         </Routes>

@@ -16,19 +16,19 @@ def get_my_company_profile():
     try:
         current_user_id = get_jwt_identity()
         claims = get_jwt()
-        
+
         # Verificar se é empresa
         if claims.get('user_type') != 'company':
             return jsonify({'error': 'Acesso negado. Apenas empresas podem acessar'}), 403
-        
+
         # Buscar empresa
         company = Company.query.filter_by(user_id=current_user_id).first()
-        
+
         if not company:
             return jsonify({'error': 'Perfil de empresa não encontrado'}), 404
-        
+
         return jsonify(company.to_dict()), 200
-        
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -43,16 +43,16 @@ def create_or_update_company_profile():
     try:
         current_user_id = get_jwt_identity()
         claims = get_jwt()
-        
+
         # Verificar se é empresa
         if claims.get('user_type') != 'company':
             return jsonify({'error': 'Acesso negado. Apenas empresas podem acessar'}), 403
-        
+
         data = request.get_json()
-        
+
         # Buscar empresa existente
         company = Company.query.filter_by(user_id=current_user_id).first()
-        
+
         if company:
             # Atualizar
             if 'company_name' in data:
@@ -73,9 +73,9 @@ def create_or_update_company_profile():
                 company.size = data['size']
             if 'industry' in data:
                 company.industry = data['industry']
-            
+
             db.session.commit()
-            
+
             return jsonify({
                 'message': 'Perfil atualizado com sucesso',
                 'company': company.to_dict()
@@ -94,15 +94,15 @@ def create_or_update_company_profile():
                 size=data.get('size'),
                 industry=data.get('industry')
             )
-            
+
             db.session.add(new_company)
             db.session.commit()
-            
+
             return jsonify({
                 'message': 'Perfil criado com sucesso',
                 'company': new_company.to_dict()
             }), 201
-        
+
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
@@ -115,12 +115,12 @@ def get_company_by_id(company_id):
     """
     try:
         company = Company.query.get(company_id)
-        
+
         if not company:
             return jsonify({'error': 'Empresa não encontrada'}), 404
-        
+
         return jsonify(company.to_dict()), 200
-        
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -139,10 +139,10 @@ def search_companies():
         industry = request.args.get('industry', '')
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 20, type=int)
-        
+
         # Construir query
         companies_query = Company.query
-        
+
         # Filtro de texto (nome ou descrição)
         if query:
             companies_query = companies_query.filter(
@@ -151,24 +151,24 @@ def search_companies():
                     Company.description.ilike(f'%{query}%')
                 )
             )
-        
+
         # Filtro de localização
         if city:
             companies_query = companies_query.filter(Company.city.ilike(f'%{city}%'))
         if state:
             companies_query = companies_query.filter(Company.state.ilike(f'%{state}%'))
-        
+
         # Filtro de tamanho
         if size:
             companies_query = companies_query.filter(Company.size == size)
-        
+
         # Filtro de indústria
         if industry:
             companies_query = companies_query.filter(Company.industry.ilike(f'%{industry}%'))
-        
+
         # Paginação
         pagination = companies_query.paginate(page=page, per_page=per_page, error_out=False)
-        
+
         return jsonify({
             'companies': [c.to_dict() for c in pagination.items],
             'total': pagination.total,
@@ -176,7 +176,6 @@ def search_companies():
             'current_page': page,
             'per_page': per_page
         }), 200
-        
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
