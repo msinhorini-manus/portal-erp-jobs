@@ -1,7 +1,11 @@
 import os
 import tempfile
 import unittest
-from flask_jwt_extended import create_access_token
+import uuid
+from datetime import datetime, timedelta
+from unittest.mock import patch
+
+from flask_jwt_extended import create_access_token, decode_token
 from sqlalchemy.exc import IntegrityError
 
 fd, database_path = tempfile.mkstemp(prefix="portal-erp-jobs-wave0-", suffix=".db")
@@ -23,6 +27,10 @@ from src.models.company_user import CompanyUser, CompanyUserRole  # noqa: E402
 from src.models.job import Job  # noqa: E402
 from src.models.application import Application, ApplicationStatus, ApplicationStatusEvent  # noqa: E402
 from src.models.site import Site, SiteDomain, SiteLocale  # noqa: E402
+from src.models.session_family import SessionFamily  # noqa: E402
+from src.models.admin import Admin  # noqa: E402
+from src.models.education import Education  # noqa: E402
+from src.rate_limit import auth_rate_limiter  # noqa: E402
 
 
 class WaveZeroSecurityTests(unittest.TestCase):
@@ -77,9 +85,12 @@ class WaveZeroSecurityTests(unittest.TestCase):
             user.set_password("ValidPassword123")
             company_user = User(email="company-test@example.com", user_type="company")
             company_user.set_password("ValidPassword123")
-            db.session.add_all([user, company_user])
+            admin_user = User(email="admin-test@example.com", user_type="admin")
+            admin_user.set_password("ValidPassword123")
+            db.session.add_all([user, company_user, admin_user])
             db.session.flush()
             company = Company(user_id=company_user.id, company_name="Regional Test Company")
+            admin = Admin(user_id=admin_user.id, name="Admin Regional")
             candidate = Candidate(
                 user_id=user.id,
                 first_name="Maria",
@@ -87,7 +98,7 @@ class WaveZeroSecurityTests(unittest.TestCase):
                 city="São Paulo",
                 current_title="Consultora ERP",
             )
-            db.session.add_all([company, candidate])
+            db.session.add_all([company, candidate, admin])
             db.session.flush()
             db.session.add_all([
                 CompanySite(
@@ -157,7 +168,18 @@ class WaveZeroSecurityTests(unittest.TestCase):
             os.unlink(database_path)
 
     def setUp(self):
+        auth_rate_limiter.clear()
+        app.config.update(
+            AUTH_LOGIN_RATE_LIMIT=100,
+            AUTH_FORGOT_RATE_LIMIT=100,
+            AUTH_RESET_RATE_LIMIT=100,
+            EMAIL_PROVIDER="",
+            EMAIL_FROM="no-reply@example.invalid",
+            SMTP_HOST="",
+            RESEND_API_KEY="",
+        )
         with app.app_context():
+            SessionFamily.query.delete()
             ApplicationStatusEvent.query.delete()
             Application.query.delete()
             CandidateSite.query.update({"is_active": True, "is_discoverable": False})
@@ -167,28 +189,59 @@ class WaveZeroSecurityTests(unittest.TestCase):
             })
             mexico = Site.query.filter_by(code="MX").one()
             mexico.is_active = False
+            User.query.update({
+                "failed_login_attempts": 0,
+                "locked_until": None,
+                "reset_token": None,
+                "reset_token_expires": None,
+                "password_changed_at": None,
+            })
+            for email in (
+                "security-test@example.com",
+                "company-test@example.com",
+                "admin-test@example.com",
+            ):
+                User.query.filter_by(email=email).one().set_password("ValidPassword123")
             db.session.commit()
 
     def _token(self, user_type, site_code="BR"):
         with app.app_context():
             site = Site.query.filter_by(code=site_code).one()
             user = User.query.filter_by(user_type=user_type).first()
+            family_id = str(uuid.uuid4())
             claims = {
                 "user_type": user_type,
                 "site_id": site.id,
                 "site_code": site.code,
                 "locale": site.default_locale,
                 "currency_code": site.currency_code,
+                "family_id": family_id,
             }
             if user_type == "candidate":
                 claims["candidate_id"] = user.candidate.id
             elif user_type == "company":
                 claims["company_id"] = user.company.id
-            return create_access_token(identity=str(user.id), additional_claims=claims)
+            db.session.add(SessionFamily(
+                user_id=user.id,
+                site_id=site.id,
+                family_id=family_id,
+                current_refresh_jti=str(uuid.uuid4()),
+                expires_at=datetime.utcnow() + timedelta(days=7),
+            ))
+            token = create_access_token(identity=str(user.id), additional_claims=claims)
+            db.session.commit()
+            return token
 
     @staticmethod
     def _authorization(token):
         return {"Authorization": f"Bearer {token}", "Host": "jobs.portalerp.com.br"}
+
+    def _login(self, endpoint="candidate", email="security-test@example.com", password="ValidPassword123"):
+        return self.client.post(
+            f"/api/auth/login/{endpoint}",
+            json={"email": email, "password": password},
+            headers={"Host": "jobs.portalerp.com.br"},
+        )
 
     def test_required_secret_fails_closed(self):
         original = os.environ.pop("WAVE0_MISSING_SECRET", None)
@@ -204,7 +257,7 @@ class WaveZeroSecurityTests(unittest.TestCase):
             "/api/auth/forgot-password",
             json={"email": "security-test@example.com"},
         )
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 503)
         self.assertNotIn("_debug_token", response.get_json())
         with app.app_context():
             user = User.query.filter_by(email="security-test@example.com").first()
@@ -220,6 +273,203 @@ class WaveZeroSecurityTests(unittest.TestCase):
             self.assertFalse(user.verify_reset_token("wrong-token"))
             user.clear_reset_token()
             db.session.commit()
+
+    def test_access_and_refresh_share_family_and_rotate(self):
+        login = self._login()
+        self.assertEqual(login.status_code, 200, login.get_json())
+        payload = login.get_json()
+        with app.app_context():
+            access_claims = decode_token(payload["access_token"])
+            refresh_claims = decode_token(payload["refresh_token"])
+        self.assertEqual(access_claims["family_id"], refresh_claims["family_id"])
+        self.assertLessEqual(access_claims["exp"] - access_claims["iat"], 901)
+        self.assertLessEqual(refresh_claims["exp"] - refresh_claims["iat"], 604801)
+
+        rotated = self.client.post(
+            "/api/auth/refresh",
+            headers=self._authorization(payload["refresh_token"]),
+        )
+        self.assertEqual(rotated.status_code, 200, rotated.get_json())
+        with app.app_context():
+            new_refresh_claims = decode_token(rotated.get_json()["refresh_token"])
+        self.assertEqual(refresh_claims["family_id"], new_refresh_claims["family_id"])
+        self.assertNotEqual(refresh_claims["jti"], new_refresh_claims["jti"])
+
+    def test_refresh_reuse_revokes_entire_family(self):
+        login = self._login().get_json()
+        rotated = self.client.post(
+            "/api/auth/refresh", headers=self._authorization(login["refresh_token"])
+        ).get_json()
+        reused = self.client.post(
+            "/api/auth/refresh", headers=self._authorization(login["refresh_token"])
+        )
+        self.assertEqual(reused.status_code, 401)
+        blocked = self.client.get(
+            "/api/auth/me", headers=self._authorization(rotated["access_token"])
+        )
+        self.assertEqual(blocked.status_code, 401)
+
+    def test_logout_revokes_family(self):
+        payload = self._login().get_json()
+        logout = self.client.post(
+            "/api/auth/logout", headers=self._authorization(payload["access_token"])
+        )
+        self.assertEqual(logout.status_code, 200)
+        blocked = self.client.get(
+            "/api/auth/me", headers=self._authorization(payload["access_token"])
+        )
+        self.assertEqual(blocked.status_code, 401)
+
+    def test_change_password_revokes_all_families(self):
+        first = self._login().get_json()
+        second = self._login().get_json()
+        changed = self.client.put(
+            "/api/auth/change-password",
+            json={"current_password": "ValidPassword123", "new_password": "NewPassword456"},
+            headers=self._authorization(first["access_token"]),
+        )
+        self.assertEqual(changed.status_code, 200, changed.get_json())
+        blocked = self.client.get(
+            "/api/auth/me", headers=self._authorization(second["access_token"])
+        )
+        self.assertEqual(blocked.status_code, 401)
+
+    def test_lockout_is_persisted_for_all_password_login_routes(self):
+        cases = (
+            ("candidate", "security-test@example.com"),
+            ("company", "company-test@example.com"),
+            ("admin", "admin-test@example.com"),
+        )
+        for endpoint, email in cases:
+            with self.subTest(endpoint=endpoint):
+                with app.app_context():
+                    user = User.query.filter_by(email=email).one()
+                    user.failed_login_attempts = 4
+                    db.session.commit()
+                failed = self._login(endpoint=endpoint, email=email, password="wrong")
+                locked = self._login(endpoint=endpoint, email=email)
+                self.assertEqual(failed.status_code, 401)
+                self.assertEqual(locked.status_code, 401)
+                self.assertEqual(failed.get_json(), locked.get_json())
+                with app.app_context():
+                    user = User.query.filter_by(email=email).one()
+                    self.assertEqual(user.failed_login_attempts, 5)
+                    self.assertIsNotNone(user.locked_until)
+                    user.failed_login_attempts = 0
+                    user.locked_until = None
+                    db.session.commit()
+
+        with app.app_context():
+            user = User.query.filter_by(email="security-test@example.com").one()
+            user.failed_login_attempts = 4
+            db.session.commit()
+        generic_failed = self.client.post(
+            "/api/auth/login",
+            json={"email": "security-test@example.com", "password": "wrong"},
+            headers={"Host": "jobs.portalerp.com.br"},
+        )
+        self.assertEqual(generic_failed.status_code, 401)
+
+    def test_forgot_response_is_generic_for_missing_provider(self):
+        existing = self.client.post(
+            "/api/auth/forgot-password",
+            json={"email": "security-test@example.com"},
+            headers={"Host": "jobs.portalerp.com.br"},
+        )
+        missing = self.client.post(
+            "/api/auth/forgot-password",
+            json={"email": "missing@example.com"},
+            headers={"Host": "jobs.portalerp.com.br"},
+        )
+        self.assertEqual(existing.status_code, 503)
+        self.assertEqual(missing.status_code, 503)
+        self.assertEqual(existing.get_json(), missing.get_json())
+        with app.app_context():
+            user = User.query.filter_by(email="security-test@example.com").one()
+            self.assertIsNone(user.reset_token)
+
+    def test_candidate_registration_rejects_weak_password(self):
+        response = self.client.post(
+            "/api/auth/register/candidate",
+            json={
+                "name": "Senha Fraca",
+                "email": "weak-password@example.com",
+                "password": "password",
+            },
+            headers={"Host": "jobs.portalerp.com.br"},
+        )
+        self.assertEqual(response.status_code, 400)
+        with app.app_context():
+            self.assertIsNone(User.query.filter_by(email="weak-password@example.com").first())
+
+    def test_password_reset_is_hashed_one_use_and_url_has_no_email(self):
+        captured = {}
+
+        def fake_send(**kwargs):
+            captured.update(kwargs)
+
+        app.config.update(EMAIL_PROVIDER="smtp", SMTP_HOST="smtp.example.invalid")
+        with patch("src.routes.auth.send_password_reset_email", side_effect=fake_send):
+            response = self.client.post(
+                "/api/auth/forgot-password",
+                json={"email": "security-test@example.com"},
+                headers={"Host": "jobs.portalerp.com.br"},
+            )
+        self.assertEqual(response.status_code, 200, response.get_json())
+        self.assertIn("/redefinir-senha?token=", captured["reset_url"])
+        self.assertNotIn("email=", captured["reset_url"])
+        raw_token = captured["reset_url"].split("token=", 1)[1]
+        with app.app_context():
+            user = User.query.filter_by(email="security-test@example.com").one()
+            self.assertNotEqual(user.reset_token, raw_token)
+
+        reset = self.client.post(
+            "/api/auth/reset-password",
+            json={"token": raw_token, "new_password": "ResetPassword789"},
+            headers={"Host": "jobs.portalerp.com.br"},
+        )
+        self.assertEqual(reset.status_code, 200, reset.get_json())
+        reused = self.client.post(
+            "/api/auth/reset-password",
+            json={"token": raw_token, "new_password": "AnotherPassword789"},
+            headers={"Host": "jobs.portalerp.com.br"},
+        )
+        self.assertEqual(reused.status_code, 400)
+
+    def test_update_education_uses_real_model_fields(self):
+        token = self._login().get_json()["access_token"]
+        with app.app_context():
+            candidate = Candidate.query.join(User).filter(
+                User.email == "security-test@example.com"
+            ).one()
+            education = Education(
+                candidate_id=candidate.id,
+                degree_name="Antigo",
+                major="Área antiga",
+                institution_name="Instituição antiga",
+            )
+            db.session.add(education)
+            db.session.commit()
+            education_id = education.id
+
+        response = self.client.put(
+            f"/api/resume/educations/{education_id}",
+            json={
+                "degree_name": "Bacharelado",
+                "major": "Sistemas de Informação",
+                "institution_name": "Universidade ERP",
+                "completion_date": "2026-12-01",
+                "grade": "9,5",
+            },
+            headers=self._authorization(token),
+        )
+        self.assertEqual(response.status_code, 200, response.get_json())
+        education = response.get_json()["education"]
+        self.assertEqual(education["degree_name"], "Bacharelado")
+        self.assertEqual(education["major"], "Sistemas de Informação")
+        self.assertEqual(education["institution_name"], "Universidade ERP")
+        self.assertEqual(education["completion_date"], "2026-12-01")
+        self.assertEqual(education["grade"], "9,5")
 
     def test_catalog_mutations_require_admin(self):
         requests = [

@@ -4,12 +4,49 @@
  */
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+let legacyRefreshFlight = null;
+
+function clearLegacyAuthStorage() {
+  const userType = localStorage.getItem('userType');
+  localStorage.removeItem('authToken');
+  localStorage.removeItem('refreshToken');
+  localStorage.removeItem('userType');
+  localStorage.removeItem('userId');
+  if (userType) localStorage.removeItem(`${userType}Data`);
+}
+
+async function refreshLegacySession() {
+  const refreshToken = localStorage.getItem('refreshToken');
+  const userType = localStorage.getItem('userType');
+  if (!refreshToken || userType === 'candidate') return null;
+  if (legacyRefreshFlight) return legacyRefreshFlight;
+
+  legacyRefreshFlight = (async () => {
+    const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${refreshToken}` },
+      cache: 'no-store',
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.access_token || !data.refresh_token) {
+      clearLegacyAuthStorage();
+      return null;
+    }
+    localStorage.setItem('authToken', data.access_token);
+    localStorage.setItem('refreshToken', data.refresh_token);
+    return data.access_token;
+  })().finally(() => {
+    legacyRefreshFlight = null;
+  });
+  return legacyRefreshFlight;
+}
 
 /**
  * Generic fetch wrapper with error handling
  */
 async function fetchAPI(endpoint, options = {}) {
   const url = `${API_BASE_URL}${endpoint}`;
+  const { __retried = false, ...requestOptions } = options;
 
   const defaultOptions = {
     headers: {
@@ -25,15 +62,29 @@ async function fetchAPI(endpoint, options = {}) {
 
   const config = {
     ...defaultOptions,
-    ...options,
+    ...requestOptions,
     headers: {
       ...defaultOptions.headers,
-      ...options.headers,
+      ...requestOptions.headers,
     },
   };
 
   try {
     const response = await fetch(url, config);
+
+    if (response.status === 401 && !__retried && endpoint !== '/auth/refresh') {
+      const renewedAccess = await refreshLegacySession();
+      if (renewedAccess) {
+        return fetchAPI(endpoint, {
+          ...requestOptions,
+          __retried: true,
+          headers: {
+            ...requestOptions.headers,
+            Authorization: `Bearer ${renewedAccess}`,
+          },
+        });
+      }
+    }
 
     // Handle non-JSON responses
     const contentType = response.headers.get('content-type');
@@ -60,6 +111,39 @@ async function fetchAPI(endpoint, options = {}) {
     console.error('API Error:', error);
     throw error;
   }
+}
+
+function readCookie(name) {
+  const prefix = `${encodeURIComponent(name)}=`;
+  return document.cookie
+    .split('; ')
+    .find((value) => value.startsWith(prefix))
+    ?.slice(prefix.length) || '';
+}
+
+/** Candidate-only bridge used while the resume builder remains in the SPA. */
+async function fetchCandidateBFF(endpoint, options = {}) {
+  const method = (options.method || 'GET').toUpperCase();
+  const headers = {
+    ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+    ...(options.headers || {}),
+  };
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+    headers['X-CSRF-Token'] = decodeURIComponent(readCookie('pej_csrf'));
+  }
+  const response = await fetch(`/bff/candidate${endpoint}`, {
+    ...options,
+    headers,
+    credentials: 'same-origin',
+    cache: 'no-store',
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(data.error || data.message || 'Não foi possível concluir a operação.');
+    error.status = response.status;
+    throw error;
+  }
+  return data;
 }
 
 // ============================================
@@ -173,7 +257,8 @@ export const authAPI = {
   refreshToken: async (refreshToken) => {
     return fetchAPI('/auth/refresh', {
       method: 'POST',
-      body: JSON.stringify({ refresh_token: refreshToken }),
+      __retried: true,
+      headers: { Authorization: `Bearer ${refreshToken}` },
     });
   },
 
@@ -187,11 +272,25 @@ export const authAPI = {
   /**
    * Logout (clear token)
    */
-  logout: () => {
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('userType');
-    localStorage.removeItem('userId');
+  logout: async () => {
+    const accessToken = localStorage.getItem('authToken');
+    const refreshToken = localStorage.getItem('refreshToken');
+    try {
+      let response = accessToken
+        ? await fetch(`${API_BASE_URL}/auth/logout`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${accessToken}` },
+        })
+        : null;
+      if ((!response || !response.ok) && refreshToken) {
+        response = await fetch(`${API_BASE_URL}/auth/logout`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${refreshToken}` },
+        });
+      }
+    } finally {
+      clearLegacyAuthStorage();
+    }
   },
 };
 
@@ -471,14 +570,14 @@ export default {
  * Get complete resume
  */
 export async function getCompleteResume() {
-  return fetchAPI('/resume/complete');
+  return fetchCandidateBFF('/resume');
 }
 
 /**
  * Update complete resume
  */
 export async function updateCompleteResume(resumeData) {
-  return fetchAPI('/resume/complete', {
+  return fetchCandidateBFF('/resume', {
     method: 'PUT',
     body: JSON.stringify(resumeData),
   });
@@ -490,14 +589,14 @@ export async function updateCompleteResume(resumeData) {
  * Get all experiences
  */
 export async function getExperiences() {
-  return fetchAPI('/resume/experiences');
+  return fetchCandidateBFF('/resume/experiences');
 }
 
 /**
  * Create new experience
  */
 export async function createExperience(experienceData) {
-  return fetchAPI('/resume/experiences', {
+  return fetchCandidateBFF('/resume/experiences', {
     method: 'POST',
     body: JSON.stringify(experienceData),
   });
@@ -507,7 +606,7 @@ export async function createExperience(experienceData) {
  * Update experience
  */
 export async function updateExperience(experienceId, experienceData) {
-  return fetchAPI(`/resume/experiences/${experienceId}`, {
+  return fetchCandidateBFF(`/resume/experiences/${experienceId}`, {
     method: 'PUT',
     body: JSON.stringify(experienceData),
   });
@@ -528,14 +627,14 @@ export async function deleteExperience(experienceId) {
  * Get all educations
  */
 export async function getEducations() {
-  return fetchAPI('/resume/educations');
+  return fetchCandidateBFF('/resume/educations');
 }
 
 /**
  * Create new education
  */
 export async function createEducation(educationData) {
-  return fetchAPI('/resume/educations', {
+  return fetchCandidateBFF('/resume/educations', {
     method: 'POST',
     body: JSON.stringify(educationData),
   });
@@ -545,7 +644,7 @@ export async function createEducation(educationData) {
  * Update education
  */
 export async function updateEducation(educationId, educationData) {
-  return fetchAPI(`/resume/educations/${educationId}`, {
+  return fetchCandidateBFF(`/resume/educations/${educationId}`, {
     method: 'PUT',
     body: JSON.stringify(educationData),
   });
@@ -566,14 +665,14 @@ export async function deleteEducation(educationId) {
  * Get all skills
  */
 export async function getSkills() {
-  return fetchAPI('/resume/skills');
+  return fetchCandidateBFF('/resume/skills');
 }
 
 /**
  * Add skill
  */
 export async function addSkill(skillData) {
-  return fetchAPI('/resume/skills', {
+  return fetchCandidateBFF('/resume/skills', {
     method: 'POST',
     body: JSON.stringify(skillData),
   });
@@ -583,7 +682,7 @@ export async function addSkill(skillData) {
  * Remove skill
  */
 export async function removeSkill(skillId) {
-  return fetchAPI(`/resume/skills/${skillId}`, {
+  return fetchCandidateBFF(`/resume/skills/${skillId}`, {
     method: 'DELETE',
   });
 }
@@ -594,14 +693,14 @@ export async function removeSkill(skillId) {
  * Get all certifications
  */
 export async function getCertifications() {
-  return fetchAPI('/resume/certifications');
+  return fetchCandidateBFF('/resume/certifications');
 }
 
 /**
  * Add certification
  */
 export async function addCertification(certData) {
-  return fetchAPI('/resume/certifications', {
+  return fetchCandidateBFF('/resume/certifications', {
     method: 'POST',
     body: JSON.stringify(certData),
   });
@@ -611,7 +710,7 @@ export async function addCertification(certData) {
  * Remove certification
  */
 export async function removeCertification(certId) {
-  return fetchAPI(`/resume/certifications/${certId}`, {
+  return fetchCandidateBFF(`/resume/certifications/${certId}`, {
     method: 'DELETE',
   });
 }
@@ -622,14 +721,14 @@ export async function removeCertification(certId) {
  * Get all projects
  */
 export async function getProjects() {
-  return fetchAPI('/resume/projects');
+  return fetchCandidateBFF('/resume/projects');
 }
 
 /**
  * Add project
  */
 export async function addProject(projectData) {
-  return fetchAPI('/resume/projects', {
+  return fetchCandidateBFF('/resume/projects', {
     method: 'POST',
     body: JSON.stringify(projectData),
   });
@@ -639,7 +738,7 @@ export async function addProject(projectData) {
  * Remove project
  */
 export async function removeProject(projectId) {
-  return fetchAPI(`/resume/projects/${projectId}`, {
+  return fetchCandidateBFF(`/resume/projects/${projectId}`, {
     method: 'DELETE',
   });
 }
@@ -650,14 +749,14 @@ export async function removeProject(projectId) {
  * Get all languages
  */
 export async function getLanguages() {
-  return fetchAPI('/resume/languages');
+  return fetchCandidateBFF('/resume/languages');
 }
 
 /**
  * Add language
  */
 export async function addLanguage(langData) {
-  return fetchAPI('/resume/languages', {
+  return fetchCandidateBFF('/resume/languages', {
     method: 'POST',
     body: JSON.stringify(langData),
   });
@@ -667,7 +766,7 @@ export async function addLanguage(langData) {
  * Remove language
  */
 export async function removeLanguage(langId) {
-  return fetchAPI(`/resume/languages/${langId}`, {
+  return fetchCandidateBFF(`/resume/languages/${langId}`, {
     method: 'DELETE',
   });
 }

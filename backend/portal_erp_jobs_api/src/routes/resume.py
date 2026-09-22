@@ -248,22 +248,18 @@ def update_education(education_id):
 
         data = request.get_json()
 
-        if 'degree' in data:
-            education.degree = data['degree']
-        if 'field_of_study' in data:
-            education.field_of_study = data['field_of_study']
-        if 'institution' in data:
-            education.institution = data['institution']
-        if 'location' in data:
-            education.location = data['location']
+        if 'degree' in data or 'degree_name' in data:
+            education.degree_name = data.get('degree_name', data.get('degree'))
+        if 'field_of_study' in data or 'major' in data:
+            education.major = data.get('major', data.get('field_of_study'))
+        if 'institution' in data or 'institution_name' in data:
+            education.institution_name = data.get('institution_name', data.get('institution'))
         if 'start_date' in data:
             education.start_date = parse_date(data['start_date'])
-        if 'end_date' in data:
-            education.end_date = parse_date(data['end_date'])
-        if 'is_current' in data:
-            education.is_current = data['is_current']
-        if 'description' in data:
-            education.description = data['description']
+        if 'end_date' in data or 'completion_date' in data:
+            education.completion_date = parse_date(data.get('completion_date', data.get('end_date')))
+        if 'grade' in data:
+            education.grade = data['grade']
 
         db.session.commit()
 
@@ -824,15 +820,11 @@ def get_complete_resume():
 def update_complete_resume():
     """Update candidate personal data and summary"""
     try:
-        print("[DEBUG] PUT /api/resume/complete - Starting...")
         candidate, error_response, status_code = get_authenticated_candidate()
         if error_response:
-            print(f"[DEBUG] Authentication failed: {status_code}")
             return error_response, status_code
 
         data = request.get_json()
-        print(f"[DEBUG] Received data: {data}")
-        print(f"[DEBUG] Candidate found: {candidate.id}")
 
         # Validate required fields
         if 'first_name' in data and not data['first_name']:
@@ -862,9 +854,7 @@ def update_complete_resume():
         if 'professional_summary' in data:
             candidate.professional_summary = data['professional_summary']
 
-        print("[DEBUG] Committing changes to database...")
         db.session.commit()
-        print("[DEBUG] Changes committed successfully")
 
         return jsonify({
             'message': 'Dados pessoais atualizados com sucesso',
@@ -872,26 +862,8 @@ def update_complete_resume():
         }), 200
 
     except Exception as e:
-        print(f"[DEBUG] Exception caught: {str(e)}")
-        print(f"[DEBUG] Exception type: {type(e).__name__}")
-        import traceback
-        print(f"[DEBUG] Traceback: {traceback.format_exc()}")
         db.session.rollback()
-
-        # Return detailed error for debugging
-        error_details = {
-            'error': str(e),
-            'type': type(e).__name__,
-            'message': 'Erro ao atualizar currículo'
-        }
-
-        # Check for specific SQLAlchemy errors
-        if 'IntegrityError' in type(e).__name__:
-            error_details['message'] = 'Erro de integridade no banco de dados'
-        elif 'DataError' in type(e).__name__:
-            error_details['message'] = 'Erro no formato dos dados'
-
-        return jsonify(error_details), 422
+        return jsonify({'error': 'Não foi possível atualizar o currículo'}), 422
 
 
 

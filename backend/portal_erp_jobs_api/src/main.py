@@ -6,6 +6,8 @@ import sys
 # DON'T CHANGE THIS !!!
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
+from datetime import timezone
+
 from flask import Flask, send_from_directory, jsonify
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
@@ -28,6 +30,7 @@ from src.models.certification import Certification
 from src.models.project import Project
 from src.models.language import Language
 from src.models.site import Site, SiteDomain, SiteLocale
+from src.models.session_family import SessionFamily
 
 # Import routes
 from src.routes.auth import auth_bp
@@ -58,6 +61,42 @@ jwt = JWTManager(app)
 
 # Initialize database
 db.init_app(app)
+
+
+@jwt.token_in_blocklist_loader
+def is_token_revoked(_jwt_header, jwt_payload):
+    """Reject tokens outside an active persisted family or predating a password change."""
+    family_id = jwt_payload.get("family_id")
+    identity = jwt_payload.get("sub")
+    if not family_id or identity is None:
+        return True
+    try:
+        user_id = int(identity)
+    except (TypeError, ValueError):
+        return True
+
+    family = SessionFamily.query.filter_by(family_id=family_id).first()
+    if not family or family.user_id != user_id or not family.is_valid():
+        return True
+
+    user = db.session.get(User, user_id)
+    if not user or not user.is_active:
+        return True
+    if user.password_changed_at:
+        changed_at = user.password_changed_at
+        if changed_at.tzinfo is None:
+            changed_at = changed_at.replace(tzinfo=timezone.utc)
+        try:
+            if int(changed_at.timestamp()) > int(jwt_payload.get("iat", 0)):
+                return True
+        except (TypeError, ValueError, OverflowError):
+            return True
+    return False
+
+
+@jwt.revoked_token_loader
+def revoked_token_response(_jwt_header, _jwt_payload):
+    return jsonify({"error": "Sessão inválida ou revogada. Faça login novamente."}), 401
 
 # Resolve the authoritative regional site before locale and route handlers.
 init_regional_context(app)

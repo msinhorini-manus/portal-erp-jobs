@@ -35,6 +35,7 @@ class User(db.Model):
     failed_login_attempts = db.Column(db.Integer, default=0)
     locked_until = db.Column(db.DateTime, nullable=True)
     last_login = db.Column(db.DateTime, nullable=True)
+    password_changed_at = db.Column(db.DateTime, nullable=True)
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -46,6 +47,15 @@ class User(db.Model):
     def set_password(self, password):
         """Hash and set password"""
         self.password_hash = generate_password_hash(password)
+        self.password_changed_at = datetime.utcnow()
+
+    def revoke_all_sessions(self):
+        """Revoke all JWT session families belonging to this user."""
+        from src.models.session_family import SessionFamily
+
+        if self.id is None:
+            return 0
+        return SessionFamily.revoke_all_for_user(self.id)
 
     def check_password(self, password):
         """Check if password matches"""
@@ -106,7 +116,10 @@ class User(db.Model):
 
     def record_failed_login(self):
         """Record failed login attempt"""
-        self.failed_login_attempts += 1
+        if self.locked_until and datetime.utcnow() >= self.locked_until:
+            self.failed_login_attempts = 0
+            self.locked_until = None
+        self.failed_login_attempts = (self.failed_login_attempts or 0) + 1
         if self.failed_login_attempts >= 5:
             self.locked_until = datetime.utcnow() + timedelta(minutes=15)
 

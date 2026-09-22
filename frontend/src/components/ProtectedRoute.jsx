@@ -1,50 +1,48 @@
+import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 
 /**
- * Protected Route Component
- * Redirects to login if user is not authenticated
- * Verifica autenticação de forma síncrona para evitar redirecionamentos incorretos
+ * Legacy guard. Candidate curriculum may use the Next BFF HttpOnly session;
+ * company/admin routes retain their existing localStorage session until their migration.
  */
 export function ProtectedRoute({ children, requiredType }) {
-  // Verificar autenticação diretamente do localStorage de forma síncrona
-  const token = localStorage.getItem('authToken');
+  const legacyToken = localStorage.getItem('authToken');
   const userType = localStorage.getItem('userType');
-  const isAuthenticated = !!token;
+  const token = requiredType === 'candidate' ? null : legacyToken;
+  const [candidateSession, setCandidateSession] = useState(requiredType === 'candidate' ? 'loading' : 'unused');
 
-  // Se não estiver autenticado, redireciona para o login correspondente
-  if (!isAuthenticated) {
-    let loginPath = '/candidato/login';
-    if (requiredType === 'admin') {
-      loginPath = '/admin/login';
-    } else if (requiredType === 'company') {
-      loginPath = '/empresa/login';
+  useEffect(() => {
+    if (requiredType !== 'candidate') return;
+    if (userType === 'candidate') {
+      for (const key of ['authToken', 'refreshToken', 'userType', 'userId']) localStorage.removeItem(key);
     }
+    let active = true;
+    fetch('/bff/auth/me', { credentials: 'same-origin', cache: 'no-store' })
+      .then((response) => {
+        if (!active) return;
+        setCandidateSession(response.ok ? 'valid' : 'invalid');
+      })
+      .catch(() => active && setCandidateSession('invalid'));
+    return () => { active = false; };
+  }, [requiredType, userType]);
 
-    // Evitar redirecionamento se já estivermos na página de login
-    if (window.location.pathname === loginPath) {
-      return children;
+  if (requiredType === 'candidate') {
+    if (candidateSession === 'loading') {
+      return <div className="min-h-[60vh] flex items-center justify-center text-gray-600">Validando sessão...</div>;
     }
+    if (candidateSession === 'valid') return children;
+    return <Navigate to="/candidato/login" replace />;
+  }
 
+  if (!token) {
+    const loginPath = requiredType === 'admin' ? '/admin/login' : requiredType === 'company' ? '/empresa/login' : '/candidato/login';
+    if (window.location.pathname === loginPath) return children;
     return <Navigate to={loginPath} replace />;
   }
 
-  // Se estiver autenticado mas o tipo de usuário não for o exigido
   if (requiredType && userType !== requiredType) {
-    // Se for admin tentando acessar área de candidato/empresa, permitimos ou redirecionamos?
-    // Geralmente admin tem acesso a tudo, mas aqui vamos manter a separação por enquanto.
-
-    let redirectPath = '/candidato/dashboard';
-    if (userType === 'admin') {
-      redirectPath = '/admin';
-    } else if (userType === 'company') {
-      redirectPath = '/empresa/dashboard';
-    }
-
-    // Evitar loop de redirecionamento
-    if (window.location.pathname === redirectPath) {
-      return children;
-    }
-
+    const redirectPath = userType === 'admin' ? '/admin' : userType === 'company' ? '/empresa/dashboard' : '/candidato/dashboard';
+    if (window.location.pathname === redirectPath) return children;
     return <Navigate to={redirectPath} replace />;
   }
 
