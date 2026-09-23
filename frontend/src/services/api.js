@@ -616,7 +616,7 @@ export async function updateExperience(experienceId, experienceData) {
  * Delete experience
  */
 export async function deleteExperience(experienceId) {
-  return fetchAPI(`/resume/experiences/${experienceId}`, {
+  return fetchCandidateBFF(`/resume/experiences/${experienceId}`, {
     method: 'DELETE',
   });
 }
@@ -654,7 +654,7 @@ export async function updateEducation(educationId, educationData) {
  * Delete education
  */
 export async function deleteEducation(educationId) {
-  return fetchAPI(`/resume/educations/${educationId}`, {
+  return fetchCandidateBFF(`/resume/educations/${educationId}`, {
     method: 'DELETE',
   });
 }
@@ -674,6 +674,16 @@ export async function getSkills() {
 export async function addSkill(skillData) {
   return fetchCandidateBFF('/resume/skills', {
     method: 'POST',
+    body: JSON.stringify(skillData),
+  });
+}
+
+/**
+ * Update skill
+ */
+export async function updateSkill(skillId, skillData) {
+  return fetchCandidateBFF(`/resume/skills/${skillId}`, {
+    method: 'PUT',
     body: JSON.stringify(skillData),
   });
 }
@@ -707,6 +717,16 @@ export async function addCertification(certData) {
 }
 
 /**
+ * Update certification
+ */
+export async function updateCertification(certId, certData) {
+  return fetchCandidateBFF(`/resume/certifications/${certId}`, {
+    method: 'PUT',
+    body: JSON.stringify(certData),
+  });
+}
+
+/**
  * Remove certification
  */
 export async function removeCertification(certId) {
@@ -735,6 +755,16 @@ export async function addProject(projectData) {
 }
 
 /**
+ * Update project
+ */
+export async function updateProject(projectId, projectData) {
+  return fetchCandidateBFF(`/resume/projects/${projectId}`, {
+    method: 'PUT',
+    body: JSON.stringify(projectData),
+  });
+}
+
+/**
  * Remove project
  */
 export async function removeProject(projectId) {
@@ -758,6 +788,16 @@ export async function getLanguages() {
 export async function addLanguage(langData) {
   return fetchCandidateBFF('/resume/languages', {
     method: 'POST',
+    body: JSON.stringify(langData),
+  });
+}
+
+/**
+ * Update language
+ */
+export async function updateLanguage(langId, langData) {
+  return fetchCandidateBFF(`/resume/languages/${langId}`, {
+    method: 'PUT',
     body: JSON.stringify(langData),
   });
 }
@@ -862,14 +902,18 @@ export const resumeAPI = {
   deleteEducation,
   getSkills,
   addSkill,
+  updateSkill,
   removeSkill,
   getCertifications,
   addCertification,
+  updateCertification,
   removeCertification,
   getProjects,
   addProject,
+  updateProject,
   removeProject,
   getLanguages,
   addLanguage,
+  updateLanguage,
   removeLanguage
 };

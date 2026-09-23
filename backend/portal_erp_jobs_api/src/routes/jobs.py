@@ -1,14 +1,26 @@
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
-from src.models.job import Job, JobSkill, Skill
+from flask_jwt_extended import jwt_required
+from src.models.job import Job
 from src.models.company import CompanySite, CompanyStatus
 from src.models.application import Application, ApplicationStatus
 from src.models.job_area import JobArea
 from src.config import db
 from sqlalchemy import or_, and_
-from datetime import datetime
 from src.regional_context import get_current_site
 from src.regional_access import get_company_access
+from src.services.jobs import (
+    ACTIVE_JOB_STATUSES,
+    apply_job_fields,
+    archive_job,
+    desired_active,
+    json_object,
+    pagination_args,
+    service_error,
+    set_job_activity,
+    set_job_status,
+    validate_job_payload,
+    validate_salary_pair,
+)
 
 jobs_bp = Blueprint('jobs', __name__, url_prefix='/api/jobs')
 
@@ -28,8 +40,9 @@ def get_all_jobs():
         work_mode = request.args.get('work_mode', '')
         min_salary = request.args.get('min_salary', type=int)
         max_salary = request.args.get('max_salary', type=int)
-        page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 20, type=int)
+        page, per_page, pagination_error = pagination_args()
+        if pagination_error:
+            return pagination_error
 
         # Novos filtros avançados
         technology = request.args.get('tech', '')  # Filtro por tecnologia específica
@@ -52,6 +65,7 @@ def get_all_jobs():
             .filter(
                 Job.site_id == site.id,
                 Job.is_active.is_(True),
+                Job.status.in_(ACTIVE_JOB_STATUSES),
                 CompanySite.status == CompanyStatus.APPROVED,
             )
         )
@@ -181,6 +195,8 @@ def get_job_by_id(job_id):
             .filter(
                 Job.id == job_id,
                 Job.site_id == site.id,
+                Job.is_active.is_(True),
+                Job.status.in_(ACTIVE_JOB_STATUSES),
                 CompanySite.status == CompanyStatus.APPROVED,
             )
             .first()
@@ -210,93 +226,42 @@ def create_job():
         if error:
             return error, status
 
-        active_jobs = Job.query.filter_by(
-            company_id=company.id,
-            site_id=site.id,
-            is_active=True,
-        ).count()
-        if active_jobs >= company_site.max_active_jobs:
-            return jsonify({'error': 'Limite regional de vagas ativas atingido'}), 409
-
-        data = request.get_json()
-
-        # Validar dados obrigatórios
-        if not data.get('title') or not data.get('description'):
-            return jsonify({'error': 'Título e descrição são obrigatórios'}), 400
-
-        # Criar nova vaga
-        # Aceitar tanto work_mode quanto work_modality (compatibilidade frontend)
-        work_modality = data.get('work_modality') or data.get('work_mode', 'hybrid')
-        # Aceitar tanto salary_min/max quanto min_salary/max_salary
-        min_salary = data.get('min_salary') or data.get('salary_min')
-        max_salary = data.get('max_salary') or data.get('salary_max')
-        # Aceitar tanto level quanto seniority_level
-        seniority_level = data.get('seniority_level') or data.get('level')
-
-        # Processar area_id
-        area_id = data.get('area_id')
-        area_text = data.get('area')
-
-        # Se area_id for fornecido, validar
-        if area_id:
-            job_area = JobArea.query.get(area_id)
-            if not job_area:
-                return jsonify({'error': f'Área com ID {area_id} não encontrada'}), 400
+        data, payload_error = json_object(request)
+        if payload_error:
+            return payload_error
+        try:
+            values = validate_job_payload(data)
+            requested_active = desired_active(data, current=True)
+        except ValueError as exc:
+            return service_error(exc)
 
         new_job = Job(
             company_id=company.id,
             site_id=site.id,
-            title=data.get('title'),
-            description=data.get('description'),
-            requirements=data.get('requirements'),
-            responsibilities=data.get('responsibilities'),
-            area_id=area_id,
-            area=area_text,  # Mantido para compatibilidade
-            seniority_level=seniority_level,
-            work_modality=work_modality,
-            contract_type=data.get('contract_type', 'clt'),
-            min_salary=min_salary,
-            max_salary=max_salary,
+            title=values.pop('title'),
+            description=values.pop('description'),
             salary_currency=site.currency_code,
-            city=data.get('city'),
-            state=data.get('state'),
             country=site.name,
-            is_active=True
+            is_active=False,
+            status='inactive',
         )
-
         db.session.add(new_job)
-        db.session.flush()  # Para obter o ID da vaga
-
-        # Processar skills/technologies
-        skills_data = data.get('skills', []) or data.get('technologies', [])
-        # Se technologies for string (ex: "Python, Flask"), converter para lista ou ignorar
-        if isinstance(skills_data, str):
-            skills_data = []  # Ignorar strings - skills devem ser IDs ou objetos
-        if skills_data and isinstance(skills_data, list):
-            for skill_item in skills_data:
-                # skill_item pode ser um ID ou um objeto com skill_id
-                if isinstance(skill_item, int):
-                    skill_id = skill_item
-                elif isinstance(skill_item, dict):
-                    skill_id = skill_item.get('skill_id') or skill_item.get('id')
-                else:
-                    continue  # Ignorar items que não são int nem dict
-                if skill_id:
-                    # Verificar se skill existe
-                    skill = Skill.query.get(skill_id)
-                    if skill:
-                        job_skill = JobSkill(
-                            job_id=new_job.id,
-                            skill_id=skill_id,
-                            is_required=skill_item.get('is_required', False) if isinstance(skill_item, dict) else False
-                        )
-                        db.session.add(job_skill)
+        try:
+            db.session.flush()
+            apply_job_fields(new_job, values)
+            if 'status' in data:
+                set_job_status(new_job, data['status'], company_site=company_site)
+            elif requested_active:
+                set_job_activity(new_job, True, company_site=company_site)
+        except (ValueError, LookupError, OverflowError) as exc:
+            db.session.rollback()
+            return service_error(exc)
 
         db.session.commit()
 
         return jsonify({
             'message': 'Vaga criada com sucesso',
-            'job': new_job.to_dict()
+            'job': new_job.to_dict(include_details=True)
         }), 201
 
     except Exception as e:
@@ -312,7 +277,7 @@ def update_job(job_id):
     """
     try:
         site = get_current_site()
-        company, _, _, error, status = get_company_access(
+        company, company_site, _, error, status = get_company_access(
             require_approved=True,
             permission='manage_jobs',
         )
@@ -328,73 +293,28 @@ def update_job(job_id):
         if job.company_id != company.id:
             return jsonify({'error': 'Você não tem permissão para editar esta vaga'}), 403
 
-        data = request.get_json()
-
-        # Atualizar campos básicos
-        if 'title' in data:
-            job.title = data['title']
-        if 'description' in data:
-            job.description = data['description']
-        if 'requirements' in data:
-            job.requirements = data['requirements']
-        if 'benefits' in data:
-            job.benefits = data['benefits']
-        if 'area_id' in data:
-            area_id = data['area_id']
-            if area_id:
-                job_area = JobArea.query.get(area_id)
-                if not job_area:
-                    return jsonify({'error': f'Área com ID {area_id} não encontrada'}), 400
-            job.area_id = area_id
-        if 'area' in data:
-            job.area = data['area']
-
-        # Campos com compatibilidade de nomes
-        if 'level' in data:
-            job.seniority_level = data['level']
-        if 'seniority_level' in data:
-            job.seniority_level = data['seniority_level']
-
-        if 'work_mode' in data:
-            job.work_modality = data['work_mode']
-        if 'work_modality' in data:
-            job.work_modality = data['work_modality']
-
-        if 'contract_type' in data:
-            job.contract_type = data['contract_type']
-
-        # Localização
-        if 'city' in data:
-            job.city = data['city']
-        if 'state' in data:
-            job.state = data['state']
-        if 'country' in data:
-            job.country = data['country']
-
-        # Salário com compatibilidade de nomes
-        if 'salary_min' in data:
-            job.min_salary = data['salary_min']
-        if 'min_salary' in data:
-            job.min_salary = data['min_salary']
-        if 'salary_max' in data:
-            job.max_salary = data['salary_max']
-        if 'max_salary' in data:
-            job.max_salary = data['max_salary']
-
-        # Status
-        if 'is_active' in data:
-            job.is_active = data['is_active']
-        if 'status' in data:
-            # Compatibilidade: converter status string para is_active boolean
-            job.is_active = data['status'] in ['active', 'Active', True]
-
-        job.updated_at = datetime.utcnow()
+        data, payload_error = json_object(request)
+        if payload_error:
+            return payload_error
+        try:
+            values = validate_job_payload(data, partial=True)
+            validate_salary_pair(job, values)
+            target_active = desired_active(data, current=job.is_active)
+            explicit_status = data.get('status')
+            apply_job_fields(job, values)
+            if explicit_status is not None:
+                set_job_status(job, explicit_status, company_site=company_site)
+            elif target_active != job.is_active:
+                set_job_activity(job, target_active, company_site=company_site)
+        except (ValueError, LookupError, OverflowError) as exc:
+            db.session.rollback()
+            return service_error(exc)
 
         db.session.commit()
 
         return jsonify({
             'message': 'Vaga atualizada com sucesso',
-            'job': job.to_dict()
+            'job': job.to_dict(include_details=True)
         }), 200
 
     except Exception as e:
@@ -426,10 +346,13 @@ def delete_job(job_id):
         if job.company_id != company.id:
             return jsonify({'error': 'Você não tem permissão para deletar esta vaga'}), 403
 
-        db.session.delete(job)
+        archive_job(job)
         db.session.commit()
 
-        return jsonify({'message': 'Vaga deletada com sucesso'}), 200
+        return jsonify({
+            'message': 'Vaga arquivada com sucesso',
+            'job': job.to_dict(include_details=True),
+        }), 200
 
     except Exception as e:
         db.session.rollback()
@@ -451,16 +374,21 @@ def get_my_company_jobs():
             return error, status_code
 
         # Buscar vagas da empresa
-        page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 20, type=int)
+        page, per_page, pagination_error = pagination_args()
+        if pagination_error:
+            return pagination_error
         status = request.args.get('status', '')
 
         jobs_query = Job.query.filter_by(company_id=company.id, site_id=site.id)
 
         if status:
-            # Converter status string para is_active boolean
-            is_active = status in ['active', 'Active', True, 'true', '1']
-            jobs_query = jobs_query.filter_by(is_active=is_active)
+            normalized_status = status.strip().lower()
+            if normalized_status in ('active', 'true', '1'):
+                jobs_query = jobs_query.filter_by(is_active=True)
+            elif normalized_status in ('inactive', 'false', '0'):
+                jobs_query = jobs_query.filter_by(is_active=False)
+            else:
+                jobs_query = jobs_query.filter_by(status=normalized_status)
 
         jobs_query = jobs_query.order_by(Job.created_at.desc())
 
@@ -478,6 +406,34 @@ def get_my_company_jobs():
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+@jobs_bp.route('/my-jobs/<int:job_id>', methods=['GET'])
+@jwt_required()
+def get_my_company_job(job_id):
+    """Obter uma vaga da empresa autenticada, inclusive quando não está pública."""
+    try:
+        site = get_current_site()
+        company, company_site, _, error, status_code = get_company_access(
+            permission='manage_jobs',
+        )
+        if error:
+            return error, status_code
+
+        job = Job.query.filter_by(
+            id=job_id,
+            company_id=company.id,
+            site_id=site.id,
+        ).first()
+        if not job:
+            return jsonify({'error': 'Vaga não encontrada'}), 404
+
+        payload = job.to_dict(include_details=True)
+        payload['site_status'] = company_site.status
+        payload['max_active_jobs'] = company_site.max_active_jobs
+        return jsonify(payload), 200
+    except Exception:
+        return jsonify({'error': 'Não foi possível carregar a vaga'}), 500
 
 
 @jobs_bp.route('/<int:job_id>/applications', methods=['GET'])
@@ -505,8 +461,9 @@ def get_job_applications(job_id):
             return jsonify({'error': 'Você não tem permissão para ver as candidaturas desta vaga'}), 403
 
         # Buscar candidaturas
-        page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 20, type=int)
+        page, per_page, pagination_error = pagination_args()
+        if pagination_error:
+            return pagination_error
         status = request.args.get('status', '')
 
         applications_query = Application.query.filter_by(job_id=job_id, site_id=site.id)
@@ -570,24 +527,16 @@ def toggle_job_status(job_id):
         if job.company_id != company.id:
             return jsonify({'error': 'Você não tem permissão para alterar esta vaga'}), 403
 
-        if not job.is_active:
-            active_jobs = Job.query.filter_by(
-                company_id=company.id,
-                site_id=site.id,
-                is_active=True,
-            ).count()
-            if active_jobs >= company_site.max_active_jobs:
-                return jsonify({'error': 'Limite regional de vagas ativas atingido'}), 409
-
-        # Alternar status
-        job.is_active = not job.is_active
-        job.updated_at = datetime.utcnow()
+        try:
+            set_job_activity(job, not job.is_active, company_site=company_site)
+        except (ValueError, LookupError, OverflowError) as exc:
+            return service_error(exc)
 
         db.session.commit()
 
         return jsonify({
             'message': f'Vaga {"ativada" if job.is_active else "pausada"} com sucesso',
-            'job': job.to_dict()
+            'job': job.to_dict(include_details=True)
         }), 200
 
     except Exception as e:

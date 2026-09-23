@@ -145,7 +145,9 @@ def register_company():
     """
     try:
         site = get_current_site()
-        data = request.get_json()
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify({'error': 'O corpo da requisição deve ser um objeto JSON'}), 400
 
         # Validar dados obrigatórios
         if not data.get('email') or not data.get('password'):
@@ -158,6 +160,12 @@ def register_company():
         existing_user = User.query.filter_by(email=data['email']).first()
         if existing_user:
             return jsonify({'error': 'Email já cadastrado'}), 409
+
+        tax_id = str(data.get('cnpj') or data.get('tax_id') or '').strip()
+        if not tax_id:
+            return jsonify({'error': 'Identificação fiscal é obrigatória'}), 400
+        if Company.query.filter_by(cnpj=tax_id).first():
+            return jsonify({'error': 'Identificação fiscal já cadastrada'}), 409
 
         # Criar usuário
         new_user = User(
@@ -173,7 +181,7 @@ def register_company():
         new_company = Company(
             user_id=new_user.id,
             company_name=data.get('trade_name') or data.get('name') or data.get('legal_name', 'Empresa'),
-            cnpj=data.get('cnpj') or data.get('tax_id', ''),
+            cnpj=tax_id,
             website=data.get('website', ''),
             sector=data.get('sector', ''),
             company_size=data.get('company_size', ''),
@@ -224,10 +232,10 @@ def register_company():
             'refresh_token': refresh_token
         }), 201
 
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        print(f"Error registering company: {e}")
-        return jsonify({'error': str(e)}), 500
+        current_app.logger.error('Company registration failed')
+        return jsonify({'error': 'Não foi possível registrar a empresa'}), 500
 
 
 @auth_bp.route('/login/company', methods=['POST'])
@@ -290,9 +298,9 @@ def login_company():
             'refresh_token': refresh_token
         }), 200
 
-    except Exception as e:
-        print(f"Error logging in company: {e}")
-        return jsonify({'error': str(e)}), 500
+    except Exception:
+        current_app.logger.error('Company login failed')
+        return jsonify({'error': 'Não foi possível realizar o login'}), 500
 
 
 # ============================================
@@ -306,7 +314,9 @@ def register_candidate():
     """
     try:
         site = get_current_site()
-        data = request.get_json()
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify({'error': 'O corpo da requisição deve ser um objeto JSON'}), 400
 
         # Validar dados obrigatórios
         if not data.get('email') or not data.get('password'):
@@ -382,10 +392,10 @@ def register_candidate():
             'refresh_token': refresh_token
         }), 201
 
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        print(f"Error registering candidate: {e}")
-        return jsonify({'error': str(e)}), 500
+        current_app.logger.error('Candidate registration failed')
+        return jsonify({'error': 'Não foi possível registrar o candidato'}), 500
 
 
 @auth_bp.route('/login/candidate', methods=['POST'])
@@ -436,9 +446,9 @@ def login_candidate():
             'refresh_token': refresh_token
         }), 200
 
-    except Exception as e:
-        print(f"Error logging in candidate: {e}")
-        return jsonify({'error': str(e)}), 500
+    except Exception:
+        current_app.logger.error('Candidate login failed')
+        return jsonify({'error': 'Não foi possível realizar o login'}), 500
 
 
 # ============================================
@@ -548,16 +558,39 @@ def get_current_user():
         if error:
             return error, status
 
-        return jsonify({
+        payload = {
             'id': user.id,
             'email': user.email,
             'user_type': user.user_type,
             'site_code': site.code,
             'created_at': user.created_at.isoformat()
-        }), 200
+        }
+        if user.user_type == 'company':
+            company = Company.query.filter_by(user_id=user.id).first()
+            if company:
+                membership = next(
+                    (
+                        item
+                        for item in company.site_memberships
+                        if item.site_id == site.id
+                    ),
+                    None,
+                )
+                payload.update({
+                    'company_id': company.id,
+                    'company_name': (
+                        membership.display_name
+                        if membership and membership.display_name
+                        else company.company_name
+                    ),
+                    'site_status': membership.status if membership else company.status,
+                })
 
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify(payload), 200
+
+    except Exception:
+        current_app.logger.error('Authenticated user lookup failed')
+        return jsonify({'error': 'Não foi possível carregar a sessão'}), 500
 
 
 @auth_bp.route('/change-password', methods=['PUT'])

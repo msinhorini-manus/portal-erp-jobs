@@ -50,8 +50,8 @@ def get_my_profile():
         payload["email"] = candidate.user.email
         payload["site_membership"] = membership.to_dict()
         return jsonify(payload), 200
-    except Exception as exc:
-        return jsonify({"error": str(exc)}), 500
+    except Exception:
+        return jsonify({"error": "Não foi possível carregar o perfil"}), 500
 
 
 @candidates_bp.route("/profile", methods=["POST", "PUT"])
@@ -98,9 +98,9 @@ def create_or_update_profile():
             "message": "Perfil atualizado com sucesso",
             "candidate": candidate.to_dict(include_details=True, site_membership=membership),
         }), 200
-    except Exception as exc:
+    except Exception:
         db.session.rollback()
-        return jsonify({"error": str(exc)}), 500
+        return jsonify({"error": "Não foi possível atualizar o perfil"}), 500
 
 
 @candidates_bp.route("/search", methods=["GET"])
@@ -155,8 +155,8 @@ def search_candidates():
             "current_page": page,
             "per_page": per_page,
         }), 200
-    except Exception as exc:
-        return jsonify({"error": str(exc)}), 500
+    except Exception:
+        return jsonify({"error": "Não foi possível pesquisar candidatos"}), 500
 
 
 @candidates_bp.route("/<int:candidate_id>", methods=["GET"])
@@ -205,8 +205,8 @@ def get_candidate_by_id(candidate_id):
             payload["email"] = candidate.user.email
             return jsonify(payload), 200
         return jsonify(_public_profile(candidate, membership, include_resume=True)), 200
-    except Exception as exc:
-        return jsonify({"error": str(exc)}), 500
+    except Exception:
+        return jsonify({"error": "Não foi possível carregar o candidato"}), 500
 
 
 @candidates_bp.route("/<int:candidate_id>/profile", methods=["GET"])
@@ -219,8 +219,8 @@ def get_candidate_public_profile(candidate_id):
             return jsonify({"error": "Perfil não encontrado ou privado"}), 404
         candidate, membership = result
         return jsonify(_public_profile(candidate, membership, include_resume=True)), 200
-    except Exception as exc:
-        return jsonify({"error": str(exc)}), 500
+    except Exception:
+        return jsonify({"error": "Não foi possível carregar o perfil público"}), 500
 
 
 @candidates_bp.route("/me/privacy", methods=["PATCH"])
@@ -231,20 +231,29 @@ def update_candidate_privacy():
         _, membership, error, status = get_candidate_access()
         if error:
             return error, status
-        data = request.get_json() or {}
-        value = data.get("curriculo_publico", data.get("is_discoverable"))
-        if value is None:
+        if not request.is_json:
+            return jsonify({"error": "O corpo deve ser um objeto JSON"}), 400
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify({"error": "O corpo deve ser um objeto JSON"}), 400
+        if "curriculo_publico" in data:
+            value = data["curriculo_publico"]
+        elif "is_discoverable" in data:
+            value = data["is_discoverable"]
+        else:
             return jsonify({"error": "Campo curriculo_publico é obrigatório"}), 400
-        membership.is_discoverable = bool(value)
+        if type(value) is not bool:
+            return jsonify({"error": "curriculo_publico deve ser booleano JSON"}), 422
+        membership.is_discoverable = value
         db.session.commit()
         return jsonify({
             "message": "Configuração de privacidade atualizada com sucesso",
             "curriculo_publico": membership.is_discoverable,
             "is_discoverable": membership.is_discoverable,
         }), 200
-    except Exception as exc:
+    except Exception:
         db.session.rollback()
-        return jsonify({"error": str(exc)}), 500
+        return jsonify({"error": "Não foi possível atualizar a privacidade"}), 500
 
 
 @candidates_bp.route("/public", methods=["GET"])
@@ -282,8 +291,8 @@ def get_public_candidates():
             "current_page": page,
             "per_page": per_page,
         }), 200
-    except Exception as exc:
-        return jsonify({"error": str(exc)}), 500
+    except Exception:
+        return jsonify({"error": "Não foi possível listar candidatos públicos"}), 500
 
 
 @candidates_bp.route("/me/privacy", methods=["GET"])
@@ -298,5 +307,5 @@ def get_candidate_privacy():
             "curriculo_publico": membership.is_discoverable,
             "is_discoverable": membership.is_discoverable,
         }), 200
-    except Exception as exc:
-        return jsonify({"error": str(exc)}), 500
+    except Exception:
+        return jsonify({"error": "Não foi possível carregar a privacidade"}), 500

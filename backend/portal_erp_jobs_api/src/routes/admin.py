@@ -7,10 +7,22 @@ from functools import wraps
 from src.config import db
 from src.models import (
     User, Admin, Candidate, CandidateSite, Company, CompanySite,
-    CompanyStatus, Job, Application,
+    CompanyStatus, Job, Application, AdminPermission,
 )
 from src.regional_access import ensure_candidate_site, validate_session_site
 from src.regional_context import get_current_site
+from src.services.jobs import (
+    apply_job_fields,
+    archive_job,
+    desired_active,
+    json_object,
+    pagination_args,
+    service_error,
+    set_job_activity,
+    set_job_status,
+    validate_job_payload,
+    validate_salary_pair,
+)
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/api/admin')
 
@@ -38,22 +50,30 @@ def _site_candidate(candidate_id):
 def _site_job(job_id):
     return Job.query.filter_by(id=job_id, site_id=get_current_site().id).first()
 
-def admin_required(fn):
-    """Decorator to require admin access"""
-    @wraps(fn)
-    @jwt_required()
-    def wrapper(*args, **kwargs):
-        _, error, status = validate_session_site()
-        if error:
-            return error, status
-        current_user_id = get_jwt_identity()
-        user = User.query.get(current_user_id)
+def admin_required(fn=None, *, permission=None):
+    """Require an active regional admin and, optionally, a named permission."""
+    def decorator(view):
+        @wraps(view)
+        @jwt_required()
+        def wrapper(*args, **kwargs):
+            _, error, status = validate_session_site()
+            if error:
+                return error, status
+            current_user_id = get_jwt_identity()
+            user = db.session.get(User, current_user_id)
+            admin = Admin.query.filter_by(user_id=current_user_id).first() if user else None
 
-        if not user or not user.is_active or user.user_type != 'admin':
-            return jsonify({'error': 'Admin access required'}), 403
+            if not user or not user.is_active or user.user_type != 'admin' or not admin:
+                return jsonify({'error': 'Admin access required'}), 403
+            if permission and not admin.has_permission(permission):
+                return jsonify({'error': 'Permissão administrativa insuficiente'}), 403
 
-        return fn(*args, **kwargs)
-    return wrapper
+            return view(*args, **kwargs)
+        return wrapper
+
+    if fn is None:
+        return decorator
+    return decorator(fn)
 
 
 @admin_bp.route('/stats', methods=['GET'])
@@ -219,12 +239,13 @@ def toggle_user_active(user_id):
 
 
 @admin_bp.route('/jobs', methods=['GET'])
-@admin_required
+@admin_required(permission=AdminPermission.MANAGE_JOBS)
 def get_all_jobs():
     """Get all jobs for moderation"""
     try:
-        page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 20, type=int)
+        page, per_page, pagination_error = pagination_args()
+        if pagination_error:
+            return pagination_error
         status = request.args.get('status', None)
 
         query = Job.query.filter_by(site_id=get_current_site().id)
@@ -233,6 +254,8 @@ def get_all_jobs():
             query = query.filter_by(is_active=True)
         elif status == 'inactive':
             query = query.filter_by(is_active=False)
+        elif status:
+            query = query.filter_by(status=status.strip().lower())
 
         pagination = query.order_by(Job.created_at.desc()).paginate(
             page=page, per_page=per_page, error_out=False
@@ -242,7 +265,8 @@ def get_all_jobs():
             'jobs': [job.to_dict() for job in pagination.items],
             'total': pagination.total,
             'pages': pagination.pages,
-            'current_page': page
+            'current_page': page,
+            'per_page': per_page,
         }), 200
 
     except Exception as e:
@@ -250,7 +274,7 @@ def get_all_jobs():
 
 
 @admin_bp.route('/jobs/<int:job_id>', methods=['DELETE'])
-@admin_required
+@admin_required(permission=AdminPermission.MANAGE_JOBS)
 def delete_job(job_id):
     """Delete a job"""
     try:
@@ -259,10 +283,10 @@ def delete_job(job_id):
         if not job:
             return jsonify({'error': 'Job not found'}), 404
 
-        db.session.delete(job)
+        archive_job(job)
         db.session.commit()
 
-        return jsonify({'message': 'Job deleted successfully'}), 200
+        return jsonify({'message': 'Job archived successfully', 'job': job.to_dict()}), 200
 
     except Exception as e:
         db.session.rollback()
@@ -483,7 +507,11 @@ def toggle_company_active(company_id):
             else CompanyStatus.APPROVED
         )
         if membership.status != CompanyStatus.APPROVED:
-            Job.query.filter_by(company_id=company.id, site_id=site.id).update({'is_active': False})
+            Job.query.filter_by(company_id=company.id, site_id=site.id).update({
+                'is_active': False,
+                'status': 'inactive',
+                'is_featured': False,
+            })
 
         db.session.commit()
 
@@ -514,7 +542,11 @@ def delete_company(company_id):
         site = get_current_site()
         membership.status = CompanyStatus.SUSPENDED
         membership.approval_reason = 'Regional presence archived by administrator'
-        Job.query.filter_by(company_id=company.id, site_id=site.id).update({'is_active': False})
+        Job.query.filter_by(company_id=company.id, site_id=site.id).update({
+            'is_active': False,
+            'status': 'inactive',
+            'is_featured': False,
+        })
 
         db.session.commit()
 
@@ -810,7 +842,7 @@ def toggle_candidate_status(candidate_id):
 
 
 @admin_bp.route('/jobs/<int:job_id>', methods=['GET'])
-@admin_required
+@admin_required(permission=AdminPermission.MANAGE_JOBS)
 def get_job_details(job_id):
     """Get detailed job information for admin"""
     try:
@@ -832,7 +864,7 @@ def get_job_details(job_id):
                     'id': app.id,
                     'candidate_id': candidate.id,
                     'candidate_name': f"{candidate.first_name} {candidate.last_name}",
-                    'candidate_email': candidate.email,
+                    'candidate_email': candidate.user.email if candidate.user else None,
                     'applied_at': app.applied_at.isoformat() if app.applied_at else None,
                     'status': app.status
                 })
@@ -842,6 +874,7 @@ def get_job_details(job_id):
             'title': job.title,
             'description': job.description,
             'requirements': job.requirements,
+            'responsibilities': job.responsibilities,
             'benefits': job.benefits,
             'area': job.area,
             'level': job.seniority_level,
@@ -853,8 +886,8 @@ def get_job_details(job_id):
             'salary_min': job.min_salary,
             'salary_max': job.max_salary,
             'is_active': job.is_active,
-            'is_featured': getattr(job, 'is_featured', False),
-            'status': getattr(job, 'status', 'active' if job.is_active else 'inactive'),
+            'is_featured': job.is_featured,
+            'status': job.status,
             'company_id': job.company_id,
             'company_name': (company_site.display_name or company.company_name) if company else 'N/A',
             'created_at': job.created_at.isoformat() if job.created_at else None,
@@ -867,7 +900,7 @@ def get_job_details(job_id):
 
 
 @admin_bp.route('/jobs/<int:job_id>/status', methods=['PUT'])
-@admin_required
+@admin_required(permission=AdminPermission.MANAGE_JOBS)
 def update_job_status(job_id):
     """Update job status (approve, reject, pending, close)"""
     try:
@@ -876,28 +909,22 @@ def update_job_status(job_id):
         if not job:
             return jsonify({'error': 'Job not found'}), 404
 
-        data = request.get_json()
+        data, payload_error = json_object(request)
+        if payload_error:
+            return payload_error
         new_status = data.get('status')
 
-        if new_status not in ['approved', 'rejected', 'pending', 'active', 'closed']:
-            return jsonify({'error': 'Invalid status'}), 400
-
-        # Map status to is_active
-        if new_status in ['approved', 'active']:
-            job.is_active = True
-        elif new_status in ['rejected', 'closed']:
-            job.is_active = False
-
-        # Store status if the model supports it
-        if hasattr(job, 'status'):
-            job.status = new_status
+        try:
+            set_job_status(job, new_status)
+        except (ValueError, LookupError, OverflowError) as exc:
+            return service_error(exc)
 
         db.session.commit()
 
         return jsonify({
             'message': f'Job status updated to {new_status}',
             'job_id': job.id,
-            'status': new_status,
+            'status': job.status,
             'is_active': job.is_active
         }), 200
 
@@ -907,7 +934,7 @@ def update_job_status(job_id):
 
 
 @admin_bp.route('/jobs/<int:job_id>/featured', methods=['PUT'])
-@admin_required
+@admin_required(permission=AdminPermission.MANAGE_JOBS)
 def toggle_job_featured(job_id):
     """Toggle job featured status"""
     try:
@@ -916,19 +943,20 @@ def toggle_job_featured(job_id):
         if not job:
             return jsonify({'error': 'Job not found'}), 404
 
-        data = request.get_json()
-        is_featured = data.get('is_featured', not getattr(job, 'is_featured', False))
-
-        # Check if the model has is_featured field
-        if hasattr(job, 'is_featured'):
-            job.is_featured = is_featured
+        data, payload_error = json_object(request)
+        if payload_error:
+            return payload_error
+        is_featured = data.get('is_featured', not job.is_featured)
+        if not isinstance(is_featured, bool):
+            return jsonify({'error': 'is_featured deve ser booleano'}), 400
+        job.is_featured = is_featured
 
         db.session.commit()
 
         return jsonify({
             'message': 'Job featured status updated',
             'job_id': job.id,
-            'is_featured': is_featured
+            'is_featured': job.is_featured
         }), 200
 
     except Exception as e:
@@ -941,7 +969,7 @@ def toggle_job_featured(job_id):
 # ============================================
 
 @admin_bp.route('/companies/pending', methods=['GET'])
-@admin_required
+@admin_required(permission=AdminPermission.APPROVE_COMPANIES)
 def get_pending_companies():
     """Get companies pending approval"""
     try:
@@ -991,7 +1019,7 @@ def get_pending_companies():
 
 
 @admin_bp.route('/companies/<int:company_id>/approve', methods=['POST'])
-@admin_required
+@admin_required(permission=AdminPermission.APPROVE_COMPANIES)
 def approve_company(company_id):
     """Approve a company registration"""
     try:
@@ -1030,7 +1058,7 @@ def approve_company(company_id):
 
 
 @admin_bp.route('/companies/<int:company_id>/reject', methods=['POST'])
-@admin_required
+@admin_required(permission=AdminPermission.APPROVE_COMPANIES)
 def reject_company(company_id):
     """Reject a company registration"""
     try:
@@ -1050,7 +1078,11 @@ def reject_company(company_id):
         Job.query.filter_by(
             company_id=company.id,
             site_id=get_current_site().id,
-        ).update({'is_active': False})
+        ).update({
+            'is_active': False,
+            'status': 'rejected',
+            'is_featured': False,
+        })
 
         db.session.commit()
 
@@ -1319,15 +1351,13 @@ def toggle_admin_active(admin_id):
 # ============== CRUD COMPLETO DE VAGAS ==============
 
 @admin_bp.route('/jobs', methods=['POST'])
-@admin_required
+@admin_required(permission=AdminPermission.MANAGE_JOBS)
 def create_job():
     """Create a new job"""
     try:
-        data = request.get_json()
-
-        # Validar campos obrigatórios
-        if not data.get('title'):
-            return jsonify({'error': 'Título é obrigatório'}), 400
+        data, payload_error = json_object(request)
+        if payload_error:
+            return payload_error
         if not data.get('company_id'):
             return jsonify({'error': 'Empresa é obrigatória'}), 400
 
@@ -1339,36 +1369,33 @@ def create_job():
         company, company_site = company_result
         if company_site.status != CompanyStatus.APPROVED:
             return jsonify({'error': 'Empresa não aprovada neste site'}), 403
-        active_jobs = Job.query.filter_by(
+        try:
+            values = validate_job_payload(data, admin=True)
+            requested_active = desired_active(data, current=True)
+        except ValueError as exc:
+            return service_error(exc)
+
+        job = Job(
             company_id=company.id,
             site_id=site.id,
-            is_active=True,
-        ).count()
-        if active_jobs >= company_site.max_active_jobs:
-            return jsonify({'error': 'Limite regional de vagas ativas atingido'}), 409
-
-        # Criar a vaga
-        job = Job(
-            company_id=data['company_id'],
-            site_id=site.id,
-            title=data['title'],
-            description=data.get('description', ''),
-            requirements=data.get('requirements', ''),
-            responsibilities=data.get('benefits', ''),  # Usando responsibilities para benefits
-            area=data.get('area', ''),
-            seniority_level=data.get('experience_level', ''),
-            work_modality=data.get('modality', ''),
-            contract_type=data.get('contract_type', ''),
-            min_salary=float(data['salary_min']) if data.get('salary_min') else None,
-            max_salary=float(data['salary_max']) if data.get('salary_max') else None,
+            title=values.pop('title'),
+            description=values.pop('description'),
             salary_currency=site.currency_code,
-            city=data.get('city', ''),
-            state=data.get('state', ''),
             country=site.name,
-            is_active=True
+            is_active=False,
+            status='inactive',
         )
-
         db.session.add(job)
+        try:
+            db.session.flush()
+            apply_job_fields(job, values)
+            if 'status' in data:
+                set_job_status(job, data['status'], company_site=company_site)
+            elif requested_active:
+                set_job_activity(job, True, company_site=company_site)
+        except (ValueError, LookupError, OverflowError) as exc:
+            db.session.rollback()
+            return service_error(exc)
         db.session.commit()
 
         return jsonify({
@@ -1382,7 +1409,7 @@ def create_job():
 
 
 @admin_bp.route('/jobs/<int:job_id>', methods=['PUT'])
-@admin_required
+@admin_required(permission=AdminPermission.MANAGE_JOBS)
 def update_job(job_id):
     """Update a job"""
     try:
@@ -1391,33 +1418,22 @@ def update_job(job_id):
         if not job:
             return jsonify({'error': 'Vaga não encontrada'}), 404
 
-        data = request.get_json()
-
-        # Atualizar campos
-        if 'title' in data:
-            job.title = data['title']
-        if 'description' in data:
-            job.description = data['description']
-        if 'requirements' in data:
-            job.requirements = data['requirements']
-        if 'benefits' in data:
-            job.responsibilities = data['benefits']
-        if 'modality' in data:
-            job.work_modality = data['modality']
-        if 'contract_type' in data:
-            job.contract_type = data['contract_type']
-        if 'experience_level' in data:
-            job.seniority_level = data['experience_level']
-        if 'city' in data:
-            job.city = data['city']
-        if 'state' in data:
-            job.state = data['state']
-        if 'salary_min' in data:
-            job.min_salary = float(data['salary_min']) if data['salary_min'] else None
-        if 'salary_max' in data:
-            job.max_salary = float(data['salary_max']) if data['salary_max'] else None
-        if 'is_active' in data:
-            job.is_active = data['is_active']
+        data, payload_error = json_object(request)
+        if payload_error:
+            return payload_error
+        try:
+            values = validate_job_payload(data, partial=True, admin=True)
+            validate_salary_pair(job, values)
+            target_active = desired_active(data, current=job.is_active)
+            explicit_status = data.get('status')
+            apply_job_fields(job, values)
+            if explicit_status is not None:
+                set_job_status(job, explicit_status)
+            elif target_active != job.is_active:
+                set_job_activity(job, target_active)
+        except (ValueError, LookupError, OverflowError) as exc:
+            db.session.rollback()
+            return service_error(exc)
 
         db.session.commit()
 
@@ -1432,7 +1448,7 @@ def update_job(job_id):
 
 
 @admin_bp.route('/jobs/<int:job_id>/toggle-status', methods=['PUT'])
-@admin_required
+@admin_required(permission=AdminPermission.MANAGE_JOBS)
 def toggle_job_status_simple(job_id):
     """Toggle job active status"""
     try:
@@ -1441,8 +1457,16 @@ def toggle_job_status_simple(job_id):
         if not job:
             return jsonify({'error': 'Vaga não encontrada'}), 404
 
-        data = request.get_json()
-        job.is_active = data.get('is_active', not job.is_active)
+        data = request.get_json(silent=True)
+        if data is None:
+            data = {}
+        if not isinstance(data, dict):
+            return jsonify({'error': 'O corpo da requisição deve ser um objeto JSON'}), 400
+        requested = data.get('is_active', not job.is_active)
+        try:
+            set_job_activity(job, requested)
+        except (ValueError, LookupError, OverflowError) as exc:
+            return service_error(exc)
 
         db.session.commit()
 

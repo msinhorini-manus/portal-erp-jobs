@@ -243,6 +243,18 @@ class WaveZeroSecurityTests(unittest.TestCase):
             headers={"Host": "jobs.portalerp.com.br"},
         )
 
+    def test_candidate_login_does_not_expose_internal_exceptions(self):
+        response = self.client.post(
+            "/api/auth/login/candidate",
+            json="not-an-object",
+            headers={"Host": "jobs.portalerp.com.br"},
+        )
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(
+            response.get_json(),
+            {"error": "Não foi possível realizar o login"},
+        )
+
     def test_required_secret_fails_closed(self):
         original = os.environ.pop("WAVE0_MISSING_SECRET", None)
         try:
@@ -319,6 +331,22 @@ class WaveZeroSecurityTests(unittest.TestCase):
             "/api/auth/me", headers=self._authorization(payload["access_token"])
         )
         self.assertEqual(blocked.status_code, 401)
+
+    def test_company_me_includes_site_scoped_identity(self):
+        login = self._login(endpoint="company", email="company-test@example.com")
+        self.assertEqual(login.status_code, 200, login.get_json())
+        response = self.client.get(
+            "/api/auth/me",
+            headers={
+                **self._authorization(login.get_json()["access_token"]),
+                "Host": "jobs.portalerp.com.br",
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.get_json())
+        payload = response.get_json()
+        self.assertEqual(payload["company_name"], "Regional Test Company")
+        self.assertEqual(payload["site_status"], CompanyStatus.APPROVED)
+        self.assertIsInstance(payload["company_id"], int)
 
     def test_change_password_revokes_all_families(self):
         first = self._login().get_json()
