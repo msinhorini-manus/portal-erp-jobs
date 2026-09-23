@@ -243,6 +243,18 @@ class WaveZeroSecurityTests(unittest.TestCase):
             headers={"Host": "jobs.portalerp.com.br"},
         )
 
+    def test_candidate_login_does_not_expose_internal_exceptions(self):
+        response = self.client.post(
+            "/api/auth/login/candidate",
+            json="not-an-object",
+            headers={"Host": "jobs.portalerp.com.br"},
+        )
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(
+            response.get_json(),
+            {"error": "Não foi possível realizar o login"},
+        )
+
     def test_required_secret_fails_closed(self):
         original = os.environ.pop("WAVE0_MISSING_SECRET", None)
         try:

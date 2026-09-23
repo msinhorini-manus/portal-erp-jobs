@@ -446,9 +446,9 @@ def login_candidate():
             'refresh_token': refresh_token
         }), 200
 
-    except Exception as e:
-        print(f"Error logging in candidate: {e}")
-        return jsonify({'error': str(e)}), 500
+    except Exception:
+        current_app.logger.error('Candidate login failed')
+        return jsonify({'error': 'Não foi possível realizar o login'}), 500
 
 
 # ============================================
