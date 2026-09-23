@@ -9,6 +9,10 @@ class Job(db.Model):
     __tablename__ = 'jobs'
     __table_args__ = (
         db.UniqueConstraint('id', 'site_id', name='uq_jobs_id_site'),
+        db.CheckConstraint(
+            "status IN ('active','approved','pending','rejected','closed','inactive','archived')",
+            name='ck_jobs_status',
+        ),
         db.ForeignKeyConstraint(
             ['company_id', 'site_id'],
             ['company_sites.company_id', 'company_sites.site_id'],
@@ -52,6 +56,8 @@ class Job(db.Model):
 
     # Status
     is_active = db.Column(db.Boolean, default=True)
+    status = db.Column(db.String(20), nullable=False, default='active')
+    is_featured = db.Column(db.Boolean, nullable=False, default=False)
     is_company_hidden = db.Column(db.Boolean, default=False)
 
     # Dates
@@ -142,11 +148,16 @@ class Job(db.Model):
             'country': self.country,
             'location': location,
             'is_active': self.is_active,
+            'status': self.status,
+            'is_featured': self.is_featured,
             'is_company_hidden': self.is_company_hidden,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
             'applications_count': applications_count,
-            'skills': skills_array
+            'skills': skills_array,
+            # Alias kept for the legacy SPA/Next consumers.
+            'technologies': skills_array,
+            'skill_ids': [item.skill_id for item in self.skills],
         }
 
         if include_details:

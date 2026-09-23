@@ -6,8 +6,8 @@ Fonte canônica da plataforma **Portal ERP Jobs** implantada em `jobs.portalerp.
 
 | Diretório | Função |
 |---|---|
-| `next/` | Páginas públicas, autenticação e dashboard candidato em Next.js 16 |
-| `frontend/` | SPA React/Vite temporária para currículo, empresa e admin |
+| `next/` | Páginas públicas, autenticação e dashboards de candidatos e empresas em Next.js 16 |
+| `frontend/` | SPA React/Vite temporária apenas para currículo candidato e Admin |
 | `backend/portal_erp_jobs_api/` | API Flask e modelos SQLAlchemy |
 | `ops/` | Configuração e documentação operacional |
 
@@ -46,6 +46,14 @@ As rotas `/candidato/login`, `/candidato/cadastro` e `/candidato/dashboard` são
 A migration `20260922_05` cria `auth_session_families` e `users.password_changed_at`. Logout, troca e reset de senha revogam as famílias aplicáveis; reuso de refresh token revoga a cadeia inteira. Login e recuperação têm rate limiting e lockout persistente. Recuperação por e-mail só fica disponível quando SMTP ou Resend está completamente configurado; sem provedor, a API falha de forma segura com `503` e não cria token.
 
 A especificação e as evidências da implementação estão em [`docs/WAVE3_CANDIDATE_AUTH_DASHBOARD_2026-09-22.md`](docs/WAVE3_CANDIDATE_AUTH_DASHBOARD_2026-09-22.md).
+
+## Autenticação e área empresarial
+
+A jornada empresarial também usa um BFF dedicado do Next em `/bff/company/*`, com cookies próprios `HttpOnly`, `Secure` e `SameSite=Strict`, proteção double-submit CSRF, refresh rotativo, logout revogável, allowlist de rotas e rejeição de autoridade regional ou empresarial enviada pelo browser. Login, cadastro, recuperação, dashboard, perfil, usuários, vagas e candidatos são servidos pelo Next.
+
+O CRUD de vagas cobre criação, listagem privada, detalhe privado inclusive quando a vaga está pausada ou arquivada, atualização, ativação/pausa e arquivamento lógico. Benefícios e skills têm round-trip completo; a API aplica ownership, região, aprovação da empresa, quota ativa, estados de lifecycle e visibilidade pública. A migration `20260922_06` adiciona `status` e `is_featured` com backfill seguro.
+
+O CRUD de currículo permanece com a interface temporária da SPA, mas usa exclusivamente o BFF candidato. Perfil, experiências, formações, skills, certificações, projetos e idiomas possuem create/read/update/delete autenticado, validação de ownership e payloads simétricos. A especificação e as evidências estão em [`docs/WAVE4_COMPANY_AND_CRUDS_2026-09-22.md`](docs/WAVE4_COMPANY_AND_CRUDS_2026-09-22.md).
 
 ## Segurança de configuração
 

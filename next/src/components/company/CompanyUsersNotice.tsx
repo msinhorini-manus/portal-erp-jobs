@@ -1,0 +1,5 @@
+import { ShieldCheck, UsersRound } from 'lucide-react'
+
+export function CompanyUsersNotice() {
+  return <div className="mx-auto max-w-3xl"><div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm"><div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-orange-50"><UsersRound className="h-8 w-8 text-orange-600" /></div><h2 className="mt-5 text-2xl font-bold text-slate-950">Gestão de equipe ainda não liberada</h2><p className="mx-auto mt-3 max-w-2xl leading-7 text-slate-600">A plataforma ainda não possui uma API operacional para convites, papéis e remoção de membros. Por segurança, esta tela não cria usuários fictícios nem grava dados no navegador.</p><div className="mt-6 rounded-xl border border-blue-200 bg-blue-50 p-4 text-left text-sm leading-6 text-blue-900"><div className="flex items-center gap-2 font-bold"><ShieldCheck className="h-5 w-5" /> O que será necessário</div><p className="mt-1">Convites verificáveis, papéis owner/admin/hr/viewer, aceite, auditoria e proteção do último proprietário precisam estar disponíveis no backend antes da ativação multiusuário.</p></div></div></div>
+}

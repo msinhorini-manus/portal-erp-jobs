@@ -10,10 +10,19 @@ from src.models.experience_level import ExperienceLevel
 from src.models.work_modality import WorkModality
 from src.models.software import Software
 from src.models.technology import Technology
+from src.models.job import Skill
 from src.models.tag import Tag
 from src.routes.admin import admin_required
 
 config_bp = Blueprint('config', __name__, url_prefix='/api/config')
+
+# ==================== SKILLS DAS VAGAS ====================
+
+@config_bp.route('/skills', methods=['GET'])
+def get_skills():
+    """Listar o catálogo canônico usado em job_skills e candidate_skills."""
+    skills = Skill.query.order_by(Skill.category, Skill.name).all()
+    return jsonify([skill.to_dict() for skill in skills])
 
 # ==================== ÁREAS DE ATUAÇÃO ====================
 

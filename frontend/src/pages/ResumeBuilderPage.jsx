@@ -1,21 +1,191 @@
 import { useState, useRef, useEffect } from 'react'
-import { Save, Download, Eye, EyeOff, Plus, Trash2, Edit2 } from 'lucide-react'
+import { Save, Download, Eye, EyeOff, Plus, Trash2 } from 'lucide-react'
 import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas'
 import { resumeAPI } from '../services/api'
 
-// Mapeamento de níveis de proficiência
 const PROFICIENCY_MAPPING = {
-  "Básico": 1,
-  "Intermediário": 2,
-  "Avançado": 3,
-  "Expert": 4
+  'Básico': 1,
+  'Intermediário': 2,
+  'Avançado': 3,
+  'Expert': 4,
 }
+
+const PROFICIENCY_LABELS = {
+  1: 'Básico',
+  2: 'Intermediário',
+  3: 'Avançado',
+  4: 'Expert',
+}
+
+const emptyResume = () => ({
+  personal: {
+    fullName: '',
+    email: '',
+    phone: '',
+    city: '',
+    state: '',
+    country: 'Brasil',
+    linkedin: '',
+    github: '',
+    portfolio: '',
+  },
+  summary: '',
+  experiences: [],
+  education: [],
+  skills: [],
+  certifications: [],
+  projects: [],
+  languages: [],
+})
+
+const monthFromApi = (value) => value ? value.slice(0, 7) : ''
+const dateFromMonth = (value) => value ? `${value}-01` : null
+const temporaryId = () => `new-${crypto.randomUUID()}`
+const persistedId = (item) => typeof item.backendId === 'number' ? item.backendId : null
 
 function readCookie(name) {
   const prefix = `${encodeURIComponent(name)}=`
   return document.cookie.split('; ').find(value => value.startsWith(prefix))?.slice(prefix.length) || ''
 }
+
+function normalizeResume(data, email = '') {
+  const candidate = data?.candidate || {}
+  return {
+    personal: {
+      fullName: `${candidate.first_name || ''} ${candidate.last_name || ''}`.trim(),
+      email,
+      phone: candidate.phone || '',
+      city: candidate.city || '',
+      state: candidate.state || '',
+      country: candidate.country || 'Brasil',
+      linkedin: candidate.linkedin_url || '',
+      github: candidate.github_url || '',
+      portfolio: candidate.portfolio_url || '',
+    },
+    summary: candidate.professional_summary || '',
+    experiences: (data?.experiences || []).map(item => ({
+      id: `experience-${item.id}`,
+      backendId: item.id,
+      title: item.job_title || '',
+      company: item.company_name || '',
+      location: item.city || '',
+      state: item.state || '',
+      country: item.country || 'Brasil',
+      startDate: monthFromApi(item.start_date),
+      endDate: monthFromApi(item.end_date),
+      current: item.is_current_job === true,
+      description: item.description || '',
+    })),
+    education: (data?.educations || []).map(item => ({
+      id: `education-${item.id}`,
+      backendId: item.id,
+      degree: item.degree_name || '',
+      institution: item.institution_name || '',
+      field: item.major || '',
+      startDate: monthFromApi(item.start_date),
+      endDate: monthFromApi(item.completion_date),
+      grade: item.grade || '',
+    })),
+    skills: (data?.skills || []).map(item => ({
+      id: `skill-${item.id}`,
+      backendId: item.id,
+      name: item.skill_name || '',
+      level: PROFICIENCY_LABELS[item.proficiency_level] || 'Intermediário',
+    })),
+    certifications: (data?.certifications || []).map(item => ({
+      id: `certification-${item.id}`,
+      backendId: item.id,
+      name: item.name || '',
+      issuer: item.issuing_organization || '',
+      date: monthFromApi(item.issue_date),
+      expirationDate: monthFromApi(item.expiration_date),
+      credentialId: item.credential_id || '',
+      url: item.credential_url || '',
+      description: item.description || '',
+    })),
+    projects: (data?.projects || []).map(item => ({
+      id: `project-${item.id}`,
+      backendId: item.id,
+      name: item.name || '',
+      description: item.description || '',
+      role: item.role || '',
+      technologies: item.technologies || '',
+      startDate: monthFromApi(item.start_date),
+      endDate: monthFromApi(item.end_date),
+      current: item.is_current === true,
+      url: item.project_url || '',
+      repositoryUrl: item.repository_url || '',
+    })),
+    languages: (data?.languages || []).map(item => ({
+      id: `language-${item.id}`,
+      backendId: item.id,
+      name: item.name || '',
+      level: item.proficiency || 'Intermediário',
+      canRead: item.can_read === true,
+      canWrite: item.can_write === true,
+      canSpeak: item.can_speak === true,
+      canListen: item.can_listen === true,
+    })),
+  }
+}
+
+const experienceDTO = (item) => ({
+  job_title: item.title,
+  company_name: item.company,
+  city: item.location || '',
+  state: item.state || '',
+  country: item.country || 'Brasil',
+  start_date: dateFromMonth(item.startDate),
+  end_date: item.current ? null : dateFromMonth(item.endDate),
+  is_current_job: item.current === true,
+  description: item.description || '',
+})
+
+const educationDTO = (item) => ({
+  degree_name: item.degree,
+  institution_name: item.institution,
+  major: item.field,
+  start_date: dateFromMonth(item.startDate),
+  completion_date: dateFromMonth(item.endDate),
+  grade: item.grade || '',
+})
+
+const skillDTO = (item) => ({
+  name: item.name,
+  proficiency_level: PROFICIENCY_MAPPING[item.level] || 2,
+})
+
+const certificationDTO = (item) => ({
+  name: item.name,
+  issuing_organization: item.issuer,
+  issue_date: dateFromMonth(item.date),
+  expiration_date: dateFromMonth(item.expirationDate),
+  credential_id: item.credentialId || '',
+  credential_url: item.url || '',
+  description: item.description || '',
+})
+
+const projectDTO = (item) => ({
+  name: item.name,
+  description: item.description,
+  role: item.role || '',
+  technologies: item.technologies || '',
+  start_date: dateFromMonth(item.startDate),
+  end_date: item.current ? null : dateFromMonth(item.endDate),
+  is_current: item.current === true,
+  project_url: item.url || '',
+  repository_url: item.repositoryUrl || '',
+})
+
+const languageDTO = (item) => ({
+  name: item.name,
+  proficiency: item.level,
+  can_read: item.canRead !== false,
+  can_write: item.canWrite !== false,
+  can_speak: item.canSpeak !== false,
+  can_listen: item.canListen !== false,
+})
 
 export default function ResumeBuilderPage() {
   const [showPreview, setShowPreview] = useState(true)
@@ -23,116 +193,58 @@ export default function ResumeBuilderPage() {
   const [loading, setLoading] = useState(false)
   const [saveMessage, setSaveMessage] = useState('')
   const [curriculoPublico, setCurriculoPublico] = useState(false)
+  const [resume, setResume] = useState(emptyResume)
   const resumePreviewRef = useRef(null)
 
-  // Carregar currículo existente
-  useEffect(() => {
-    const loadResume = async () => {
-      try {
-        const [data, sessionResponse] = await Promise.all([
-          resumeAPI.get(),
-          fetch('/bff/auth/me', { credentials: 'same-origin', cache: 'no-store' })
-        ])
-        const session = sessionResponse.ok ? await sessionResponse.json() : {}
-        if (data && data.candidate) {
-          const candidate = data.candidate
-          const fullName = `${candidate.first_name || ''} ${candidate.last_name || ''}`.trim()
-
-          setResume({
-            personal: {
-              fullName: fullName,
-              email: session.email || candidate.email || '',
-              phone: candidate.phone || '',
-              city: candidate.city || '',
-              state: candidate.state || '',
-              country: 'Brasil',
-              linkedin: candidate.linkedin_url || '',
-              github: candidate.github_url || '',
-              portfolio: candidate.portfolio_url || ''
-            },
-            summary: candidate.professional_summary || '',
-            experiences: data.experiences || [],
-            education: data.educations || [],
-            skills: data.skills || [],
-            certifications: data.certifications || [],
-            projects: data.projects || [],
-            languages: data.languages || []
-          })
-        }
-      } catch (error) {
-        console.error('Erro ao carregar currículo:', error)
-      }
-    }
-
-    loadResume()
-    loadPrivacyStatus()
-  }, [])
-
-  // Carregar status de privacidade
-  const loadPrivacyStatus = async () => {
-    try {
-      const response = await fetch('/bff/candidate/privacy', { credentials: 'same-origin', cache: 'no-store' })
-
-      if (response.ok) {
-        const data = await response.json()
-        setCurriculoPublico(data.curriculo_publico)
-      }
-    } catch (error) {
-      console.error('Error loading privacy status:', error)
-    }
+  const reconcileResume = async () => {
+    const [data, sessionResponse] = await Promise.all([
+      resumeAPI.get(),
+      fetch('/bff/auth/me', { credentials: 'same-origin', cache: 'no-store' }),
+    ])
+    const session = sessionResponse.ok ? await sessionResponse.json() : {}
+    setResume(normalizeResume(data, session.email || ''))
   }
 
-  // Atualizar status de privacidade
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const [data, sessionResponse, privacyResponse] = await Promise.all([
+          resumeAPI.get(),
+          fetch('/bff/auth/me', { credentials: 'same-origin', cache: 'no-store' }),
+          fetch('/bff/candidate/privacy', { credentials: 'same-origin', cache: 'no-store' }),
+        ])
+        const session = sessionResponse.ok ? await sessionResponse.json() : {}
+        const privacy = privacyResponse.ok ? await privacyResponse.json() : {}
+        setResume(normalizeResume(data, session.email || ''))
+        setCurriculoPublico(privacy.curriculo_publico === true)
+      } catch {
+        setSaveMessage('Não foi possível carregar o currículo. Atualize a página e tente novamente.')
+      }
+    }
+    load()
+  }, [])
+
   const togglePrivacy = async () => {
+    const newStatus = !curriculoPublico
     try {
-      const newStatus = !curriculoPublico
       const response = await fetch('/bff/candidate/privacy', {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'X-CSRF-Token': decodeURIComponent(readCookie('pej_csrf'))
+          'X-CSRF-Token': decodeURIComponent(readCookie('pej_csrf')),
         },
         credentials: 'same-origin',
-        body: JSON.stringify({ curriculo_publico: newStatus })
+        body: JSON.stringify({ curriculo_publico: newStatus }),
       })
-
-      const responseData = await response.json()
-
-      if (response.ok) {
-        setCurriculoPublico(newStatus)
-        alert(newStatus ? 'Seu currículo agora é público!' : 'Seu currículo agora é privado!')
-      } else {
-        alert(`Erro ao atualizar privacidade: ${responseData.error || 'Erro desconhecido'}`)
-      }
+      const responseData = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(responseData.error || 'Não foi possível atualizar a privacidade.')
+      setCurriculoPublico(responseData.curriculo_publico === true)
+      setSaveMessage(newStatus ? 'Seu currículo agora está público neste site.' : 'Seu currículo agora está privado neste site.')
     } catch (error) {
-      console.error('❌ togglePrivacy: Exception caught:', error)
-      alert('Erro ao atualizar privacidade')
+      setSaveMessage(error.message || 'Não foi possível atualizar a privacidade.')
     }
   }
 
-  // Estado do currículo
-  const [resume, setResume] = useState({
-    personal: {
-      fullName: '',
-      email: '',
-      phone: '',
-      city: '',
-      state: '',
-      country: 'Brasil',
-      linkedin: '',
-      github: '',
-      portfolio: ''
-    },
-    summary: '',
-    experiences: [],
-    education: [],
-    skills: [],
-    certifications: [],
-    projects: [],
-    languages: []
-  })
-
-  // Seções do currículo
   const sections = [
     { id: 'personal', name: 'Dados Pessoais', icon: '👤' },
     { id: 'summary', name: 'Resumo Profissional', icon: '📝' },
@@ -141,299 +253,144 @@ export default function ResumeBuilderPage() {
     { id: 'skills', name: 'Tecnologias', icon: '💻' },
     { id: 'certifications', name: 'Certificações', icon: '🏆' },
     { id: 'projects', name: 'Projetos', icon: '🚀' },
-    { id: 'languages', name: 'Idiomas', icon: '🌍' }
+    { id: 'languages', name: 'Idiomas', icon: '🌍' },
   ]
 
-  // Funções de atualização
   const updatePersonal = (field, value) => {
-    setResume(prev => ({
-      ...prev,
-      personal: { ...prev.personal, [field]: value }
+    setResume(previous => ({ ...previous, personal: { ...previous.personal, [field]: value } }))
+  }
+  const updateSummary = (value) => setResume(previous => ({ ...previous, summary: value }))
+
+  const appendItem = (collection, item) => {
+    setResume(previous => ({ ...previous, [collection]: [...previous[collection], item] }))
+  }
+  const updateItem = (collection, id, field, value) => {
+    setResume(previous => ({
+      ...previous,
+      [collection]: previous[collection].map(item => item.id === id ? { ...item, [field]: value } : item),
     }))
   }
-
-  const updateSummary = (value) => {
-    setResume(prev => ({ ...prev, summary: value }))
+  const removeLocalItem = (collection, id) => {
+    setResume(previous => ({ ...previous, [collection]: previous[collection].filter(item => item.id !== id) }))
+  }
+  const removePersistedItem = async (collection, item, apiDelete, label) => {
+    if (!window.confirm(`Excluir ${label} permanentemente do currículo?`)) return
+    try {
+      setLoading(true)
+      const backendId = persistedId(item)
+      if (backendId !== null) await apiDelete(backendId)
+      removeLocalItem(collection, item.id)
+      setSaveMessage(`${label} excluído com sucesso.`)
+    } catch (error) {
+      setSaveMessage(error.message || `Não foi possível excluir ${label}.`)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const addExperience = () => {
-    setResume(prev => ({
-      ...prev,
-      experiences: [...prev.experiences, {
-        id: Date.now(),
-        title: '',
-        company: '',
-        location: '',
-        startDate: '',
-        endDate: '',
-        current: false,
-        description: ''
-      }]
-    }))
-  }
-
-  const updateExperience = (id, field, value) => {
-    setResume(prev => ({
-      ...prev,
-      experiences: prev.experiences.map(exp =>
-        exp.id === id ? { ...exp, [field]: value } : exp
-      )
-    }))
-  }
-
+  const addExperience = () => appendItem('experiences', {
+    id: temporaryId(), title: '', company: '', location: '', state: '', country: 'Brasil',
+    startDate: '', endDate: '', current: false, description: '',
+  })
+  const updateExperience = (id, field, value) => updateItem('experiences', id, field, value)
   const removeExperience = (id) => {
-    setResume(prev => ({
-      ...prev,
-      experiences: prev.experiences.filter(exp => exp.id !== id)
-    }))
+    const item = resume.experiences.find(candidate => candidate.id === id)
+    if (item) removePersistedItem('experiences', item, resumeAPI.deleteExperience, 'esta experiência')
   }
 
-  const addEducation = () => {
-    setResume(prev => ({
-      ...prev,
-      education: [...prev.education, {
-        id: Date.now(),
-        degree: '',
-        institution: '',
-        field: '',
-        startDate: '',
-        endDate: '',
-        current: false
-      }]
-    }))
-  }
-
-  const updateEducation = (id, field, value) => {
-    setResume(prev => ({
-      ...prev,
-      education: prev.education.map(edu =>
-        edu.id === id ? { ...edu, [field]: value } : edu
-      )
-    }))
-  }
-
+  const addEducation = () => appendItem('education', {
+    id: temporaryId(), degree: '', institution: '', field: '', startDate: '', endDate: '', grade: '',
+  })
+  const updateEducation = (id, field, value) => updateItem('education', id, field, value)
   const removeEducation = (id) => {
-    setResume(prev => ({
-      ...prev,
-      education: prev.education.filter(edu => edu.id !== id)
-    }))
+    const item = resume.education.find(candidate => candidate.id === id)
+    if (item) removePersistedItem('education', item, resumeAPI.deleteEducation, 'esta formação')
   }
 
-  const addSkill = () => {
-    setResume(prev => ({
-      ...prev,
-      skills: [...prev.skills, {
-        id: Date.now(),
-        name: '',
-        level: 'intermediário'
-      }]
-    }))
-  }
-
-  const updateSkill = (id, field, value) => {
-    setResume(prev => ({
-      ...prev,
-      skills: prev.skills.map(skill =>
-        skill.id === id ? { ...skill, [field]: value } : skill
-      )
-    }))
-  }
-
+  const addSkill = () => appendItem('skills', { id: temporaryId(), name: '', level: 'Intermediário' })
+  const updateSkill = (id, field, value) => updateItem('skills', id, field, value)
   const removeSkill = (id) => {
-    setResume(prev => ({
-      ...prev,
-      skills: prev.skills.filter(skill => skill.id !== id)
-    }))
+    const item = resume.skills.find(candidate => candidate.id === id)
+    if (item) removePersistedItem('skills', item, resumeAPI.removeSkill, 'esta tecnologia')
   }
 
-  const addCertification = () => {
-    setResume(prev => ({
-      ...prev,
-      certifications: [...prev.certifications, {
-        id: Date.now(),
-        name: '',
-        issuer: '',
-        date: '',
-        url: ''
-      }]
-    }))
-  }
-
-  const updateCertification = (id, field, value) => {
-    setResume(prev => ({
-      ...prev,
-      certifications: prev.certifications.map(cert =>
-        cert.id === id ? { ...cert, [field]: value } : cert
-      )
-    }))
-  }
-
+  const addCertification = () => appendItem('certifications', {
+    id: temporaryId(), name: '', issuer: '', date: '', expirationDate: '', credentialId: '', url: '', description: '',
+  })
+  const updateCertification = (id, field, value) => updateItem('certifications', id, field, value)
   const removeCertification = (id) => {
-    setResume(prev => ({
-      ...prev,
-      certifications: prev.certifications.filter(cert => cert.id !== id)
-    }))
+    const item = resume.certifications.find(candidate => candidate.id === id)
+    if (item) removePersistedItem('certifications', item, resumeAPI.removeCertification, 'esta certificação')
   }
 
-  const addProject = () => {
-    setResume(prev => ({
-      ...prev,
-      projects: [...prev.projects, {
-        id: Date.now(),
-        name: '',
-        description: '',
-        technologies: '',
-        url: ''
-      }]
-    }))
-  }
-
-  const updateProject = (id, field, value) => {
-    setResume(prev => ({
-      ...prev,
-      projects: prev.projects.map(proj =>
-        proj.id === id ? { ...proj, [field]: value } : proj
-      )
-    }))
-  }
-
+  const addProject = () => appendItem('projects', {
+    id: temporaryId(), name: '', description: '', role: '', technologies: '', startDate: '', endDate: '',
+    current: false, url: '', repositoryUrl: '',
+  })
+  const updateProject = (id, field, value) => updateItem('projects', id, field, value)
   const removeProject = (id) => {
-    setResume(prev => ({
-      ...prev,
-      projects: prev.projects.filter(proj => proj.id !== id)
-    }))
+    const item = resume.projects.find(candidate => candidate.id === id)
+    if (item) removePersistedItem('projects', item, resumeAPI.removeProject, 'este projeto')
   }
 
-  const addLanguage = () => {
-    setResume(prev => ({
-      ...prev,
-      languages: [...prev.languages, {
-        id: Date.now(),
-        name: '',
-        level: 'intermediário'
-      }]
-    }))
-  }
-
-  const updateLanguage = (id, field, value) => {
-    setResume(prev => ({
-      ...prev,
-      languages: prev.languages.map(lang =>
-        lang.id === id ? { ...lang, [field]: value } : lang
-      )
-    }))
-  }
-
+  const addLanguage = () => appendItem('languages', {
+    id: temporaryId(), name: '', level: 'Intermediário', canRead: true, canWrite: true, canSpeak: true, canListen: true,
+  })
+  const updateLanguage = (id, field, value) => updateItem('languages', id, field, value)
   const removeLanguage = (id) => {
-    setResume(prev => ({
-      ...prev,
-      languages: prev.languages.filter(lang => lang.id !== id)
-    }))
+    const item = resume.languages.find(candidate => candidate.id === id)
+    if (item) removePersistedItem('languages', item, resumeAPI.removeLanguage, 'este idioma')
+  }
+
+  const saveCollection = async (collection, items, create, update, dto, responseKey) => {
+    for (const item of items) {
+      const backendId = persistedId(item)
+      if (backendId === null) {
+        const response = await create(dto(item))
+        const createdId = response?.[responseKey]?.id
+        if (typeof createdId !== 'number') throw new Error('A API não confirmou o identificador do item criado.')
+        item.backendId = createdId
+        setResume(previous => ({
+          ...previous,
+          [collection]: previous[collection].map(current => (
+            current.id === item.id ? { ...current, backendId: createdId } : current
+          )),
+        }))
+      } else {
+        await update(backendId, dto(item))
+      }
+    }
   }
 
   const handleSave = async () => {
     try {
       setLoading(true)
       setSaveMessage('')
-
-      // Salvar dados pessoais
-      const [firstName, ...lastNameParts] = resume.personal.fullName.split(' ')
-      const lastName = lastNameParts.join(' ')
-
+      const normalizedName = resume.personal.fullName.trim().split(/\s+/)
+      if (normalizedName.length < 2) throw new Error('Informe nome e sobrenome.')
+      const [firstName, ...lastNameParts] = normalizedName
       await resumeAPI.update({
-        first_name: firstName || '',
-        last_name: lastName || '',
+        first_name: firstName,
+        last_name: lastNameParts.join(' '),
         phone: resume.personal.phone,
         city: resume.personal.city,
         state: resume.personal.state,
+        country: resume.personal.country,
         linkedin_url: resume.personal.linkedin,
         github_url: resume.personal.github,
         portfolio_url: resume.personal.portfolio,
-        professional_summary: resume.summary
+        professional_summary: resume.summary,
       })
-
-      // Salvar experiências
-      for (const exp of resume.experiences) {
-        // Salvar apenas experiências novas (que não têm ID do backend)
-        if (!exp.backend_id) {
-          await resumeAPI.addExperience({
-            job_title: exp.title,
-            company_name: exp.company,
-            city: exp.location || '',
-            state: '',
-            country: 'Brasil',
-            start_date: exp.startDate,
-            end_date: exp.current ? null : exp.endDate,
-            is_current_job: exp.current || false,
-            description: exp.description
-          })
-        }
-      }
-
-      // Salvar formação acadêmica
-      for (const edu of resume.education) {
-        if (!edu.backend_id) {
-          await resumeAPI.addEducation({
-            degree: edu.degree,
-            institution_name: edu.institution,
-            field_of_study: edu.field,
-            start_date: edu.startDate,
-            end_date: edu.endDate,
-            is_current: edu.current || false
-          })
-        }
-      }
-
-      // Salvar habilidades
-      for (const skill of resume.skills) {
-        if (!skill.backend_id) {
-          await resumeAPI.addSkill({
-            name: skill.name,
-            proficiency_level: PROFICIENCY_MAPPING[skill.level] || 2
-          })
-        }
-      }
-
-      // Salvar certificações
-      for (const cert of resume.certifications) {
-        if (!cert.backend_id) {
-          await resumeAPI.addCertification({
-            name: cert.name,
-            issuing_organization: cert.issuer,
-            issue_date: cert.date,
-            credential_id: cert.credentialId || '',
-            credential_url: cert.url || ''
-          })
-        }
-      }
-
-      // Salvar projetos
-      for (const proj of resume.projects) {
-        if (!proj.backend_id) {
-          await resumeAPI.addProject({
-            name: proj.name,
-            description: proj.description,
-            technologies: proj.technologies,
-            url: proj.url || ''
-          })
-        }
-      }
-
-      // Salvar idiomas
-      for (const lang of resume.languages) {
-        if (!lang.backend_id) {
-          await resumeAPI.addLanguage({
-            language: lang.name,
-            proficiency_level: lang.level
-          })
-        }
-      }
-
-      setSaveMessage('Currículo salvo com sucesso!')
-      setTimeout(() => setSaveMessage(''), 3000)
+      await saveCollection('experiences', resume.experiences, resumeAPI.addExperience, resumeAPI.updateExperience, experienceDTO, 'experience')
+      await saveCollection('education', resume.education, resumeAPI.addEducation, resumeAPI.updateEducation, educationDTO, 'education')
+      await saveCollection('skills', resume.skills, resumeAPI.addSkill, resumeAPI.updateSkill, skillDTO, 'skill')
+      await saveCollection('certifications', resume.certifications, resumeAPI.addCertification, resumeAPI.updateCertification, certificationDTO, 'certification')
+      await saveCollection('projects', resume.projects, resumeAPI.addProject, resumeAPI.updateProject, projectDTO, 'project')
+      await saveCollection('languages', resume.languages, resumeAPI.addLanguage, resumeAPI.updateLanguage, languageDTO, 'language')
+      await reconcileResume()
+      setSaveMessage('Currículo salvo e sincronizado com sucesso!')
     } catch (error) {
-      console.error('Erro ao salvar currículo:', error)
-      alert('Erro ao salvar currículo. Tente novamente.')
+      setSaveMessage(error.message || 'Erro ao salvar currículo. Revise os campos e tente novamente.')
     } finally {
       setLoading(false)
     }
@@ -582,10 +539,12 @@ export default function ResumeBuilderPage() {
                         <input
                           type="email"
                           value={resume.personal.email}
-                          onChange={(e) => updatePersonal('email', e.target.value)}
+                          readOnly
+                          aria-describedby="email-help"
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] focus:border-transparent"
                           placeholder="joao@email.com"
                         />
+                        <p id="email-help" className="mt-1 text-xs text-gray-500">O e-mail é gerenciado pela conta e não é alterado neste currículo.</p>
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Telefone</label>
@@ -658,6 +617,7 @@ export default function ResumeBuilderPage() {
                     <textarea
                       value={resume.summary}
                       onChange={(e) => updateSummary(e.target.value)}
+                      maxLength={1500}
                       rows="6"
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] focus:border-transparent"
                       placeholder="Descreva sua carreira, habilidades e objetivos..."
@@ -811,7 +771,7 @@ export default function ResumeBuilderPage() {
                                 />
                               </div>
                               <div className="col-span-2">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Área de Estudo</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Área de Estudo *</label>
                                 <input
                                   type="text"
                                   value={edu.field}
@@ -836,17 +796,7 @@ export default function ResumeBuilderPage() {
                                   value={edu.endDate}
                                   onChange={(e) => updateEducation(edu.id, 'endDate', e.target.value)}
                                   className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                                  disabled={edu.current}
                                 />
-                              </div>
-                              <div className="col-span-2 flex items-center">
-                                <input
-                                  type="checkbox"
-                                  checked={edu.current}
-                                  onChange={(e) => updateEducation(edu.id, 'current', e.target.checked)}
-                                  className="h-4 w-4 text-[#FF6B35] border-gray-300 rounded"
-                                />
-                                <label className="ml-2 block text-sm text-gray-900">Estudo aqui atualmente</label>
                               </div>
                             </div>
                           </div>
@@ -969,7 +919,7 @@ export default function ResumeBuilderPage() {
                                 />
                               </div>
                               <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Instituição Emissora</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Instituição Emissora *</label>
                                 <input
                                   type="text"
                                   value={cert.issuer}
@@ -1053,7 +1003,7 @@ export default function ResumeBuilderPage() {
                                 />
                               </div>
                               <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Descrição</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Descrição *</label>
                                 <textarea
                                   value={project.description}
                                   onChange={(e) => updateProject(project.id, 'description', e.target.value)}
@@ -1227,7 +1177,7 @@ export default function ResumeBuilderPage() {
                           <h3 className="text-lg font-bold">{edu.degree || 'Grau'}</h3>
                           <p className="font-semibold text-gray-700">{edu.institution || 'Instituição'}</p>
                           {edu.field && <p className="text-sm text-gray-600">{edu.field}</p>}
-                          <p className="text-xs text-gray-500">{edu.startDate} - {edu.current ? 'Atual' : edu.endDate}</p>
+                          <p className="text-xs text-gray-500">{edu.startDate} - {edu.endDate}</p>
                         </div>
                       ))}
                     </div>
