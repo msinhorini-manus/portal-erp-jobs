@@ -558,16 +558,39 @@ def get_current_user():
         if error:
             return error, status
 
-        return jsonify({
+        payload = {
             'id': user.id,
             'email': user.email,
             'user_type': user.user_type,
             'site_code': site.code,
             'created_at': user.created_at.isoformat()
-        }), 200
+        }
+        if user.user_type == 'company':
+            company = Company.query.filter_by(user_id=user.id).first()
+            if company:
+                membership = next(
+                    (
+                        item
+                        for item in company.site_memberships
+                        if item.site_id == site.id
+                    ),
+                    None,
+                )
+                payload.update({
+                    'company_id': company.id,
+                    'company_name': (
+                        membership.display_name
+                        if membership and membership.display_name
+                        else company.company_name
+                    ),
+                    'site_status': membership.status if membership else company.status,
+                })
 
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify(payload), 200
+
+    except Exception:
+        current_app.logger.error('Authenticated user lookup failed')
+        return jsonify({'error': 'Não foi possível carregar a sessão'}), 500
 
 
 @auth_bp.route('/change-password', methods=['PUT'])

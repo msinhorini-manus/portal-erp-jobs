@@ -332,6 +332,22 @@ class WaveZeroSecurityTests(unittest.TestCase):
         )
         self.assertEqual(blocked.status_code, 401)
 
+    def test_company_me_includes_site_scoped_identity(self):
+        login = self._login(endpoint="company", email="company-test@example.com")
+        self.assertEqual(login.status_code, 200, login.get_json())
+        response = self.client.get(
+            "/api/auth/me",
+            headers={
+                **self._authorization(login.get_json()["access_token"]),
+                "Host": "jobs.portalerp.com.br",
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.get_json())
+        payload = response.get_json()
+        self.assertEqual(payload["company_name"], "Regional Test Company")
+        self.assertEqual(payload["site_status"], CompanyStatus.APPROVED)
+        self.assertIsInstance(payload["company_id"], int)
+
     def test_change_password_revokes_all_families(self):
         first = self._login().get_json()
         second = self._login().get_json()
