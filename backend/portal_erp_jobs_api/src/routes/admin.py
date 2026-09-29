@@ -20,6 +20,7 @@ from src.services.jobs import (
     service_error,
     set_job_activity,
     set_job_status,
+    text_contains,
     validate_job_payload,
     validate_salary_pair,
 )
@@ -314,8 +315,8 @@ def get_all_companies():
         if search:
             query = query.filter(
                 db.or_(
-                    Company.company_name.ilike(f'%{search}%'),
-                    Company.cnpj.ilike(f'%{search}%')
+                    text_contains(Company.company_name, search),
+                    text_contains(Company.cnpj, search)
                 )
             )
 
@@ -622,10 +623,10 @@ def get_all_candidates():
         if search:
             query = query.filter(
                 db.or_(
-                    Candidate.first_name.ilike(f'%{search}%'),
-                    Candidate.last_name.ilike(f'%{search}%'),
-                    (Candidate.first_name + ' ' + Candidate.last_name).ilike(f'%{search}%'),
-                    User.email.ilike(f'%{search}%')
+                    text_contains(Candidate.first_name, search),
+                    text_contains(Candidate.last_name, search),
+                    text_contains(Candidate.first_name + ' ' + Candidate.last_name, search),
+                    text_contains(User.email, search)
                 )
             )
 

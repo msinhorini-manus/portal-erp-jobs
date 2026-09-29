@@ -25,6 +25,7 @@ Também foram encontrados estes pontos:
 
 - tradução centralizada dos parâmetros da UI para a API;
 - busca livre por título, descrição, requisitos, empresa e skill;
+- busca textual literal, case-insensitive e tolerante à ausência de acentos em PT/ES;
 - filtros por localização, área, tecnologia, empresa, modalidade, nível, contrato e salário;
 - compatibilidade de modalidade e senioridade entre rótulos PT-BR e valores canônicos;
 - contrato case-insensitive para dados legados;
@@ -48,7 +49,7 @@ Também foram encontrados estes pontos:
 - busca proativa visível na área empresarial, limitada a profissionais opt-in do site regional;
 - filtros por nome/cargo, cidade, UF, tecnologia, pretensão salarial, experiência mínima e disponibilidade imediata;
 - paginação e links para perfis autorizados;
-- allowlist BFF ampliada somente para `tech`;
+- allowlist BFF ampliada somente para os filtros documentados de tecnologia, salário, experiência e disponibilidade;
 - dashboard candidato carrega até 100 vagas e candidaturas para que os filtros locais não fiquem limitados aos 20 primeiros itens;
 - query do BFF candidato preservada somente para `page`, `per_page` e `status`.
 

@@ -10,7 +10,7 @@ from src.models.experience import Experience
 from src.models.job import Job, Skill
 from src.regional_access import get_candidate_access, get_company_access
 from src.regional_context import get_current_site
-from src.services.jobs import optional_int_arg, pagination_args
+from src.services.jobs import optional_int_arg, pagination_args, text_contains
 
 candidates_bp = Blueprint("candidates", __name__, url_prefix="/api/candidates")
 
@@ -153,18 +153,18 @@ def search_candidates():
         query = _public_candidate_query(site).filter(CandidateSite.is_actively_looking.is_(True))
         if query_text:
             query = query.filter(db.or_(
-                Candidate.first_name.ilike(f"%{query_text}%"),
-                Candidate.last_name.ilike(f"%{query_text}%"),
-                Candidate.current_title.ilike(f"%{query_text}%"),
+                text_contains(Candidate.first_name, query_text),
+                text_contains(Candidate.last_name, query_text),
+                text_contains(Candidate.current_title, query_text),
             ))
         if city:
-            query = query.filter(Candidate.city.ilike(f"%{city}%"))
+            query = query.filter(text_contains(Candidate.city, city))
         if state:
-            query = query.filter(Candidate.state.ilike(f"%{state}%"))
+            query = query.filter(text_contains(Candidate.state, state))
         if technology:
             query = query.filter(
                 Candidate.skills.any(
-                    CandidateSkill.skill.has(Skill.name.ilike(f"%{technology}%"))
+                    CandidateSkill.skill.has(text_contains(Skill.name, technology))
                 )
             )
         if min_salary is not None:
@@ -307,16 +307,16 @@ def get_public_candidates():
         query = _public_candidate_query(site)
         if query_text:
             query = query.filter(db.or_(
-                Candidate.first_name.ilike(f"%{query_text}%"),
-                Candidate.last_name.ilike(f"%{query_text}%"),
-                Candidate.current_title.ilike(f"%{query_text}%"),
+                text_contains(Candidate.first_name, query_text),
+                text_contains(Candidate.last_name, query_text),
+                text_contains(Candidate.current_title, query_text),
             ))
         if city:
-            query = query.filter(Candidate.city.ilike(f"%{city}%"))
+            query = query.filter(text_contains(Candidate.city, city))
         if technology:
             query = query.filter(
                 Candidate.skills.any(
-                    CandidateSkill.skill.has(Skill.name.ilike(f"%{technology}%"))
+                    CandidateSkill.skill.has(text_contains(Skill.name, technology))
                 )
             )
 

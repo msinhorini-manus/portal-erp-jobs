@@ -7,7 +7,7 @@ from src.models.company import Company, CompanySite, CompanyStatus
 from src.models.job import Job
 from src.regional_access import get_company_access
 from src.regional_context import get_current_site
-from src.services.jobs import pagination_args
+from src.services.jobs import pagination_args, text_contains
 
 companies_bp = Blueprint("companies", __name__, url_prefix="/api/companies")
 
@@ -110,17 +110,17 @@ def search_companies():
         if query_text:
             query = query.filter(
                 db.or_(
-                    CompanySite.display_name.ilike(f"%{query_text}%"),
-                    Company.company_name.ilike(f"%{query_text}%"),
-                    CompanySite.description.ilike(f"%{query_text}%"),
+                    text_contains(CompanySite.display_name, query_text),
+                    text_contains(Company.company_name, query_text),
+                    text_contains(CompanySite.description, query_text),
                 )
             )
         if sector:
-            query = query.filter(CompanySite.sector.ilike(f"%{sector}%"))
+            query = query.filter(text_contains(CompanySite.sector, sector))
         if city:
-            query = query.filter(CompanySite.city.ilike(f"%{city}%"))
+            query = query.filter(text_contains(CompanySite.city, city))
         if state:
-            query = query.filter(CompanySite.state.ilike(f"%{state}%"))
+            query = query.filter(text_contains(CompanySite.state, state))
 
         pagination = query.order_by(
             db.func.coalesce(CompanySite.display_name, Company.company_name)

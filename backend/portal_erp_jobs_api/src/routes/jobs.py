@@ -19,6 +19,7 @@ from src.services.jobs import (
     service_error,
     set_job_activity,
     set_job_status,
+    text_contains,
     validate_job_payload,
     validate_salary_pair,
 )
@@ -89,11 +90,11 @@ def get_all_jobs():
         if query:
             jobs_query = jobs_query.filter(
                 or_(
-                    Job.title.ilike(f'%{query}%'),
-                    Job.description.ilike(f'%{query}%'),
-                    Job.requirements.ilike(f'%{query}%'),
-                    Job.company.has(Company.company_name.ilike(f'%{query}%')),
-                    Job.skills.any(JobSkill.skill.has(Skill.name.ilike(f'%{query}%'))),
+                    text_contains(Job.title, query),
+                    text_contains(Job.description, query),
+                    text_contains(Job.requirements, query),
+                    Job.company.has(text_contains(Company.company_name, query)),
+                    Job.skills.any(JobSkill.skill.has(text_contains(Skill.name, query))),
                 )
             )
 
@@ -101,10 +102,10 @@ def get_all_jobs():
         if technology:
             jobs_query = jobs_query.filter(
                 or_(
-                    Job.skills.any(JobSkill.skill.has(Skill.name.ilike(f'%{technology}%'))),
-                    Job.title.ilike(f'%{technology}%'),
-                    Job.description.ilike(f'%{technology}%'),
-                    Job.requirements.ilike(f'%{technology}%')
+                    Job.skills.any(JobSkill.skill.has(text_contains(Skill.name, technology))),
+                    text_contains(Job.title, technology),
+                    text_contains(Job.description, technology),
+                    text_contains(Job.requirements, technology)
                 )
             )
 
@@ -118,8 +119,8 @@ def get_all_jobs():
                 # Se não for int, buscar por texto (compatibilidade)
                 jobs_query = jobs_query.filter(
                     or_(
-                        Job.area.ilike(f'%{area}%'),
-                        Job.job_area.has(JobArea.name.ilike(f'%{area}%'))
+                        text_contains(Job.area, area),
+                        Job.job_area.has(text_contains(JobArea.name, area))
                     )
                 )
 
@@ -145,14 +146,14 @@ def get_all_jobs():
 
         # Filtro de localização
         if city:
-            jobs_query = jobs_query.filter(Job.city.ilike(f'%{city}%'))
+            jobs_query = jobs_query.filter(text_contains(Job.city, city))
         if state:
-            jobs_query = jobs_query.filter(Job.state.ilike(f'%{state}%'))
+            jobs_query = jobs_query.filter(text_contains(Job.state, state))
         if location:
             jobs_query = jobs_query.filter(
                 or_(
-                    Job.city.ilike(f'%{location}%'),
-                    Job.state.ilike(f'%{location}%'),
+                    text_contains(Job.city, location),
+                    text_contains(Job.state, location),
                 )
             )
 

@@ -560,8 +560,9 @@ class JobsWave4Tests(unittest.TestCase):
             company_membership.sector = "Software ERP"
             company_membership.city = "Curitiba"
             company_membership.state = "PR"
+            company_membership.description = "Gestão empresarial"
             candidate = db.session.get(Candidate, self.candidate_id)
-            candidate.current_title = "Engenheira Python"
+            candidate.current_title = "Engenheira de Gestão Python"
             candidate.city = "Curitiba"
             candidate.state = "PR"
             candidate.years_experience = 8
@@ -572,6 +573,7 @@ class JobsWave4Tests(unittest.TestCase):
         filters = (
             "q=Wave+4+Company",
             "q=Python",
+            "q=Experiencia",
             "tech=Python",
             "area=Dados+e+Analytics",
             "location=Curitiba",
@@ -602,8 +604,14 @@ class JobsWave4Tests(unittest.TestCase):
         self.assertEqual(companies.get_json()["total"], 1)
         self.assertEqual(companies.get_json()["companies"][0]["id"], self.company_id)
 
+        companies_without_accents = self.client.get(
+            "/api/companies/search?q=Gestao", headers=self.HOST
+        )
+        self.assertEqual(companies_without_accents.status_code, 200, companies_without_accents.get_json())
+        self.assertEqual(companies_without_accents.get_json()["total"], 1)
+
         for path, token in (
-            ("/api/candidates/search?tech=Python&city=Curitiba&min_salary=14000&min_experience=5&available_immediately=true", self.owner_token),
+            ("/api/candidates/search?q=Gestao&tech=Python&city=Curitiba&min_salary=14000&min_experience=5&available_immediately=true", self.owner_token),
             ("/api/candidates/public?tech=Python&city=Curitiba", None),
         ):
             response = self.client.get(path, headers=self._headers(token))
