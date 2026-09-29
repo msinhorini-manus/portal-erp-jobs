@@ -14,8 +14,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const { id } = await params
     const job = await getJobById(id)
     return {
-      title: `${job.title} - ${job.company_name || 'Portal ERP Jobs'}`,
-      description: job.description?.substring(0, 160) || `Vaga de ${job.title} no Portal ERP Jobs`,
+      title: `${job.title} - ${job.company_name || 'Jobs by Portal ERP'}`,
+      description: job.description?.substring(0, 160) || `Vaga de ${job.title} no Jobs by Portal ERP`,
       openGraph: {
         title: `${job.title} - ${job.company_name || ''}`,
         description: job.description?.substring(0, 160),

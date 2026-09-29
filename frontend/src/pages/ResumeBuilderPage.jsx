@@ -429,12 +429,13 @@ export default function ResumeBuilderPage() {
       {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Construtor de Currículo</h1>
+              <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-blue-700">Jobs by Portal ERP</p>
+              <h1 className="text-2xl font-bold text-[#0F2530]">Construtor de Currículo</h1>
               <p className="text-sm text-gray-600 mt-1">Crie seu currículo profissional em minutos</p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <button
                 onClick={() => setShowPreview(!showPreview)}
                 className="flex items-center gap-2 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
@@ -473,7 +474,7 @@ export default function ResumeBuilderPage() {
               <button
                 onClick={handleSave}
                 disabled={loading}
-                className="flex items-center gap-2 px-4 py-2 text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors disabled:cursor-wait disabled:opacity-60"
+                className="flex items-center gap-2 px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:cursor-wait disabled:opacity-60"
               >
                 <Save className="w-4 h-4" />
                 {loading ? 'Salvando...' : 'Salvar'}

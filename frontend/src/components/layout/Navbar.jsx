@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { Plus, Menu, X, User, Building2, Shield, LogOut, Home, Briefcase, Users, BarChart3, FileText, Settings, ChevronDown, LayoutDashboard } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/contexts/AuthContext'
+import BrandLockup from './BrandLockup'
 
 /**
  * Navbar Inteligente - Componente de navegação global
@@ -84,9 +85,9 @@ export default function Navbar() {
       case 'company':
         return {
           label: 'Empresa',
-          color: 'bg-emerald-500',
-          borderColor: 'border-emerald-500',
-          textColor: 'text-emerald-500',
+          color: 'bg-[#F7941D]',
+          borderColor: 'border-[#F7941D]',
+          textColor: 'text-orange-300',
           icon: Building2,
           dashboardPath: '/empresa/dashboard'
         }
@@ -118,20 +119,12 @@ export default function Navbar() {
   const userLinks = getUserLinks()
 
   return (
-    <header className="bg-[#1F3B47] text-white shadow-md sticky top-0 z-50">
+    <header className="bg-[#0F2530] text-white shadow-[0_10px_30px_rgba(15,37,48,0.16)] sticky top-0 z-50 border-b border-white/10">
       <div className="container mx-auto px-4 lg:px-6">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-2 flex-shrink-0">
-            <div className="w-9 h-9 bg-[#F7941D] rounded-full flex items-center justify-center font-bold text-white text-sm">
-              P
-            </div>
-            <div className="hidden sm:block">
-              <div className="text-lg font-bold leading-tight">
-                Portal <span className="text-[#F7941D]">ERP</span> Jobs
-              </div>
-              <div className="text-[10px] text-white/60 -mt-1">Software Careers</div>
-            </div>
+          <Link to="/" className="flex items-center flex-shrink-0" aria-label="Jobs by Portal ERP — início">
+            <BrandLockup onDark className="w-[176px] sm:w-[204px]" />
           </Link>
 
           {/* Desktop Navigation */}

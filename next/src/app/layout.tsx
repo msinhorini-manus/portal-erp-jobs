@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+import { Inter, Manrope } from 'next/font/google'
 
 import './globals.css'
 import { Footer } from '@/components/layout/Footer'
@@ -7,19 +7,20 @@ import { Navbar } from '@/components/layout/Navbar'
 import { getActiveSites, getSiteContext } from '@/lib/site-resolver.server'
 import { openGraphLocale, requireCanonicalOrigin } from '@/lib/site'
 
-const inter = Inter({ subsets: ['latin'] })
+const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
+const manrope = Manrope({ subsets: ['latin'], variable: '--font-manrope' })
 
 export const dynamic = 'force-dynamic'
 
 const COPY: Record<string, { title: string; description: string; keywords: string[] }> = {
   'pt-BR': {
-    title: 'Portal ERP Jobs - Vagas de Software e ERP',
-    description: 'Plataforma de empregos especializada no setor de software e ERP. Encontre vagas de desenvolvimento, consultoria SAP, Oracle, Protheus e mais.',
+    title: 'Jobs by Portal ERP - Vagas de Software e ERP',
+    description: 'O mercado de software trabalha aqui. Vagas, talentos e empresas conectados pela autoridade do Portal ERP.',
     keywords: ['vagas software', 'empregos ERP', 'vagas SAP', 'vagas Protheus', 'vagas Oracle', 'desenvolvedor', 'consultor ERP', 'Portal ERP'],
   },
   'es-MX': {
-    title: 'Portal ERP Jobs - Empleos de Software y ERP',
-    description: 'Plataforma de empleo especializada en software y ERP para profesionales y empresas de México.',
+    title: 'Jobs by Portal ERP - Empleos de Software y ERP',
+    description: 'El mercado de software trabaja aquí. Empleos, talentos y empresas conectados por la autoridad de Portal ERP.',
     keywords: ['empleos software', 'empleos ERP', 'vacantes SAP', 'consultor ERP', 'Portal ERP'],
   },
 }
@@ -33,7 +34,7 @@ export async function generateMetadata(): Promise<Metadata> {
     metadataBase: new URL(origin),
     title: {
       default: copy.title,
-      template: '%s | Portal ERP Jobs',
+      template: '%s | Jobs by Portal ERP',
     },
     description: copy.description,
     keywords: copy.keywords,
@@ -43,15 +44,15 @@ export async function generateMetadata(): Promise<Metadata> {
       type: 'website',
       locale: openGraphLocale(site),
       url: origin,
-      siteName: 'Portal ERP Jobs',
+      siteName: 'Jobs by Portal ERP',
       title: copy.title,
       description: copy.description,
       images: [
         {
           url: `${origin}/og-image.png`,
           width: 1200,
-          height: 630,
-          alt: 'Portal ERP Jobs',
+          height: 628,
+          alt: 'Jobs by Portal ERP',
         },
       ],
     },
@@ -79,7 +80,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html lang={site.locale}>
-      <body className={inter.className}>
+      <body className={`${inter.variable} ${manrope.variable}`}>
         <div className="min-h-screen flex flex-col">
           <Navbar currentSite={site} sites={activeSites} />
           <main className="flex-1">{children}</main>

@@ -1,47 +1,53 @@
 'use client'
 
-import { useState } from 'react'
+import { FormEvent, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search, MapPin } from 'lucide-react'
+import { MapPin, Search } from 'lucide-react'
 
 export function HeroSearch() {
   const [query, setQuery] = useState('')
   const [location, setLocation] = useState('')
   const router = useRouter()
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSearch = (event: FormEvent) => {
+    event.preventDefault()
     const params = new URLSearchParams()
-    if (query) params.set('q', query)
-    if (location) params.set('location', location)
+    if (query.trim()) params.set('q', query.trim())
+    if (location.trim()) params.set('location', location.trim())
     router.push(`/vagas?${params.toString()}`)
   }
 
   return (
-    <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-3 max-w-2xl mx-auto">
-      <div className="flex-1 relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+    <form
+      onSubmit={handleSearch}
+      className="grid gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-[0_16px_38px_rgba(15,37,48,0.12)] sm:grid-cols-[1fr_0.8fr_auto]"
+      aria-label="Buscar vagas"
+    >
+      <label className="relative flex min-w-0 items-center">
+        <span className="sr-only">Cargo, tecnologia ou empresa</span>
+        <Search className="pointer-events-none absolute left-3 h-5 w-5 text-slate-400" />
         <input
-          type="text"
+          type="search"
           placeholder="Cargo, tecnologia ou empresa"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          className="w-full pl-10 pr-4 py-3 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-portal-orange"
+          onChange={(event) => setQuery(event.target.value)}
+          className="min-h-12 w-full rounded-xl border-0 bg-transparent pl-10 pr-3 text-slate-950 outline-none placeholder:text-slate-400 focus:bg-slate-50 focus:ring-2 focus:ring-portal-orange/30"
         />
-      </div>
-      <div className="flex-1 relative">
-        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+      </label>
+      <label className="relative flex min-w-0 items-center border-t border-slate-100 sm:border-l sm:border-t-0">
+        <span className="sr-only">Cidade ou estado</span>
+        <MapPin className="pointer-events-none absolute left-3 h-5 w-5 text-slate-400" />
         <input
-          type="text"
+          type="search"
           placeholder="Cidade ou estado"
           value={location}
-          onChange={(e) => setLocation(e.target.value)}
-          className="w-full pl-10 pr-4 py-3 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-portal-orange"
+          onChange={(event) => setLocation(event.target.value)}
+          className="min-h-12 w-full rounded-xl border-0 bg-transparent pl-10 pr-3 text-slate-950 outline-none placeholder:text-slate-400 focus:bg-slate-50 focus:ring-2 focus:ring-portal-orange/30"
         />
-      </div>
+      </label>
       <button
         type="submit"
-        className="bg-portal-orange hover:bg-portal-orange-dark text-white px-8 py-3 rounded-lg font-medium transition-colors"
+        className="min-h-12 rounded-xl bg-portal-orange px-6 font-bold text-white transition hover:bg-portal-orange-dark focus:outline-none focus:ring-2 focus:ring-portal-orange/40"
       >
         Buscar vagas
       </button>

@@ -38,9 +38,9 @@ export function CompanyShell({ children }: { children: React.ReactNode }) {
 
   return (
     <section className="min-h-[75vh] bg-slate-50">
-      <div className="border-b border-slate-200 bg-[#0d2f3b] text-white">
+      <div className="border-b border-slate-200 bg-portal-dark text-white">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
-          <div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-orange-300">Portal empresarial {session?.site_code ? `· ${session.site_code}` : ''}</p><h1 className="mt-1 text-xl font-bold">{session?.company_name || 'Área da empresa'}</h1></div>
+          <div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-orange-300">Jobs by Portal ERP · Portal empresarial {session?.site_code ? `· ${session.site_code}` : ''}</p><h1 className="mt-1 font-display text-xl font-bold">{session?.company_name || 'Área da empresa'}</h1></div>
           <div className="flex items-center gap-3"><span className="hidden rounded-full bg-white/10 px-3 py-1 text-xs font-semibold sm:inline">{statusLabel(session?.site_status)}</span><button onClick={() => setOpen(value => !value)} className="rounded-lg border border-white/20 p-2 lg:hidden" aria-label="Abrir menu">{open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}</button><button onClick={logout} className="hidden items-center gap-2 rounded-lg border border-white/20 px-3 py-2 text-sm font-semibold hover:bg-white/10 lg:flex"><LogOut className="h-4 w-4" /> Sair</button></div>
         </div>
         <nav className={`${open ? 'flex' : 'hidden'} mx-auto max-w-7xl flex-col gap-1 px-4 pb-4 lg:flex lg:flex-row lg:pb-0`}>
