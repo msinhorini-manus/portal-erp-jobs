@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-import { authenticatedProxy } from '@/lib/candidate-bff'
+import { authenticatedProxy } from '../../../../lib/candidate-bff'
 
 const ALLOWED: Array<{ pattern: RegExp; target: (match: RegExpMatchArray) => string; methods: string[] }> = [
   { pattern: /^profile$/, target: () => '/candidates/profile', methods: ['GET', 'PUT'] },
@@ -21,7 +21,16 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
     if (!route.methods.includes(request.method)) {
       return NextResponse.json({ error: 'Método não permitido.' }, { status: 405 })
     }
-    return authenticatedProxy(request, route.target(match), { requireCsrf: request.method !== 'GET' })
+    let target = route.target(match)
+    if (joined === 'applications' && request.method === 'GET') {
+      const allowed = new Set(['page', 'per_page', 'status'])
+      if ([...request.nextUrl.searchParams.keys()].some(key => !allowed.has(key))) {
+        return NextResponse.json({ error: 'Parâmetro de consulta não permitido.' }, { status: 400 })
+      }
+      const query = request.nextUrl.searchParams.toString()
+      if (query) target += `?${query}`
+    }
+    return authenticatedProxy(request, target, { requireCsrf: request.method !== 'GET' })
   }
   return NextResponse.json({ error: 'Rota não permitida.' }, { status: 404 })
 }

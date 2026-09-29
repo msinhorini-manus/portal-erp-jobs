@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 from datetime import datetime
+import unicodedata
 
 from flask import jsonify, request
+from sqlalchemy import func
 
 from src.config import db
 from src.models.company import CompanySite
@@ -40,6 +42,38 @@ def pagination_args(*, default=20):
     if page < 1 or per_page < 1:
         return None, None, api_error("Paginação deve usar valores positivos", 400)
     return page, min(per_page, MAX_PAGE_SIZE), None
+
+
+def optional_int_arg(name, *, minimum=0):
+    """Parse an optional integer query parameter without silently ignoring bad input."""
+    raw = request.args.get(name)
+    if raw in (None, ""):
+        return None, None
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return None, api_error(f"{name} deve ser inteiro", 400)
+    if value < minimum:
+        return None, api_error(f"{name} deve ser maior ou igual a {minimum}", 400)
+    return value, None
+
+
+def text_contains(column, value):
+    """Return a literal case/accent-insensitive contains expression for searchable text."""
+    normalized = ''.join(
+        char for char in unicodedata.normalize('NFKD', value.strip().lower())
+        if not unicodedata.combining(char)
+    )
+    escaped = normalized.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+    expression = func.lower(column)
+    for accented, plain in (
+        ('á', 'a'), ('à', 'a'), ('â', 'a'), ('ã', 'a'),
+        ('é', 'e'), ('ê', 'e'), ('í', 'i'),
+        ('ó', 'o'), ('ô', 'o'), ('õ', 'o'),
+        ('ú', 'u'), ('ü', 'u'), ('ç', 'c'), ('ñ', 'n'),
+    ):
+        expression = func.replace(expression, accented, plain)
+    return expression.like(f'%{escaped}%', escape='\\')
 
 
 def json_object(request):

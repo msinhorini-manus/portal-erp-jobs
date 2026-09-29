@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server'
 
 import { authenticatedProxy, logoutSession, publicAuthRequest, validateCsrf } from './candidate-bff'
 import { safeReturnPath } from './candidate-client'
+import { GET as candidateRouteGet } from '../app/bff/candidate/[...path]/route'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -113,5 +114,17 @@ describe('candidate BFF', () => {
     const secondHeaders = new Headers(mockedFetch.mock.calls[1][1]?.headers)
     expect(secondHeaders.get('Authorization')).toBe('Bearer valid-refresh')
     expect(response.headers.getSetCookie().join('\n')).toContain('Max-Age=0')
+  })
+
+  it('forwards only allowlisted application filters', async () => {
+    const mockedFetch = vi.fn(async (_url: string | URL | Request) => new Response(JSON.stringify({ applications: [] }), { status: 200, headers: { 'content-type': 'application/json' } }))
+    vi.stubGlobal('fetch', mockedFetch)
+    const request = new NextRequest('https://jobs.portalerp.com.br/bff/candidate/applications?per_page=100&status=applied', { headers: { cookie: 'pej_access=access' } })
+    const response = await candidateRouteGet(request, { params: Promise.resolve({ path: ['applications'] }) })
+    expect(response.status).toBe(200)
+    expect(String(mockedFetch.mock.calls[0][0])).toContain('/api/applications/?per_page=100&status=applied')
+
+    const blocked = new NextRequest('https://jobs.portalerp.com.br/bff/candidate/applications?site_id=2', { headers: { cookie: 'pej_access=access' } })
+    expect((await candidateRouteGet(blocked, { params: Promise.resolve({ path: ['applications'] }) })).status).toBe(400)
   })
 })

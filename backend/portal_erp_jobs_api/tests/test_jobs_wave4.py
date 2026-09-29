@@ -38,7 +38,9 @@ from src.models import (  # noqa: E402
     SiteLocale,
     User,
 )
-from src.models.job import Skill  # noqa: E402
+from src.models.candidate import CandidateSkill  # noqa: E402
+from src.models.job import JobSkill, Skill  # noqa: E402
+from src.models.job_area import JobArea  # noqa: E402
 
 
 class JobsWave4Tests(unittest.TestCase):
@@ -519,6 +521,126 @@ class JobsWave4Tests(unittest.TestCase):
         self.assertEqual(bounded.status_code, 200, bounded.get_json())
         self.assertEqual(bounded.get_json()["per_page"], 100)
         self.assertEqual(invalid_page.status_code, 400, invalid_page.get_json())
+
+    def test_public_search_filters_and_candidate_discovery(self):
+        with app.app_context():
+            area = JobArea(name="Dados e Analytics", description="Dados")
+            db.session.add(area)
+            db.session.flush()
+            job = Job(
+                company_id=self.company_id,
+                site_id=self.site_id,
+                title="Engenheiro de Dados",
+                description="Pipelines de dados empresariais",
+                requirements="Experiência com PostgreSQL",
+                area_id=area.id,
+                area=area.name,
+                seniority_level="senior",
+                work_modality="remote",
+                contract_type="CLT",
+                min_salary=12000,
+                max_salary=18000,
+                city="Curitiba",
+                state="PR",
+                is_active=True,
+                status="active",
+            )
+            job.skills.append(JobSkill(skill_id=self.python_id))
+            db.session.add(job)
+            membership = CandidateSite.query.filter_by(
+                candidate_id=self.candidate_id, site_id=self.site_id
+            ).one()
+            membership.is_discoverable = True
+            membership.is_actively_looking = True
+            membership.available_immediately = True
+            membership.expected_salary = 15000
+            company_membership = CompanySite.query.filter_by(
+                company_id=self.company_id, site_id=self.site_id
+            ).one()
+            company_membership.sector = "Software ERP"
+            company_membership.city = "Curitiba"
+            company_membership.state = "PR"
+            company_membership.description = "Gestão empresarial"
+            candidate = db.session.get(Candidate, self.candidate_id)
+            candidate.current_title = "Engenheira de Gestão Python"
+            candidate.city = "Curitiba"
+            candidate.state = "PR"
+            candidate.years_experience = 8
+            candidate.skills.append(CandidateSkill(skill_id=self.python_id))
+            db.session.commit()
+            job_id = job.id
+
+        filters = (
+            "q=Wave+4+Company",
+            "q=Python",
+            "q=Experiencia",
+            "tech=Python",
+            "area=Dados+e+Analytics",
+            "location=Curitiba",
+            "location=PR",
+            "level=S%C3%AAnior",
+            "work_mode=Remoto",
+            "employment_type=clt",
+            "salary_min_exact=12000&salary_max_exact=18000",
+            f"company_id={self.company_id}",
+        )
+        for query in filters:
+            with self.subTest(query=query):
+                response = self.client.get(f"/api/jobs/?{query}", headers=self.HOST)
+                self.assertEqual(response.status_code, 200, response.get_json())
+                self.assertIn(job_id, {item["id"] for item in response.get_json()["jobs"]})
+
+        empty = self.client.get(
+            "/api/jobs/?tech=Python&location=Recife", headers=self.HOST
+        )
+        self.assertEqual(empty.status_code, 200, empty.get_json())
+        self.assertEqual(empty.get_json()["total"], 0)
+
+        companies = self.client.get(
+            "/api/companies/search?q=Wave&sector=ERP&city=Curitiba&state=PR",
+            headers=self.HOST,
+        )
+        self.assertEqual(companies.status_code, 200, companies.get_json())
+        self.assertEqual(companies.get_json()["total"], 1)
+        self.assertEqual(companies.get_json()["companies"][0]["id"], self.company_id)
+
+        companies_without_accents = self.client.get(
+            "/api/companies/search?q=Gestao", headers=self.HOST
+        )
+        self.assertEqual(companies_without_accents.status_code, 200, companies_without_accents.get_json())
+        self.assertEqual(companies_without_accents.get_json()["total"], 1)
+
+        for path, token in (
+            ("/api/candidates/search?q=Gestao&tech=Python&city=Curitiba&min_salary=14000&min_experience=5&available_immediately=true", self.owner_token),
+            ("/api/candidates/public?tech=Python&city=Curitiba", None),
+        ):
+            response = self.client.get(path, headers=self._headers(token))
+            self.assertEqual(response.status_code, 200, response.get_json())
+            self.assertEqual(response.get_json()["total"], 1)
+            self.assertEqual(response.get_json()["candidates"][0]["id"], self.candidate_id)
+
+        for path, token in (
+            ("/api/companies/search?page=0", None),
+            ("/api/candidates/public?per_page=0", None),
+            ("/api/candidates/search?page=nope", self.owner_token),
+            ("/api/applications/?page=0", self.candidate_token),
+            ("/api/applications/company?per_page=-1", self.owner_token),
+            ("/api/admin/users?per_page=0", self.admin_token),
+            ("/api/admin/companies?page=0", self.admin_token),
+            ("/api/admin/candidates?page=nope", self.admin_token),
+            ("/api/jobs/?company_id=nope", None),
+            ("/api/jobs/?salary_min_exact=20000&salary_max_exact=10000", None),
+            ("/api/candidates/search?min_experience=nope", self.owner_token),
+            ("/api/candidates/search?available_immediately=maybe", self.owner_token),
+        ):
+            response = self.client.get(path, headers=self._headers(token))
+            self.assertEqual(response.status_code, 400, (path, response.get_json()))
+
+        admin_search = self.client.get(
+            "/api/admin/candidates?search=Ana+Candidate", headers=self._headers(self.admin_token)
+        )
+        self.assertEqual(admin_search.status_code, 200, admin_search.get_json())
+        self.assertEqual(admin_search.get_json()["total"], 1)
 
 
 if __name__ == "__main__":

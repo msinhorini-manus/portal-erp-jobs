@@ -43,6 +43,10 @@ export async function getTechnologies() {
   return fetchAPI('/config/technologies')
 }
 
+export async function getSkills() {
+  return fetchAPI('/config/skills')
+}
+
 export async function getJobs(params?: Record<string, string>) {
   const searchParams = params ? `?${new URLSearchParams(params).toString()}` : ''
   return fetchAPI(`/jobs/${searchParams}`)
@@ -52,8 +56,9 @@ export async function getJobById(id: string) {
   return fetchAPI(`/jobs/${id}`)
 }
 
-export async function getCompanies() {
-  return fetchAPI('/companies/search')
+export async function getCompanies(params?: Record<string, string>) {
+  const searchParams = params ? `?${new URLSearchParams(params).toString()}` : ''
+  return fetchAPI(`/companies/search${searchParams}`)
 }
 
 export async function getCompanyById(id: string) {

@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
-from src.models.job import Job
-from src.models.company import CompanySite, CompanyStatus
+from src.models.job import Job, JobSkill, Skill
+from src.models.company import Company, CompanySite, CompanyStatus
 from src.models.application import Application, ApplicationStatus
 from src.models.job_area import JobArea
 from src.config import db
@@ -14,10 +14,12 @@ from src.services.jobs import (
     archive_job,
     desired_active,
     json_object,
+    optional_int_arg,
     pagination_args,
     service_error,
     set_job_activity,
     set_job_status,
+    text_contains,
     validate_job_payload,
     validate_salary_pair,
 )
@@ -34,12 +36,13 @@ def get_all_jobs():
         site = get_current_site()
         # Parâmetros de busca
         query = request.args.get('q', '')
+        location = request.args.get('location', '')
         city = request.args.get('city', '')
         state = request.args.get('state', '')
         employment_type = request.args.get('employment_type', '')
         work_mode = request.args.get('work_mode', '')
-        min_salary = request.args.get('min_salary', type=int)
-        max_salary = request.args.get('max_salary', type=int)
+        min_salary, min_salary_error = optional_int_arg('min_salary')
+        max_salary, max_salary_error = optional_int_arg('max_salary')
         page, per_page, pagination_error = pagination_args()
         if pagination_error:
             return pagination_error
@@ -48,9 +51,22 @@ def get_all_jobs():
         technology = request.args.get('tech', '')  # Filtro por tecnologia específica
         area = request.args.get('area', '')  # Filtro por área de atuação
         level = request.args.get('level', '')  # Filtro por nível de experiência
-        company_id = request.args.get('company_id', type=int)  # Filtro por empresa
-        salary_exact_min = request.args.get('salary_min_exact', type=int)  # Salário mínimo exato
-        salary_exact_max = request.args.get('salary_max_exact', type=int)  # Salário máximo exato
+        company_id, company_id_error = optional_int_arg('company_id', minimum=1)
+        salary_exact_min, salary_exact_min_error = optional_int_arg('salary_min_exact')
+        salary_exact_max, salary_exact_max_error = optional_int_arg('salary_max_exact')
+        numeric_error = next((error for error in (
+            min_salary_error,
+            max_salary_error,
+            company_id_error,
+            salary_exact_min_error,
+            salary_exact_max_error,
+        ) if error), None)
+        if numeric_error:
+            return numeric_error
+        if min_salary is not None and max_salary is not None and min_salary > max_salary:
+            return jsonify({'error': 'Faixa salarial inválida'}), 400
+        if salary_exact_min is not None and salary_exact_max is not None and salary_exact_min > salary_exact_max:
+            return jsonify({'error': 'Faixa salarial exata inválida'}), 400
 
         # Apenas vagas ativas de empresas aprovadas no site atual.
         jobs_query = (
@@ -70,23 +86,26 @@ def get_all_jobs():
             )
         )
 
-        # Filtro de texto (título ou descrição)
+        # Busca livre por vaga, empresa ou skill canônica.
         if query:
             jobs_query = jobs_query.filter(
                 or_(
-                    Job.title.ilike(f'%{query}%'),
-                    Job.description.ilike(f'%{query}%'),
-                    Job.requirements.ilike(f'%{query}%')
+                    text_contains(Job.title, query),
+                    text_contains(Job.description, query),
+                    text_contains(Job.requirements, query),
+                    Job.company.has(text_contains(Company.company_name, query)),
+                    Job.skills.any(JobSkill.skill.has(text_contains(Skill.name, query))),
                 )
             )
 
-        # Filtro por tecnologia específica (busca no título, descrição e requisitos)
+        # Filtro por tecnologia específica, priorizando o catálogo canônico.
         if technology:
             jobs_query = jobs_query.filter(
                 or_(
-                    Job.title.ilike(f'%{technology}%'),
-                    Job.description.ilike(f'%{technology}%'),
-                    Job.requirements.ilike(f'%{technology}%')
+                    Job.skills.any(JobSkill.skill.has(text_contains(Skill.name, technology))),
+                    text_contains(Job.title, technology),
+                    text_contains(Job.description, technology),
+                    text_contains(Job.requirements, technology)
                 )
             )
 
@@ -100,41 +119,72 @@ def get_all_jobs():
                 # Se não for int, buscar por texto (compatibilidade)
                 jobs_query = jobs_query.filter(
                     or_(
-                        Job.area.ilike(f'%{area}%'),
-                        Job.job_area.has(JobArea.name.ilike(f'%{area}%'))
+                        text_contains(Job.area, area),
+                        Job.job_area.has(text_contains(JobArea.name, area))
                     )
                 )
 
         # Filtro por nível de experiência
         if level:
-            jobs_query = jobs_query.filter(Job.seniority_level.ilike(f'%{level}%'))
+            level_aliases = {
+                'estágio': ('estágio', 'estagio', 'internship'),
+                'estagio': ('estágio', 'estagio', 'internship'),
+                'júnior': ('júnior', 'junior'),
+                'junior': ('júnior', 'junior'),
+                'sênior': ('sênior', 'senior'),
+                'senior': ('sênior', 'senior'),
+                'líder/gerente': ('líder/gerente', 'lider/gerente', 'tech_lead', 'manager'),
+            }
+            values = level_aliases.get(level.strip().lower(), (level,))
+            jobs_query = jobs_query.filter(or_(*[
+                Job.seniority_level.ilike(f'%{value}%') for value in values
+            ]))
 
         # Filtro por empresa
-        if company_id:
+        if company_id is not None:
             jobs_query = jobs_query.filter(Job.company_id == company_id)
 
         # Filtro de localização
         if city:
-            jobs_query = jobs_query.filter(Job.city.ilike(f'%{city}%'))
+            jobs_query = jobs_query.filter(text_contains(Job.city, city))
         if state:
-            jobs_query = jobs_query.filter(Job.state.ilike(f'%{state}%'))
+            jobs_query = jobs_query.filter(text_contains(Job.state, state))
+        if location:
+            jobs_query = jobs_query.filter(
+                or_(
+                    text_contains(Job.city, location),
+                    text_contains(Job.state, location),
+                )
+            )
 
         # Filtro de tipo de contratação
         if employment_type:
-            jobs_query = jobs_query.filter(Job.contract_type == employment_type)
+            jobs_query = jobs_query.filter(Job.contract_type.ilike(employment_type))
 
         # Filtro de modo de trabalho
         if work_mode:
-            jobs_query = jobs_query.filter(Job.work_modality.ilike(f'%{work_mode}%'))
+            modality_aliases = {
+                'remoto': ('remoto', 'remote'),
+                'remote': ('remoto', 'remote'),
+                'híbrido': ('híbrido', 'hibrido', 'hybrid'),
+                'hibrido': ('híbrido', 'hibrido', 'hybrid'),
+                'hybrid': ('híbrido', 'hibrido', 'hybrid'),
+                'presencial': ('presencial', 'onsite'),
+                'onsite': ('presencial', 'onsite'),
+            }
+            values = modality_aliases.get(work_mode.strip().lower(), (work_mode,))
+            jobs_query = jobs_query.filter(or_(*[
+                Job.work_modality.ilike(f'%{value}%') for value in values
+            ]))
 
         # Filtro de salário (faixa)
-        if min_salary:
+        if min_salary is not None:
             jobs_query = jobs_query.filter(Job.min_salary >= min_salary)
-        if max_salary:
+        if max_salary is not None:
             jobs_query = jobs_query.filter(Job.max_salary <= max_salary)
 
         # Filtro de salário exato (para busca precisa)
-        if salary_exact_min and salary_exact_max:
+        if salary_exact_min is not None and salary_exact_max is not None:
             # Busca vagas que tenham salário dentro da faixa especificada
             jobs_query = jobs_query.filter(
                 and_(
@@ -142,9 +192,9 @@ def get_all_jobs():
                     Job.max_salary <= salary_exact_max
                 )
             )
-        elif salary_exact_min:
+        elif salary_exact_min is not None:
             jobs_query = jobs_query.filter(Job.min_salary >= salary_exact_min)
-        elif salary_exact_max:
+        elif salary_exact_max is not None:
             jobs_query = jobs_query.filter(Job.max_salary <= salary_exact_max)
 
         # Ordenar por data de criação (mais recentes primeiro)
@@ -164,6 +214,7 @@ def get_all_jobs():
                 'technology': technology,
                 'area': area,
                 'level': level,
+                'location': location,
                 'city': city,
                 'state': state,
                 'work_mode': work_mode,

@@ -4,7 +4,7 @@ import { allowedQuery, authenticatedCompanyProxy, CompanyRoute, resolveCompanyRo
 
 const JOB_QUERY = ['page', 'per_page', 'status'] as const
 const APPLICATION_QUERY = ['page', 'per_page', 'status', 'job_id'] as const
-const CANDIDATE_QUERY = ['page', 'per_page', 'q', 'city', 'state', 'min_salary', 'max_salary'] as const
+const CANDIDATE_QUERY = ['page', 'per_page', 'q', 'city', 'state', 'tech', 'min_salary', 'max_salary', 'min_experience', 'available_immediately'] as const
 
 export const COMPANY_ROUTES: CompanyRoute[] = [
   { pattern: /^profile$/, target: () => '/companies/', methods: ['GET', 'PUT'] },
