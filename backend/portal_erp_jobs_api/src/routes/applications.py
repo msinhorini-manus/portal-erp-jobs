@@ -10,6 +10,7 @@ from src.models.company import CompanySite, CompanyStatus
 from src.models.job import Job
 from src.regional_access import get_candidate_access, get_company_access
 from src.regional_context import get_current_site
+from src.services.jobs import pagination_args
 
 applications_bp = Blueprint("applications", __name__, url_prefix="/api/applications")
 
@@ -113,8 +114,9 @@ def get_my_applications():
         if error:
             return error, status
 
-        page = request.args.get("page", 1, type=int)
-        per_page = min(request.args.get("per_page", 20, type=int), 100)
+        page, per_page, pagination_error = pagination_args()
+        if pagination_error:
+            return pagination_error
         status_filter = ApplicationStatus.normalize(request.args.get("status"))
 
         query = Application.query.filter_by(candidate_id=candidate.id, site_id=site.id)
@@ -261,8 +263,9 @@ def get_company_applications():
         if error:
             return error, status_code
 
-        page = request.args.get("page", 1, type=int)
-        per_page = min(request.args.get("per_page", 20, type=int), 100)
+        page, per_page, pagination_error = pagination_args()
+        if pagination_error:
+            return pagination_error
         status_filter = ApplicationStatus.normalize(request.args.get("status"))
         job_id = request.args.get("job_id", type=int)
 

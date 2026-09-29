@@ -7,11 +7,24 @@ from src.models.application import Application
 from src.models.candidate import Candidate, CandidateSite, CandidateSkill
 from src.models.education import Education
 from src.models.experience import Experience
-from src.models.job import Job
+from src.models.job import Job, Skill
 from src.regional_access import get_candidate_access, get_company_access
 from src.regional_context import get_current_site
+from src.services.jobs import optional_int_arg, pagination_args
 
 candidates_bp = Blueprint("candidates", __name__, url_prefix="/api/candidates")
+
+
+def _optional_bool_arg(name):
+    raw = request.args.get(name)
+    if raw in (None, ""):
+        return None, None
+    normalized = raw.strip().lower()
+    if normalized in {"true", "1"}:
+        return True, None
+    if normalized in {"false", "0"}:
+        return False, None
+    return None, (jsonify({"error": f"{name} deve ser booleano"}), 400)
 
 
 def _public_candidate_query(site):
@@ -119,10 +132,23 @@ def search_candidates():
         query_text = request.args.get("q", "").strip()
         city = request.args.get("city", "").strip()
         state = request.args.get("state", "").strip()
-        min_salary = request.args.get("min_salary", type=int)
-        max_salary = request.args.get("max_salary", type=int)
-        page = request.args.get("page", 1, type=int)
-        per_page = min(request.args.get("per_page", 20, type=int), 100)
+        technology = request.args.get("tech", "").strip()
+        min_salary, min_salary_error = optional_int_arg("min_salary")
+        max_salary, max_salary_error = optional_int_arg("max_salary")
+        min_experience, min_experience_error = optional_int_arg("min_experience")
+        available_immediately, availability_error = _optional_bool_arg("available_immediately")
+        page, per_page, pagination_error = pagination_args()
+        numeric_error = next((error for error in (
+            min_salary_error,
+            max_salary_error,
+            min_experience_error,
+            availability_error,
+            pagination_error,
+        ) if error), None)
+        if numeric_error:
+            return numeric_error
+        if min_salary is not None and max_salary is not None and min_salary > max_salary:
+            return jsonify({"error": "Faixa salarial inválida"}), 400
 
         query = _public_candidate_query(site).filter(CandidateSite.is_actively_looking.is_(True))
         if query_text:
@@ -135,10 +161,20 @@ def search_candidates():
             query = query.filter(Candidate.city.ilike(f"%{city}%"))
         if state:
             query = query.filter(Candidate.state.ilike(f"%{state}%"))
+        if technology:
+            query = query.filter(
+                Candidate.skills.any(
+                    CandidateSkill.skill.has(Skill.name.ilike(f"%{technology}%"))
+                )
+            )
         if min_salary is not None:
             query = query.filter(CandidateSite.expected_salary >= min_salary)
         if max_salary is not None:
             query = query.filter(CandidateSite.expected_salary <= max_salary)
+        if min_experience is not None:
+            query = query.filter(Candidate.years_experience >= min_experience)
+        if available_immediately is not None:
+            query = query.filter(CandidateSite.available_immediately.is_(available_immediately))
 
         pagination = query.order_by(Candidate.updated_at.desc()).paginate(
             page=page,
@@ -263,8 +299,10 @@ def get_public_candidates():
         site = get_current_site()
         query_text = request.args.get("q", "").strip()
         city = request.args.get("city", "").strip()
-        page = request.args.get("page", 1, type=int)
-        per_page = min(request.args.get("per_page", 20, type=int), 100)
+        technology = request.args.get("tech", "").strip()
+        page, per_page, pagination_error = pagination_args()
+        if pagination_error:
+            return pagination_error
 
         query = _public_candidate_query(site)
         if query_text:
@@ -275,6 +313,12 @@ def get_public_candidates():
             ))
         if city:
             query = query.filter(Candidate.city.ilike(f"%{city}%"))
+        if technology:
+            query = query.filter(
+                Candidate.skills.any(
+                    CandidateSkill.skill.has(Skill.name.ilike(f"%{technology}%"))
+                )
+            )
 
         pagination = query.order_by(Candidate.updated_at.desc()).paginate(
             page=page,

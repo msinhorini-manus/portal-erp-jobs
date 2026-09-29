@@ -165,8 +165,9 @@ def delete_tag(tag_id):
 def get_users():
     """Get all users"""
     try:
-        page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 20, type=int)
+        page, per_page, pagination_error = pagination_args()
+        if pagination_error:
+            return pagination_error
         user_type = request.args.get('type', None)
 
         query = User.query
@@ -301,8 +302,9 @@ def get_all_companies():
     """Get all companies for management"""
     try:
         site = get_current_site()
-        page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 20, type=int)
+        page, per_page, pagination_error = pagination_args()
+        if pagination_error:
+            return pagination_error
         search = request.args.get('search', '')
         status = request.args.get('status', None)  # active, inactive, all
 
@@ -569,8 +571,9 @@ def get_company_jobs(company_id):
         company, membership = company_result
 
         site = get_current_site()
-        page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 20, type=int)
+        page, per_page, pagination_error = pagination_args()
+        if pagination_error:
+            return pagination_error
 
         pagination = Job.query.filter_by(company_id=company.id, site_id=site.id).order_by(
             Job.created_at.desc()
@@ -602,27 +605,35 @@ def get_all_candidates():
     """Get all candidates for management"""
     try:
         site = get_current_site()
-        page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 20, type=int)
+        page, per_page, pagination_error = pagination_args()
+        if pagination_error:
+            return pagination_error
         search = request.args.get('search', '')
         status = request.args.get('status', None)
 
-        query = Candidate.query.join(CandidateSite).filter(CandidateSite.site_id == site.id)
+        query = (
+            Candidate.query
+            .join(CandidateSite)
+            .join(User, User.id == Candidate.user_id)
+            .filter(CandidateSite.site_id == site.id)
+        )
 
         # Search filter
         if search:
             query = query.filter(
                 db.or_(
-                    db.func.concat(Candidate.first_name, ' ', Candidate.last_name).ilike(f'%{search}%'),
-                    Candidate.email.ilike(f'%{search}%')
+                    Candidate.first_name.ilike(f'%{search}%'),
+                    Candidate.last_name.ilike(f'%{search}%'),
+                    (Candidate.first_name + ' ' + Candidate.last_name).ilike(f'%{search}%'),
+                    User.email.ilike(f'%{search}%')
                 )
             )
 
         # Status filter
         if status == 'active':
-            query = query.join(User).filter(User.is_active == True)
+            query = query.filter(User.is_active == True)
         elif status == 'inactive':
-            query = query.join(User).filter(User.is_active == False)
+            query = query.filter(User.is_active == False)
 
         pagination = query.order_by(Candidate.created_at.desc()).paginate(
             page=page, per_page=per_page, error_out=False
@@ -973,8 +984,9 @@ def toggle_job_featured(job_id):
 def get_pending_companies():
     """Get companies pending approval"""
     try:
-        page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 20, type=int)
+        page, per_page, pagination_error = pagination_args()
+        if pagination_error:
+            return pagination_error
 
         site = get_current_site()
         query = (

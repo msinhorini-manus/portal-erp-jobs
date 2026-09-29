@@ -7,6 +7,7 @@ from src.models.company import Company, CompanySite, CompanyStatus
 from src.models.job import Job
 from src.regional_access import get_company_access
 from src.regional_context import get_current_site
+from src.services.jobs import pagination_args
 
 companies_bp = Blueprint("companies", __name__, url_prefix="/api/companies")
 
@@ -101,8 +102,9 @@ def search_companies():
         sector = request.args.get("sector", "").strip()
         city = request.args.get("city", "").strip()
         state = request.args.get("state", "").strip()
-        page = request.args.get("page", 1, type=int)
-        per_page = min(request.args.get("per_page", 20, type=int), 100)
+        page, per_page, pagination_error = pagination_args()
+        if pagination_error:
+            return pagination_error
 
         query = _approved_company_query(site)
         if query_text:

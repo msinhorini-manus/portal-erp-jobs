@@ -107,6 +107,8 @@ describe('company BFF', () => {
     expect(resolveCompanyRoute('dashboard', 'DELETE', new URLSearchParams(), COMPANY_ROUTES)).toEqual({ error: 'method' })
     expect(resolveCompanyRoute('jobs', 'GET', new URLSearchParams('site_id=4'), COMPANY_ROUTES)).toEqual({ error: 'query' })
     expect(resolveCompanyRoute('applications', 'GET', new URLSearchParams('company_id=8'), COMPANY_ROUTES)).toEqual({ error: 'query' })
+    expect(resolveCompanyRoute('candidates', 'GET', new URLSearchParams('tech=Python&city=Sao%20Paulo'), COMPANY_ROUTES)).toEqual({ target: '/candidates/search?city=Sao+Paulo&tech=Python' })
+    expect(resolveCompanyRoute('candidates', 'GET', new URLSearchParams('min_experience=5&available_immediately=true'), COMPANY_ROUTES)).toEqual({ target: '/candidates/search?min_experience=5&available_immediately=true' })
     expect(resolveCompanyRoute('jobs/12/toggle-status/extra', 'PATCH', new URLSearchParams(), COMPANY_ROUTES)).toEqual({ error: 'path' })
   })
 

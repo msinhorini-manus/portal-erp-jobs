@@ -1,6 +1,6 @@
 import { Metadata } from 'next'
 import Link from 'next/link'
-import { getTechnologies } from '@/lib/api'
+import { getSkills } from '@/lib/api'
 
 export const metadata: Metadata = {
   title: 'Tecnologias',
@@ -11,7 +11,7 @@ export default async function TechnologiesPage() {
   let technologies: any[] = []
 
   try {
-    technologies = await getTechnologies()
+    technologies = await getSkills()
   } catch (e) {
     console.error('Failed to fetch technologies:', e)
   }

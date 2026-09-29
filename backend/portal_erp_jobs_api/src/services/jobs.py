@@ -42,6 +42,20 @@ def pagination_args(*, default=20):
     return page, min(per_page, MAX_PAGE_SIZE), None
 
 
+def optional_int_arg(name, *, minimum=0):
+    """Parse an optional integer query parameter without silently ignoring bad input."""
+    raw = request.args.get(name)
+    if raw in (None, ""):
+        return None, None
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return None, api_error(f"{name} deve ser inteiro", 400)
+    if value < minimum:
+        return None, api_error(f"{name} deve ser maior ou igual a {minimum}", 400)
+    return value, None
+
+
 def json_object(request):
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
