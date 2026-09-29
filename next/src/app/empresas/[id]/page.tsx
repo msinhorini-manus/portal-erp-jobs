@@ -15,7 +15,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const companyName = company.company_name || company.trade_name || company.name || 'Empresa'
     return {
       title: `${companyName} - Empresa`,
-      description: company.description?.substring(0, 160) || `Perfil da empresa ${companyName} no Portal ERP Jobs`,
+      description: company.description?.substring(0, 160) || `Perfil da empresa ${companyName} no Jobs by Portal ERP`,
     }
   } catch {
     return { title: 'Empresa não encontrada' }

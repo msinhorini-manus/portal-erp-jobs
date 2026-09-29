@@ -4,7 +4,7 @@ import { Calendar, Clock, ArrowRight } from 'lucide-react'
 
 export const metadata: Metadata = {
   title: 'Blog & Conteúdo',
-  description: 'Artigos, dicas de carreira e tendências do mercado de software e ERP. Mantenha-se atualizado com o Portal ERP Jobs.',
+  description: 'Artigos, dicas de carreira e tendências do mercado de software e ERP no Jobs by Portal ERP.',
 }
 
 const articles = [

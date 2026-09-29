@@ -10,13 +10,16 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        'portal-dark': '#1F3B47',
-        'portal-dark-light': '#2C5F7F',
+        'portal-dark': '#0F2530',
+        'portal-dark-light': '#173D49',
         'portal-orange': '#F7941D',
-        'portal-orange-dark': '#E8850F',
+        'portal-orange-dark': '#DF7C08',
+        'career-blue': '#2563EB',
+        'talent-teal': '#0EA5A8',
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        sans: ['var(--font-inter)', 'Inter', 'system-ui', 'sans-serif'],
+        display: ['var(--font-manrope)', 'Manrope', 'Inter', 'system-ui', 'sans-serif'],
       },
     },
   },

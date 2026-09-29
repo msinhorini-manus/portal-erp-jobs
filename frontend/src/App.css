@@ -2,38 +2,54 @@
 @tailwind components;
 @tailwind utilities;
 
+@font-face {
+  font-family: "Manrope";
+  src: url("/brand/Manrope-Variable.ttf") format("truetype");
+  font-weight: 200 800;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("/brand/Inter-Variable.ttf") format("truetype");
+  font-weight: 100 900;
+  font-display: swap;
+}
+
 :root {
   --radius: 0.625rem;
 
-  /* Portal ERP Colors */
-  /* Primary: Azul escuro #1F3B47 (r31 g59 b71) */
-  /* Secondary: Laranja #F7941D */
+  --jobs-authority: #0f2530;
+  --jobs-authority-soft: #173d49;
+  --jobs-orange: #f7941d;
+  --jobs-blue: #2563eb;
+  --jobs-teal: #0ea5a8;
 
   --background: 0 0% 100%; /* Branco */
-  --foreground: 210 20% 20%; /* Azul escuro Portal ERP */
+  --foreground: 200 52.4% 12.4%;
 
   --card: 0 0% 100%;
-  --card-foreground: 210 20% 20%;
+  --card-foreground: 200 52.4% 12.4%;
 
   --popover: 0 0% 100%;
-  --popover-foreground: 210 20% 20%;
+  --popover-foreground: 200 52.4% 12.4%;
 
-  --primary: 210 20% 20%; /* Azul escuro Portal ERP #1F3B47 */
+  --primary: 200 52.4% 12.4%;
   --primary-foreground: 0 0% 100%; /* Branco */
 
-  --secondary: 30 95% 55%; /* Laranja Portal ERP #F7941D */
+  --secondary: 32.8 93.2% 54.1%;
   --secondary-foreground: 0 0% 100%;
 
   --muted: 0 0% 96%;
   --muted-foreground: 210 10% 55%;
 
-  --accent: 30 95% 55%; /* Laranja Portal ERP */
+  --accent: 32.8 93.2% 54.1%;
   --accent-foreground: 0 0% 100%;
 
   --destructive: 0 84.2% 60.2%;
   --border: 0 0% 92%;
   --input: 0 0% 95%;
-  --ring: 210 20% 20%;
+  --ring: 32.8 93.2% 54.1%;
 
   --chart-1: 30 95% 55%; /* Laranja */
   --chart-2: 210 20% 20%; /* Azul escuro */
@@ -74,5 +90,10 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: "Inter", Arial, sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: "Manrope", "Inter", Arial, sans-serif;
   }
 }

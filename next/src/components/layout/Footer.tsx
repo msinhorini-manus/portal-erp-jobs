@@ -1,65 +1,55 @@
 import Link from 'next/link'
 
+import { BrandLockup } from './BrandLockup'
+
 export function Footer() {
   return (
-    <footer className="bg-portal-dark text-white py-12">
+    <footer className="bg-portal-dark py-12 text-white">
       <div className="container mx-auto px-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-          {/* Brand */}
-          <div>
-            <Link href="/" className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 bg-portal-orange rounded-full flex items-center justify-center font-bold text-white text-sm">
-                P
-              </div>
-              <span className="text-lg font-bold">
-                Portal <span className="text-portal-orange">ERP</span> Jobs
-              </span>
+        <div className="grid grid-cols-1 gap-9 md:grid-cols-2 xl:grid-cols-5">
+          <div className="xl:col-span-2">
+            <Link href="/" aria-label="Jobs by Portal ERP — início" className="inline-block">
+              <BrandLockup onDark className="w-[220px]" />
             </Link>
-            <p className="text-white/60 text-sm">
-              A plataforma de empregos especializada no setor de software e ERP.
+            <p className="mt-4 max-w-md text-sm leading-6 text-white/65">
+              Carreiras, talentos e empresas conectados pela autoridade do Portal ERP.
             </p>
+            <p className="mt-3 font-display text-xl font-extrabold text-white">O mercado de software trabalha aqui.</p>
           </div>
 
-          {/* Para Candidatos */}
           <div>
-            <h4 className="font-semibold mb-4 text-white/90">Para Candidatos</h4>
+            <h4 className="mb-4 font-semibold text-portal-orange">Profissionais</h4>
             <ul className="space-y-2 text-sm">
-              <li><Link href="/vagas" className="text-white/60 hover:text-white transition-colors">Buscar Vagas</Link></li>
-              <li><Link href="/candidato/cadastro" className="text-white/60 hover:text-white transition-colors">Cadastrar Currículo</Link></li>
-              <li><Link href="/areas" className="text-white/60 hover:text-white transition-colors">Áreas de Atuação</Link></li>
-              <li><Link href="/tecnologias" className="text-white/60 hover:text-white transition-colors">Tecnologias</Link></li>
-              <li><Link href="/salarios" className="text-white/60 hover:text-white transition-colors">Guia de Salários</Link></li>
+              <li><Link href="/vagas" className="text-white/65 hover:text-white">Buscar vagas</Link></li>
+              <li><Link href="/candidato/cadastro" className="text-white/65 hover:text-white">Cadastrar currículo</Link></li>
+              <li><Link href="/areas" className="text-white/65 hover:text-white">Áreas de atuação</Link></li>
+              <li><a href="https://portalerp.me/" target="_blank" rel="noopener noreferrer" className="font-semibold text-blue-300 hover:text-white">Conhecer Portal ERP Pro</a></li>
             </ul>
           </div>
 
-          {/* Para Empresas */}
           <div>
-            <h4 className="font-semibold mb-4 text-white/90">Para Empresas</h4>
+            <h4 className="mb-4 font-semibold text-portal-orange">Empresas</h4>
             <ul className="space-y-2 text-sm">
-              <li><Link href="/empresa/cadastro" className="text-white/60 hover:text-white transition-colors">Publicar Vaga</Link></li>
-              <li><Link href="/empresa/cadastro" className="text-white/60 hover:text-white transition-colors">Cadastrar Empresa</Link></li>
-              <li><Link href="/empresas" className="text-white/60 hover:text-white transition-colors">Empresas Cadastradas</Link></li>
-              <li><Link href="/conteudo" className="text-white/60 hover:text-white transition-colors">Blog & Conteúdo</Link></li>
+              <li><Link href="/empresa/cadastro" className="text-white/65 hover:text-white">Publicar vaga</Link></li>
+              <li><Link href="/empresas" className="text-white/65 hover:text-white">Empresas cadastradas</Link></li>
+              <li><a href="https://membro.portalerp.com.br/" target="_blank" rel="noopener noreferrer" className="font-semibold text-teal-300 hover:text-white">Programa de Membros</a></li>
+              <li><a href="https://softhub.portalerp.com/" target="_blank" rel="noopener noreferrer" className="text-white/65 hover:text-white">SoftHub</a></li>
             </ul>
           </div>
 
-          {/* Institucional */}
           <div>
-            <h4 className="font-semibold mb-4 text-white/90">Institucional</h4>
+            <h4 className="mb-4 font-semibold text-portal-orange">Portal ERP</h4>
             <ul className="space-y-2 text-sm">
-              <li><Link href="/sobre" className="text-white/60 hover:text-white transition-colors">Sobre Nós</Link></li>
-              <li><Link href="/contato" className="text-white/60 hover:text-white transition-colors">Contato</Link></li>
-              <li><Link href="/termos" className="text-white/60 hover:text-white transition-colors">Termos de Uso</Link></li>
-              <li><Link href="/privacidade" className="text-white/60 hover:text-white transition-colors">Política de Privacidade</Link></li>
-              <li><a href="https://erpsummit.online" target="_blank" rel="noopener noreferrer" className="text-white/60 hover:text-white transition-colors">ERPSummit.online</a></li>
+              <li><a href="https://portalerp.com.br/" target="_blank" rel="noopener noreferrer" className="text-white/65 hover:text-white">Conteúdo e mercado</a></li>
+              <li><Link href="/conteudo" className="text-white/65 hover:text-white">Conteúdo de carreira</Link></li>
+              <li><a href="https://erpsummit.online" target="_blank" rel="noopener noreferrer" className="text-white/65 hover:text-white">ERP Summit</a></li>
             </ul>
           </div>
         </div>
 
-        <div className="border-t border-white/10 mt-8 pt-8 text-center">
-          <p className="text-white/50 text-sm">
-            © {new Date().getFullYear()} Portal ERP Jobs. Todos os direitos reservados. Uma empresa do Portal ERP Group.
-          </p>
+        <div className="mt-10 flex flex-col gap-3 border-t border-white/10 pt-7 text-sm text-white/50 sm:flex-row sm:items-center sm:justify-between">
+          <p>© {new Date().getFullYear()} Jobs by Portal ERP. Todos os direitos reservados.</p>
+          <p>Portal ERP | SoftHub | Jobs</p>
         </div>
       </div>
     </footer>
