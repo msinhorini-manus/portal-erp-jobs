@@ -1,5 +1,3 @@
-import { Globe2 } from 'lucide-react'
-
 const ecosystemLinks = [
   { href: 'https://portalerp.com/br', label: 'Inteligência' },
   { href: 'https://membro.portalerp.com.br/', label: 'Programa de Membros' },
@@ -19,28 +17,19 @@ export default function EcosystemBar() {
           Ecossistema Portal ERP
         </a>
 
-        <div className="flex items-center gap-3 text-[10px] font-semibold text-slate-600 sm:text-[11px]">
-          <nav className="hidden items-center gap-4 md:flex" aria-label="Ecossistema Portal ERP">
-            {ecosystemLinks.map(link => (
-              <a
-                key={link.href}
-                href={link.href}
-                target="_blank"
-                rel="noreferrer"
-                className="transition-colors hover:text-[#F7941D]"
-              >
-                {link.label}
-              </a>
-            ))}
-          </nav>
-          <span className="hidden h-3 w-px bg-slate-300 md:block" aria-hidden="true" />
-          <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
-            <Globe2 className="h-3 w-3" aria-hidden="true" />
-            Brasil
-            <span className="text-slate-300" aria-hidden="true">·</span>
-            PT
-          </span>
-        </div>
+        <nav className="hidden items-center gap-4 text-[11px] font-semibold text-slate-600 md:flex" aria-label="Ecossistema Portal ERP">
+          {ecosystemLinks.map(link => (
+            <a
+              key={link.href}
+              href={link.href}
+              target="_blank"
+              rel="noreferrer"
+              className="transition-colors hover:text-[#F7941D]"
+            >
+              {link.label}
+            </a>
+          ))}
+        </nav>
       </div>
     </div>
   )
