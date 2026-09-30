@@ -5,6 +5,7 @@ import { getSkills } from '@/lib/api'
 export const metadata: Metadata = {
   title: 'Tecnologias',
   description: 'Encontre vagas por tecnologia: SAP, Oracle, Protheus, Python, Java, React, Angular, AWS, Azure e muito mais.',
+  alternates: { canonical: '/tecnologias' },
 }
 
 export default async function TechnologiesPage() {

@@ -172,7 +172,7 @@ def update_application_status(application_id):
         site = get_current_site()
         company, _, _, error, status_code = get_company_access(
             require_approved=True,
-            permission="view_candidates",
+            permission="manage_candidates",
         )
         if error:
             return error, status_code

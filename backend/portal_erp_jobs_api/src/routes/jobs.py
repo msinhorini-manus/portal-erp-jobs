@@ -419,7 +419,7 @@ def get_my_company_jobs():
     try:
         site = get_current_site()
         company, company_site, _, error, status_code = get_company_access(
-            permission='manage_jobs',
+            permission='view_jobs',
         )
         if error:
             return error, status_code
@@ -466,7 +466,7 @@ def get_my_company_job(job_id):
     try:
         site = get_current_site()
         company, company_site, _, error, status_code = get_company_access(
-            permission='manage_jobs',
+            permission='view_jobs',
         )
         if error:
             return error, status_code

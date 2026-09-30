@@ -1,0 +1,7 @@
+import type { Metadata } from 'next'
+
+export const metadata: Metadata = { title: 'Contato', description: 'Canais de contato do Portal ERP Jobs para empresas, profissionais e privacidade.', alternates: { canonical: '/contato' } }
+
+export default function ContactPage() {
+  return <div className="bg-slate-50 py-16"><div className="mx-auto max-w-4xl px-5"><h1 className="font-display text-4xl font-bold text-portal-dark sm:text-5xl">Fale com o Portal ERP Jobs</h1><p className="mt-4 text-lg leading-8 text-slate-600">Escolha o canal adequado para que sua solicitação seja direcionada corretamente.</p><div className="mt-8 grid gap-5 sm:grid-cols-2"><a href="mailto:contato@portalerp.com.br?subject=Portal%20ERP%20Jobs" className="rounded-2xl border bg-white p-6 shadow-sm"><h2 className="text-xl font-bold text-portal-dark">Atendimento geral</h2><p className="mt-2 text-slate-600">Dúvidas sobre vagas, empresas, programa e operação da plataforma.</p><p className="mt-4 font-semibold text-blue-700">contato@portalerp.com.br</p></a><a href="mailto:privacidade@portalerp.com.br?subject=Privacidade%20Portal%20ERP%20Jobs" className="rounded-2xl border bg-white p-6 shadow-sm"><h2 className="text-xl font-bold text-portal-dark">Privacidade e LGPD</h2><p className="mt-2 text-slate-600">Direitos do titular, acesso, correção, oposição ou exclusão de dados.</p><p className="mt-4 font-semibold text-blue-700">privacidade@portalerp.com.br</p></a></div></div></div>
+}

@@ -42,6 +42,8 @@ export function CandidateRegisterForm({ locale }: { locale: string }) {
           phone: form.get('phone'),
           current_position: form.get('current_position'),
           password,
+          accept_terms: form.get('accept_terms') === 'on',
+          accept_privacy: form.get('accept_privacy') === 'on',
         }),
       })
       router.replace(returnPath)
@@ -67,6 +69,8 @@ export function CandidateRegisterForm({ locale }: { locale: string }) {
         <label className="block text-sm font-medium text-slate-700">{spanish ? 'Contraseña' : 'Senha'}<input className={`${inputClass} mt-1`} name="password" type="password" autoComplete="new-password" required /></label>
         <label className="block text-sm font-medium text-slate-700">{spanish ? 'Confirmar contraseña' : 'Confirmar senha'}<input className={`${inputClass} mt-1`} name="confirm_password" type="password" autoComplete="new-password" required /></label>
         <p className="text-xs text-slate-500">{spanish ? 'Mínimo 8 caracteres con mayúscula, minúscula y número.' : 'Mínimo de 8 caracteres com maiúscula, minúscula e número.'}</p>
+        <label className="flex gap-3 text-sm text-slate-700"><input className="mt-1" type="checkbox" name="accept_terms" required /><span>{spanish ? 'He leído y acepto los ' : 'Li e aceito os '}<Link href="/termos" target="_blank" className="font-semibold text-blue-700 underline">{spanish ? 'Términos de Uso' : 'Termos de Uso'}</Link>.</span></label>
+        <label className="flex gap-3 text-sm text-slate-700"><input className="mt-1" type="checkbox" name="accept_privacy" required /><span>{spanish ? 'He leído y acepto la ' : 'Li e aceito a '}<Link href="/privacidade" target="_blank" className="font-semibold text-blue-700 underline">{spanish ? 'Política de Privacidad' : 'Política de Privacidade'}</Link>.</span></label>
         <button className={buttonClass} disabled={loading} type="submit">{loading ? (spanish ? 'Creando...' : 'Criando...') : (spanish ? 'Crear cuenta' : 'Criar conta')}</button>
       </form>
       <p className="mt-5 text-center text-sm text-slate-600">{spanish ? '¿Ya tienes cuenta?' : 'Já possui conta?'}{' '}<Link className="font-semibold text-orange-600 hover:underline" href={`/candidato/login?redirect=${encodeURIComponent(returnPath)}`}>{spanish ? 'Ingresar' : 'Entrar'}</Link></p>

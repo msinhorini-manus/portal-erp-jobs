@@ -42,6 +42,12 @@ export const COMPANY_ROUTES: CompanyRoute[] = [
     query: CANDIDATE_QUERY,
   },
   { pattern: /^candidates\/(\d+)$/, target: match => `/candidates/${match[1]}`, methods: ['GET'] },
+  { pattern: /^team\/members$/, target: () => '/company-team/members', methods: ['GET'] },
+  { pattern: /^team\/members\/(\d+)$/, target: match => `/company-team/members/${match[1]}`, methods: ['PATCH', 'DELETE'] },
+  { pattern: /^team\/invitations$/, target: () => '/company-team/invitations', methods: ['POST'] },
+  { pattern: /^team\/invitations\/(\d+)$/, target: match => `/company-team/invitations/${match[1]}`, methods: ['DELETE'] },
+  { pattern: /^team\/invitations\/(\d+)\/resend$/, target: match => `/company-team/invitations/${match[1]}/resend`, methods: ['POST'] },
+  { pattern: /^team\/audit$/, target: () => '/company-team/audit', methods: ['GET'] },
 ]
 
 async function proxy(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {

@@ -45,7 +45,7 @@ def get_company_profile():
 def update_company_profile():
     """Update global legal contact fields and site-local presentation fields."""
     try:
-        company, membership, _, error, status = get_company_access()
+        company, membership, _, error, status = get_company_access(permission="manage_company")
         if error:
             return error, status
         data = request.get_json() or {}

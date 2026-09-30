@@ -22,6 +22,8 @@ from .technology import Technology
 from .tag import Tag
 from .site import Site, SiteDomain, SiteLocale
 from .session_family import SessionFamily
+from .company_team import CompanyInvitation, CompanyInvitationStatus, CompanyAuditEvent
+from .legal_acceptance import LegalAcceptance
 
 __all__ = [
     'User',
@@ -54,5 +56,9 @@ __all__ = [
     'Site',
     'SiteDomain',
     'SiteLocale',
-    'SessionFamily'
+    'SessionFamily',
+    'CompanyInvitation',
+    'CompanyInvitationStatus',
+    'CompanyAuditEvent',
+    'LegalAcceptance',
 ]

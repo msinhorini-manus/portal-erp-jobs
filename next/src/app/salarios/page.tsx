@@ -4,6 +4,7 @@ import Link from 'next/link'
 export const metadata: Metadata = {
   title: 'Guia de Salários',
   description: 'Guia de salários do mercado de software e ERP. Descubra faixas salariais por cargo, tecnologia e nível de experiência.',
+  alternates: { canonical: '/salarios' },
 }
 
 const salaryRanges = [

@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { FormEvent, useEffect, useState } from 'react'
 
-import { companyFetch, companyPath } from '@/lib/company-client'
+import { companyAuthPath, companyFetch, companyPath, CompanySession } from '@/lib/company-client'
 import { CompanyJob } from '@/lib/company-types'
 
 type Catalog = { id: number; name: string; value?: string; category?: string }
@@ -53,6 +53,13 @@ export function CompanyJobForm({ jobId }: { jobId?: string }) {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [canManage, setCanManage] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    companyFetch<CompanySession>(companyAuthPath('me'))
+      .then(session => setCanManage(Boolean(session.permissions?.manage_jobs)))
+      .catch(() => setCanManage(false))
+  }, [])
 
   useEffect(() => {
     Promise.all([
@@ -129,7 +136,8 @@ export function CompanyJobForm({ jobId }: { jobId?: string }) {
     }
   }
 
-  if (loading) return <p className="py-16 text-center text-slate-600">Carregando formulário...</p>
+  if (loading || canManage === null) return <p className="py-16 text-center text-slate-600">Carregando formulário...</p>
+  if (!canManage) return <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-amber-900"><h2 className="text-xl font-bold">Permissão insuficiente</h2><p className="mt-2">Seu papel permite consultar vagas, mas não criar nem editar publicações.</p></div>
 
   return <div className="mx-auto max-w-4xl space-y-6">
     <div>

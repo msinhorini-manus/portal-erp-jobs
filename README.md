@@ -55,6 +55,12 @@ O CRUD de vagas cobre criação, listagem privada, detalhe privado inclusive qua
 
 O CRUD de currículo permanece com a interface temporária da SPA, mas usa exclusivamente o BFF candidato. Perfil, experiências, formações, skills, certificações, projetos e idiomas possuem create/read/update/delete autenticado, validação de ownership e payloads simétricos. A especificação e as evidências estão em [`docs/WAVE4_COMPANY_AND_CRUDS_2026-09-22.md`](docs/WAVE4_COMPANY_AND_CRUDS_2026-09-22.md).
 
+## Governança empresarial, legal e SEO
+
+A migration `20260929_07` adiciona convites empresariais temporários, auditoria de acesso e aceites legais versionados. Owners e administradores gerenciam a equipe em `/empresa/usuarios`; os papéis `owner`, `admin`, `hr` e `viewer` são revalidados pela API em cada operação. Alterações de papel e remoções revogam as sessões existentes, e a empresa não pode ficar sem owner ativo.
+
+Os cadastros exigem aceite explícito dos Termos de Uso e da Política de Privacidade, publicados em `/termos` e `/privacidade`. O sitemap inclui todas as vagas e empresas públicas por paginação, e as páginas de vaga e empresa publicam dados estruturados `JobPosting` e `Organization`. Consulte [`docs/WAVE8_LEGAL_SEO_COMPANY_RBAC_2026-09-29.md`](docs/WAVE8_LEGAL_SEO_COMPANY_RBAC_2026-09-29.md).
+
 ## Segurança de configuração
 
 O Flask falha fechado se `SECRET_KEY` ou `JWT_SECRET_KEY` tiverem menos de 32 caracteres. Valores reais nunca devem ser versionados. Use `.env.example` apenas como referência de nomes.

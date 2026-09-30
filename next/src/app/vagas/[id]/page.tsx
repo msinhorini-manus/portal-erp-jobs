@@ -4,6 +4,8 @@ import { notFound } from 'next/navigation'
 import { getJobById } from '@/lib/api'
 import { MapPin, Building2, Clock, DollarSign, Briefcase, Globe, Users, ArrowLeft } from 'lucide-react'
 import { ApplyButton } from '@/components/ApplyButton'
+import { getSiteContext } from '@/lib/site-resolver.server'
+import { requireCanonicalOrigin } from '@/lib/site'
 
 type Props = {
   params: Promise<{ id: string }>
@@ -12,14 +14,17 @@ type Props = {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   try {
     const { id } = await params
-    const job = await getJobById(id)
+    const [job, { site }] = await Promise.all([getJobById(id), getSiteContext()])
+    const canonical = `${requireCanonicalOrigin(site)}/vagas/${id}`
     return {
       title: `${job.title} - ${job.company_name || 'Jobs by Portal ERP'}`,
       description: job.description?.substring(0, 160) || `Vaga de ${job.title} no Jobs by Portal ERP`,
+      alternates: { canonical },
       openGraph: {
         title: `${job.title} - ${job.company_name || ''}`,
         description: job.description?.substring(0, 160),
         type: 'article',
+        url: canonical,
       },
     }
   } catch {
@@ -29,9 +34,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function JobDetailPage({ params }: Props) {
   let job: any
+  let origin = ''
 
   try {
     const { id } = await params
+    const context = await getSiteContext()
+    origin = requireCanonicalOrigin(context.site)
     job = await getJobById(id)
   } catch (e) {
     notFound()
@@ -64,8 +72,57 @@ export default async function JobDetailPage({ params }: Props) {
     return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
   }
 
+  const employmentType: Record<string, string> = {
+    clt: 'FULL_TIME', pj: 'CONTRACTOR', contractor: 'CONTRACTOR', internship: 'INTERN', estágio: 'INTERN', part_time: 'PART_TIME', temporary: 'TEMPORARY',
+  }
+  const minSalary = job.min_salary ?? job.salary_min
+  const maxSalary = job.max_salary ?? job.salary_max
+  const organization = job.company || {}
+  const jobPosting: Record<string, unknown> = {
+    '@context': 'https://schema.org',
+    '@type': 'JobPosting',
+    title: job.title,
+    description: [job.description, job.requirements && `Requisitos: ${job.requirements}`, job.responsibilities && `Responsabilidades: ${job.responsibilities}`].filter(Boolean).join('\n\n'),
+    identifier: { '@type': 'PropertyValue', name: 'Jobs by Portal ERP', value: String(job.id) },
+    datePosted: job.created_at,
+    ...(job.expires_at ? { validThrough: job.expires_at } : {}),
+    employmentType: employmentType[String(job.contract_type || '').toLocaleLowerCase()] || job.contract_type,
+    hiringOrganization: {
+      '@type': 'Organization',
+      name: job.company_name || organization.company_name,
+      ...(organization.website ? { sameAs: organization.website } : {}),
+      ...(organization.logo_url ? { logo: organization.logo_url } : {}),
+    },
+    directApply: true,
+    url: `${origin}/vagas/${job.id}`,
+    ...(job.work_modality === 'remote' ? {
+      jobLocationType: 'TELECOMMUTE',
+      applicantLocationRequirements: { '@type': 'Country', name: job.country || 'Brasil' },
+    } : {
+      jobLocation: {
+        '@type': 'Place',
+        address: {
+          '@type': 'PostalAddress',
+          addressLocality: job.city,
+          addressRegion: job.state,
+          addressCountry: job.country || 'BR',
+        },
+      },
+    }),
+    ...((minSalary || maxSalary) ? {
+      baseSalary: {
+        '@type': 'MonetaryAmount',
+        currency: job.salary_currency || 'BRL',
+        value: { '@type': 'QuantitativeValue', minValue: minSalary || undefined, maxValue: maxSalary || undefined, unitText: 'MONTH' },
+      },
+    } : {}),
+    ...(job.skills?.length ? { skills: job.skills.join(', ') } : {}),
+    ...(job.area ? { industry: job.area } : {}),
+  }
+
   return (
     <div className="bg-gray-50 min-h-screen">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jobPosting).replace(/</g, '\\u003c') }} />
       {/* Header */}
       <section className="bg-portal-dark text-white py-8">
         <div className="container mx-auto px-6">
@@ -149,11 +206,11 @@ export default async function JobDetailPage({ params }: Props) {
           <div className="space-y-6">
             {/* Apply Card */}
             <div className="bg-white rounded-xl p-6 shadow-sm border-2 border-portal-orange/20">
-              {(job.salary_min || job.salary_max) && (
+              {(minSalary || maxSalary) && (
                 <div className="mb-4">
                   <p className="text-sm text-gray-500 mb-1">Faixa Salarial</p>
                   <p className="text-2xl font-bold text-portal-orange">
-                    {formatSalary(job.salary_min)} - {formatSalary(job.salary_max)}
+                    {[formatSalary(minSalary), formatSalary(maxSalary)].filter(Boolean).join(' – ')}
                   </p>
                 </div>
               )}
