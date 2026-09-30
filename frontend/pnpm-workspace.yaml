@@ -1,0 +1,10 @@
+allowBuilds:
+  core-js: true
+  esbuild: true
+overrides:
+  lodash: 4.18.1
+  'nanoid@3': 3.3.19
+  'picomatch@2': 2.3.2
+  'picomatch@4': 4.0.7
+  postcss: 8.5.28
+  rollup: 4.63.5

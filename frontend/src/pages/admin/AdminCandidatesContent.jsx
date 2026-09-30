@@ -15,11 +15,11 @@ export default function AdminCandidatesContent() {
     first_name: '',
     last_name: '',
     email: '',
+    password: '',
     phone: '',
     city: '',
     state: '',
-    current_title: '',
-    experience_level: '',
+    current_position: '',
     linkedin_url: '',
     github_url: ''
   })
@@ -51,8 +51,8 @@ export default function AdminCandidatesContent() {
   }
 
   const createCandidate = async () => {
-    if (!createData.first_name || !createData.last_name || !createData.email) {
-      toast.error('Nome, sobrenome e email são obrigatórios')
+    if (!createData.first_name || !createData.last_name || !createData.email || !createData.password) {
+      toast.error('Nome, sobrenome, email e senha temporária são obrigatórios')
       return
     }
 
@@ -74,12 +74,12 @@ export default function AdminCandidatesContent() {
           first_name: '',
           last_name: '',
           email: '',
+          password: '',
           phone: '',
           city: '',
           state: '',
-          current_title: '',
-          experience_level: '',
-          linkedin_url: '',
+          current_position: '',
+                linkedin_url: '',
           github_url: ''
         })
         loadCandidates()
@@ -123,13 +123,11 @@ export default function AdminCandidatesContent() {
   const toggleCandidateStatus = async (candidateId, currentStatus) => {
     try {
       const token = localStorage.getItem('authToken')
-      const response = await fetch(`/api/admin/candidates/${candidateId}/toggle-status`, {
-        method: 'PUT',
+      const response = await fetch(`/api/admin/candidates/${candidateId}/toggle-active`, {
+        method: 'PATCH',
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ is_active: !currentStatus })
+          'Authorization': `Bearer ${token}`
+        }
       })
 
       if (response.ok) {
@@ -155,15 +153,14 @@ export default function AdminCandidatesContent() {
       if (response.ok) {
         const data = await response.json()
         setSelectedCandidate(data)
+        const name = (data.name || '').trim().split(/\s+/)
         setEditData({
-          first_name: data.first_name || '',
-          last_name: data.last_name || '',
-          email: data.email || '',
+          first_name: data.first_name || name[0] || '',
+          last_name: data.last_name || name.slice(1).join(' ') || '',
           phone: data.phone || '',
           city: data.city || '',
           state: data.state || '',
-          current_title: data.current_title || '',
-          experience_level: data.experience_level || '',
+          current_position: data.current_position || data.title || '',
           linkedin_url: data.linkedin_url || '',
           github_url: data.github_url || ''
         })
@@ -288,7 +285,7 @@ export default function AdminCandidatesContent() {
                       </div>
                       <div>
                         <p className="font-medium text-gray-900">{candidate.full_name}</p>
-                        <p className="text-sm text-gray-500">{candidate.current_title || 'Sem cargo definido'}</p>
+                        <p className="text-sm text-gray-500">{candidate.current_position || candidate.current_title || 'Sem cargo definido'}</p>
                       </div>
                     </div>
                   </td>
@@ -348,7 +345,7 @@ export default function AdminCandidatesContent() {
                       <button
                         onClick={() => viewCandidateDetails(candidate.id)}
                         className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        title="Ver/Editar"
+                        title="Ver detalhes"
                       >
                         <Edit2 className="w-5 h-5" />
                       </button>
@@ -414,6 +411,17 @@ export default function AdminCandidatesContent() {
                   />
                 </div>
                 <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Senha temporária *</label>
+                  <input
+                    type="password"
+                    value={createData.password}
+                    onChange={(e) => setCreateData({...createData, password: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    placeholder="Mínimo 8 caracteres, com maiúscula, minúscula e número"
+                    autoComplete="new-password"
+                  />
+                </div>
+                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Telefone</label>
                   <input
                     type="text"
@@ -474,27 +482,11 @@ export default function AdminCandidatesContent() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Cargo Atual</label>
                   <input
                     type="text"
-                    value={createData.current_title}
-                    onChange={(e) => setCreateData({...createData, current_title: e.target.value})}
+                    value={createData.current_position}
+                    onChange={(e) => setCreateData({...createData, current_position: e.target.value})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                     placeholder="Desenvolvedor Full Stack"
                   />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Nível de Experiência</label>
-                  <select
-                    value={createData.experience_level}
-                    onChange={(e) => setCreateData({...createData, experience_level: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                  >
-                    <option value="">Selecione...</option>
-                    <option value="junior">Júnior</option>
-                    <option value="pleno">Pleno</option>
-                    <option value="senior">Sênior</option>
-                    <option value="especialista">Especialista</option>
-                    <option value="gerente">Gerente</option>
-                    <option value="diretor">Diretor</option>
-                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">LinkedIn</label>
@@ -574,15 +566,6 @@ export default function AdminCandidatesContent() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                    <input
-                      type="email"
-                      value={editData.email}
-                      onChange={(e) => setEditData({...editData, email: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                    />
-                  </div>
-                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Telefone</label>
                     <input
                       type="text"
@@ -641,26 +624,10 @@ export default function AdminCandidatesContent() {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Cargo Atual</label>
                     <input
                       type="text"
-                      value={editData.current_title}
-                      onChange={(e) => setEditData({...editData, current_title: e.target.value})}
+                      value={editData.current_position}
+                      onChange={(e) => setEditData({...editData, current_position: e.target.value})}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                     />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Nível</label>
-                    <select
-                      value={editData.experience_level}
-                      onChange={(e) => setEditData({...editData, experience_level: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                    >
-                      <option value="">Selecione...</option>
-                      <option value="junior">Júnior</option>
-                      <option value="pleno">Pleno</option>
-                      <option value="senior">Sênior</option>
-                      <option value="especialista">Especialista</option>
-                      <option value="gerente">Gerente</option>
-                      <option value="diretor">Diretor</option>
-                    </select>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">LinkedIn</label>
@@ -706,11 +673,7 @@ export default function AdminCandidatesContent() {
                   </div>
                   <div>
                     <label className="text-sm font-medium text-gray-500">Cargo Atual</label>
-                    <p className="text-gray-900">{selectedCandidate.current_title || '-'}</p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Nível</label>
-                    <p className="text-gray-900">{selectedCandidate.experience_level || '-'}</p>
+                    <p className="text-gray-900">{selectedCandidate.current_position || selectedCandidate.title || '-'}</p>
                   </div>
                   <div>
                     <label className="text-sm font-medium text-gray-500">Status</label>
@@ -743,6 +706,12 @@ export default function AdminCandidatesContent() {
                 </div>
               )}
 
+              {!editMode && selectedCandidate.global_profile_editable === false && (
+                <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  Este perfil pertence a mais de um site e só pode ser alterado pelo próprio candidato.
+                </p>
+              )}
+
               {/* Botões de Ação */}
               <div className="flex justify-end gap-3 pt-4 border-t">
                 {editMode ? (
@@ -769,13 +738,15 @@ export default function AdminCandidatesContent() {
                     >
                       Fechar
                     </button>
-                    <button
-                      onClick={() => setEditMode(true)}
-                      className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                      Editar
-                    </button>
+                    {selectedCandidate.global_profile_editable && (
+                      <button
+                        onClick={() => setEditMode(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                        Editar perfil
+                      </button>
+                    )}
                   </>
                 )}
               </div>

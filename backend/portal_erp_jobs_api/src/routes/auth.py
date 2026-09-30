@@ -137,6 +137,14 @@ def _active_company_membership(user):
     ).first()
 
 
+def _active_admin_for_site(user, site):
+    """Resolve an administrator only when it has explicit current-site scope."""
+    from src.models.admin import Admin
+
+    admin = Admin.query.filter_by(user_id=user.id).first()
+    return admin if admin and admin.has_site_access(site.id) else None
+
+
 def _existing_company_site(company, site):
     return next(
         (membership for membership in company.site_memberships if membership.site_id == site.id),
@@ -722,12 +730,10 @@ def login_admin():
         if not user:
             return jsonify(INVALID_CREDENTIALS), 401
 
-        # Buscar perfil admin
-        from src.models.admin import Admin
-        admin = Admin.query.filter_by(user_id=user.id).first()
-
+        # Do not reveal whether credentials are valid but site authorization is absent.
+        admin = _active_admin_for_site(user, site)
         if not admin:
-            return jsonify({'error': 'Perfil de administrador não encontrado'}), 404
+            return jsonify(INVALID_CREDENTIALS), 401
 
         access_token, refresh_token = _issue_tokens(user, site, admin=admin)
 
@@ -812,13 +818,12 @@ def login_generic():
                 return jsonify({'error': 'Perfil de candidato não encontrado'}), 404
 
         elif user.user_type == 'admin':
-            from src.models.admin import Admin
-            admin = Admin.query.filter_by(user_id=user.id).first()
+            admin = _active_admin_for_site(user, site)
             if admin:
                 response_data['admin_id'] = admin.id
                 response_data['name'] = admin.name
             else:
-                return jsonify({'error': 'Perfil de administrador não encontrado'}), 404
+                return jsonify(INVALID_CREDENTIALS), 401
         else:
             return jsonify({'error': 'Tipo de usuário inválido'}), 400
 
@@ -1202,127 +1207,4 @@ def linkedin_login():
     except Exception as e:
         db.session.rollback()
         print(f"Error in LinkedIn login: {e}")
-        return jsonify({'error': str(e)}), 500
-
-
-# ============================================
-# ADMIN MANAGEMENT
-# ============================================
-
-@auth_bp.route('/admin/register', methods=['POST'])
-@jwt_required()
-def register_admin():
-    """
-    Registrar novo administrador (apenas super_admin pode fazer isso)
-    """
-    try:
-        current_user, _, error, status = get_active_user('admin')
-        if error:
-            return error, status
-
-        from src.models.admin import Admin, AdminRole, DEFAULT_PERMISSIONS
-        current_admin = Admin.query.filter_by(user_id=current_user.id).first()
-
-        if not current_admin or current_admin.role != 'super_admin':
-            return jsonify({'error': 'Apenas super administradores podem criar novos admins'}), 403
-
-        data = request.get_json()
-        email = data.get('email', '').lower().strip()
-        password = data.get('password', '')
-        name = data.get('name', '').strip()
-        role = data.get('role', 'moderator')
-
-        if not email or not password or not name:
-            return jsonify({'error': 'Email, senha e nome são obrigatórios'}), 400
-
-        password_error = _password_policy_error(password)
-        if password_error:
-            return jsonify({'error': password_error}), 400
-
-        if User.query.filter_by(email=email).first():
-            return jsonify({'error': 'Email já cadastrado'}), 409
-
-        # Criar usuário
-        new_user = User(
-            email=email,
-            password_hash=generate_password_hash(password),
-            user_type='admin',
-            is_active=True
-        )
-        if hasattr(new_user, 'is_verified'):
-            new_user.is_verified = True
-        if hasattr(new_user, 'auth_provider'):
-            new_user.auth_provider = 'email'
-
-        db.session.add(new_user)
-        db.session.flush()
-
-        # Criar perfil admin
-        new_admin = Admin(
-            user_id=new_user.id,
-            name=name,
-            role=role,
-            permissions=DEFAULT_PERMISSIONS.get(role, DEFAULT_PERMISSIONS.get('moderator', {})),
-            created_by=current_admin.id
-        )
-        db.session.add(new_admin)
-        db.session.commit()
-
-        return jsonify({
-            'message': 'Administrador criado com sucesso',
-            'admin': {
-                'id': new_admin.id,
-                'user_id': new_user.id,
-                'email': new_user.email,
-                'name': new_admin.name,
-                'role': new_admin.role
-            }
-        }), 201
-
-    except Exception as e:
-        db.session.rollback()
-        print(f"Error registering admin: {e}")
-        return jsonify({'error': str(e)}), 500
-
-
-@auth_bp.route('/admin/list', methods=['GET'])
-@jwt_required()
-def list_admins():
-    """
-    Listar todos os administradores (apenas super_admin)
-    """
-    try:
-        current_user, _, error, status = get_active_user('admin')
-        if error:
-            return error, status
-
-        from src.models.admin import Admin
-        current_admin = Admin.query.filter_by(user_id=current_user.id).first()
-
-        if not current_admin or current_admin.role != 'super_admin':
-            return jsonify({'error': 'Apenas super administradores podem listar admins'}), 403
-
-        admins = Admin.query.all()
-        admins_data = []
-
-        for admin in admins:
-            user = User.query.get(admin.user_id)
-            admins_data.append({
-                'id': admin.id,
-                'user_id': admin.user_id,
-                'email': user.email if user else None,
-                'name': admin.name,
-                'role': admin.role,
-                'permissions': admin.permissions,
-                'is_active': user.is_active if user else False,
-                'last_activity': admin.last_activity.isoformat() if admin.last_activity else None,
-                'created_at': admin.created_at.isoformat() if admin.created_at else None
-            })
-
-        return jsonify({
-            'admins': admins_data,
-            'total': len(admins_data)
-        }), 200
-
-    except Exception as e:
         return jsonify({'error': str(e)}), 500

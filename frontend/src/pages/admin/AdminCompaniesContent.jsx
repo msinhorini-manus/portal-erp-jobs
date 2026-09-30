@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Building2, Search, Eye, Mail, Phone, MapPin, ToggleLeft, ToggleRight, X, Calendar, Briefcase, Crown, Edit2, Save, Plus, Trash2 } from 'lucide-react'
+import { Building2, Search, Eye, Mail, Phone, MapPin, ToggleLeft, ToggleRight, X, Calendar, Briefcase, Crown, Edit2, Save, Trash2 } from 'lucide-react'
 import toast, { Toaster } from 'react-hot-toast'
 
 export default function AdminCompaniesContent() {
@@ -8,19 +8,8 @@ export default function AdminCompaniesContent() {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCompany, setSelectedCompany] = useState(null)
   const [showModal, setShowModal] = useState(false)
-  const [showCreateModal, setShowCreateModal] = useState(false)
   const [editMode, setEditMode] = useState(false)
   const [editData, setEditData] = useState({})
-  const [createData, setCreateData] = useState({
-    company_name: '',
-    email: '',
-    phone: '',
-    cnpj: '',
-    city: '',
-    state: '',
-    is_member: false,
-    max_active_jobs: 3
-  })
 
   useEffect(() => {
     loadCompanies()
@@ -48,49 +37,8 @@ export default function AdminCompaniesContent() {
     }
   }
 
-  const createCompany = async () => {
-    if (!createData.company_name || !createData.email) {
-      toast.error('Nome e email são obrigatórios')
-      return
-    }
-
-    try {
-      const token = localStorage.getItem('authToken')
-      const response = await fetch('/api/admin/companies', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(createData)
-      })
-
-      if (response.ok) {
-        toast.success('Empresa criada com sucesso')
-        setShowCreateModal(false)
-        setCreateData({
-          company_name: '',
-          email: '',
-          phone: '',
-          cnpj: '',
-          city: '',
-          state: '',
-          is_member: false,
-          max_active_jobs: 3
-        })
-        loadCompanies()
-      } else {
-        const error = await response.json()
-        toast.error(error.error || 'Erro ao criar empresa')
-      }
-    } catch (error) {
-      console.error('Erro:', error)
-      toast.error('Erro ao conectar com o servidor')
-    }
-  }
-
   const deleteCompany = async (companyId) => {
-    if (!confirm('Tem certeza que deseja excluir esta empresa? Esta ação não pode ser desfeita.')) {
+    if (!confirm('Tem certeza que deseja suspender esta empresa neste site? As vagas ativas também serão desativadas.')) {
       return
     }
 
@@ -104,11 +52,11 @@ export default function AdminCompaniesContent() {
       })
 
       if (response.ok) {
-        toast.success('Empresa excluída com sucesso')
+        toast.success('Empresa suspensa neste site')
         loadCompanies()
       } else {
         const error = await response.json()
-        toast.error(error.error || 'Erro ao excluir empresa')
+        toast.error(error.error || 'Erro ao suspender empresa')
       }
     } catch (error) {
       console.error('Erro:', error)
@@ -119,13 +67,11 @@ export default function AdminCompaniesContent() {
   const toggleCompanyStatus = async (companyId, currentStatus) => {
     try {
       const token = localStorage.getItem('authToken')
-      const response = await fetch(`/api/admin/companies/${companyId}/toggle-status`, {
-        method: 'PUT',
+      const response = await fetch(`/api/admin/companies/${companyId}/toggle-active`, {
+        method: 'PATCH',
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ is_active: !currentStatus })
+          'Authorization': `Bearer ${token}`
+        }
       })
 
       if (response.ok) {
@@ -174,16 +120,19 @@ export default function AdminCompaniesContent() {
       })
       if (response.ok) {
         const data = await response.json()
-        setSelectedCompany(data)
+        const company = data.company || data
+        setSelectedCompany({
+          ...company,
+          jobs: data.jobs || [],
+          stats: data.stats || {}
+        })
         setEditData({
-          company_name: data.name || '',
-          email: data.email || '',
-          phone: data.phone || '',
-          cnpj: data.cnpj || '',
-          city: data.city || '',
-          state: data.state || '',
-          is_member: data.is_member || false,
-          max_active_jobs: data.max_active_jobs || 3
+          name: company.name || '',
+          phone: company.phone || '',
+          city: company.city || '',
+          state: company.state || '',
+          is_member: company.is_member || false,
+          max_active_jobs: company.max_active_jobs || 3
         })
         setShowModal(true)
         setEditMode(false)
@@ -212,7 +161,7 @@ export default function AdminCompaniesContent() {
         loadCompanies()
         setSelectedCompany({
           ...selectedCompany,
-          name: editData.company_name,
+          name: editData.name,
           ...editData
         })
       } else {
@@ -250,13 +199,6 @@ export default function AdminCompaniesContent() {
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Gestão de Empresas</h1>
           <p className="text-gray-600">{companies.length} empresas cadastradas</p>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-[#F7941D] text-white rounded-lg hover:bg-orange-600 transition-colors"
-        >
-          <Plus className="w-5 h-5" />
-          Nova Empresa
-        </button>
       </div>
 
       {/* Search */}
@@ -395,7 +337,7 @@ export default function AdminCompaniesContent() {
                       <button
                         onClick={() => deleteCompany(company.id)}
                         className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Excluir"
+                        title="Suspender neste site"
                       >
                         <Trash2 className="w-5 h-5" />
                       </button>
@@ -407,153 +349,6 @@ export default function AdminCompaniesContent() {
           </tbody>
         </table>
       </div>
-
-      {/* Modal de Criar Empresa */}
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b flex justify-between items-center">
-              <h2 className="text-xl font-bold text-gray-900">Nova Empresa</h2>
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="p-2 hover:bg-gray-100 rounded-lg"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Nome da Empresa *</label>
-                  <input
-                    type="text"
-                    value={createData.company_name}
-                    onChange={(e) => setCreateData({...createData, company_name: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                    placeholder="Nome da empresa"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
-                  <input
-                    type="email"
-                    value={createData.email}
-                    onChange={(e) => setCreateData({...createData, email: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                    placeholder="email@empresa.com"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Telefone</label>
-                  <input
-                    type="text"
-                    value={createData.phone}
-                    onChange={(e) => setCreateData({...createData, phone: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                    placeholder="(11) 99999-9999"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">CNPJ</label>
-                  <input
-                    type="text"
-                    value={createData.cnpj}
-                    onChange={(e) => setCreateData({...createData, cnpj: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                    placeholder="00.000.000/0001-00"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Cidade</label>
-                  <input
-                    type="text"
-                    value={createData.city}
-                    onChange={(e) => setCreateData({...createData, city: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                    placeholder="São Paulo"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Estado</label>
-                  <select
-                    value={createData.state}
-                    onChange={(e) => setCreateData({...createData, state: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                  >
-                    <option value="">Selecione...</option>
-                    <option value="AC">Acre</option>
-                    <option value="AL">Alagoas</option>
-                    <option value="AP">Amapá</option>
-                    <option value="AM">Amazonas</option>
-                    <option value="BA">Bahia</option>
-                    <option value="CE">Ceará</option>
-                    <option value="DF">Distrito Federal</option>
-                    <option value="ES">Espírito Santo</option>
-                    <option value="GO">Goiás</option>
-                    <option value="MA">Maranhão</option>
-                    <option value="MT">Mato Grosso</option>
-                    <option value="MS">Mato Grosso do Sul</option>
-                    <option value="MG">Minas Gerais</option>
-                    <option value="PA">Pará</option>
-                    <option value="PB">Paraíba</option>
-                    <option value="PR">Paraná</option>
-                    <option value="PE">Pernambuco</option>
-                    <option value="PI">Piauí</option>
-                    <option value="RJ">Rio de Janeiro</option>
-                    <option value="RN">Rio Grande do Norte</option>
-                    <option value="RS">Rio Grande do Sul</option>
-                    <option value="RO">Rondônia</option>
-                    <option value="RR">Roraima</option>
-                    <option value="SC">Santa Catarina</option>
-                    <option value="SP">São Paulo</option>
-                    <option value="SE">Sergipe</option>
-                    <option value="TO">Tocantins</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Limite de Vagas</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="100"
-                    value={createData.max_active_jobs}
-                    onChange={(e) => setCreateData({...createData, max_active_jobs: parseInt(e.target.value) || 3})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                  />
-                </div>
-                <div className="col-span-2">
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={createData.is_member}
-                      onChange={(e) => setCreateData({...createData, is_member: e.target.checked})}
-                      className="w-5 h-5 rounded border-gray-300 text-yellow-500 focus:ring-yellow-500"
-                    />
-                    <span className="text-gray-700 flex items-center gap-2">
-                      <Crown className="w-4 h-4 text-yellow-500" />
-                      Empresa Membro do Portal ERP
-                    </span>
-                  </label>
-                </div>
-              </div>
-              <div className="flex justify-end gap-3 pt-4 border-t">
-                <button
-                  onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={createCompany}
-                  className="px-4 py-2 bg-[#F7941D] text-white rounded-lg hover:bg-orange-600 transition-colors"
-                >
-                  Criar Empresa
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Modal de Detalhes/Editar */}
       {showModal && selectedCompany && (
@@ -579,17 +374,8 @@ export default function AdminCompaniesContent() {
                       <label className="block text-sm font-medium text-gray-700 mb-1">Nome da Empresa</label>
                       <input
                         type="text"
-                        value={editData.company_name}
-                        onChange={(e) => setEditData({...editData, company_name: e.target.value})}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                      <input
-                        type="email"
-                        value={editData.email}
-                        onChange={(e) => setEditData({...editData, email: e.target.value})}
+                        value={editData.name}
+                        onChange={(e) => setEditData({...editData, name: e.target.value})}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                       />
                     </div>
@@ -599,15 +385,6 @@ export default function AdminCompaniesContent() {
                         type="text"
                         value={editData.phone}
                         onChange={(e) => setEditData({...editData, phone: e.target.value})}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">CNPJ</label>
-                      <input
-                        type="text"
-                        value={editData.cnpj}
-                        onChange={(e) => setEditData({...editData, cnpj: e.target.value})}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                       />
                     </div>
