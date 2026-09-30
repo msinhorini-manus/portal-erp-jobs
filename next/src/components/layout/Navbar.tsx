@@ -6,6 +6,7 @@ import { Building2, Menu, User, X } from 'lucide-react'
 
 import type { RegionalSite } from '@/lib/site'
 import { BrandLockup } from './BrandLockup'
+import { EcosystemBar } from './EcosystemBar'
 import { SiteSelector } from './SiteSelector'
 
 const navLinks = [
@@ -27,6 +28,7 @@ export function Navbar({ currentSite, sites }: NavbarProps) {
 
   return (
     <header className="sticky top-0 z-50 border-b border-white/10 bg-portal-dark text-white shadow-[0_10px_30px_rgba(15,37,48,0.16)]">
+      <EcosystemBar />
       <div className="container mx-auto px-4 sm:px-6">
         <div className="flex min-h-[76px] items-center justify-between gap-4">
           <Link href="/" aria-label="Jobs by Portal ERP — início" className="shrink-0">

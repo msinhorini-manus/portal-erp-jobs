@@ -4,6 +4,7 @@ import { Plus, Menu, X, User, Building2, Shield, LogOut, Home, Briefcase, Users,
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/contexts/AuthContext'
 import BrandLockup from './BrandLockup'
+import EcosystemBar from './EcosystemBar'
 
 /**
  * Navbar Inteligente - Componente de navegação global
@@ -120,6 +121,7 @@ export default function Navbar() {
 
   return (
     <header className="bg-[#0F2530] text-white shadow-[0_10px_30px_rgba(15,37,48,0.16)] sticky top-0 z-50 border-b border-white/10">
+      <EcosystemBar />
       <div className="container mx-auto px-4 lg:px-6">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
