@@ -14,6 +14,7 @@ from .certification import Certification
 from .project import Project
 from .language import Language
 from .admin import Admin, AdminRole, AdminPermission, DEFAULT_PERMISSIONS
+from .admin_scope import AdminSite, AdminAuditEvent
 from .job_area import JobArea
 from .experience_level import ExperienceLevel
 from .work_modality import WorkModality
@@ -47,6 +48,8 @@ __all__ = [
     'AdminRole',
     'AdminPermission',
     'DEFAULT_PERMISSIONS',
+    'AdminSite',
+    'AdminAuditEvent',
     'JobArea',
     'ExperienceLevel',
     'WorkModality',

@@ -21,6 +21,7 @@ from src.config import db  # noqa: E402
 from src.main import app  # noqa: E402
 from src.models import (  # noqa: E402
     Admin,
+    AdminSite,
     Application,
     ApplicationStatus,
     ApplicationStatusEvent,
@@ -147,6 +148,8 @@ class JobsWave4Tests(unittest.TestCase):
             db.session.add_all([
                 self.membership,
                 self.other_membership,
+                AdminSite(admin_id=self.admin.id, site_id=self.site.id, is_active=True),
+                AdminSite(admin_id=self.denied_admin.id, site_id=self.site.id, is_active=True),
                 CandidateSite(
                     candidate_id=self.candidate.id,
                     site_id=self.site.id,

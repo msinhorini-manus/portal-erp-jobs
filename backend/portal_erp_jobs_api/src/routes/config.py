@@ -12,7 +12,7 @@ from src.models.software import Software
 from src.models.technology import Technology
 from src.models.job import Skill
 from src.models.tag import Tag
-from src.routes.admin import admin_required
+from src.routes.admin import _audit_admin, platform_admin_required
 
 config_bp = Blueprint('config', __name__, url_prefix='/api/config')
 
@@ -41,7 +41,7 @@ def get_area(area_id):
     return jsonify(area.to_dict())
 
 @config_bp.route('/areas', methods=['POST'])
-@admin_required
+@platform_admin_required
 def create_area():
     """Criar nova área de atuação"""
     data = request.get_json()
@@ -62,12 +62,14 @@ def create_area():
     )
 
     db.session.add(area)
+    db.session.flush()
+    _audit_admin('catalog.area.created', 'job_area', area.id, details={})
     db.session.commit()
 
     return jsonify(area.to_dict()), 201
 
 @config_bp.route('/areas/<int:area_id>', methods=['PUT'])
-@admin_required
+@platform_admin_required
 def update_area(area_id):
     """Atualizar área de atuação"""
     area = JobArea.query.get_or_404(area_id)
@@ -82,16 +84,18 @@ def update_area(area_id):
     if 'color' in data:
         area.color = data['color']
 
+    _audit_admin('catalog.area.updated', 'job_area', area.id, details={'fields': sorted(data.keys())})
     db.session.commit()
     return jsonify(area.to_dict())
 
 @config_bp.route('/areas/<int:area_id>', methods=['DELETE'])
-@admin_required
+@platform_admin_required
 def delete_area(area_id):
     """Excluir área de atuação"""
     area = JobArea.query.get(area_id)
     if not area:
         return jsonify({'error': 'Área não encontrada'}), 404
+    _audit_admin('catalog.area.deleted', 'job_area', area.id, details={})
     db.session.delete(area)
     db.session.commit()
     return jsonify({'message': 'Área excluída com sucesso'}), 200
@@ -113,7 +117,7 @@ def get_level(level_id):
     return jsonify(level.to_dict())
 
 @config_bp.route('/levels', methods=['POST'])
-@admin_required
+@platform_admin_required
 def create_level():
     """Criar novo nível de experiência"""
     data = request.get_json()
@@ -132,12 +136,14 @@ def create_level():
     )
 
     db.session.add(level)
+    db.session.flush()
+    _audit_admin('catalog.level.created', 'experience_level', level.id, details={})
     db.session.commit()
 
     return jsonify(level.to_dict()), 201
 
 @config_bp.route('/levels/<int:level_id>', methods=['PUT'])
-@admin_required
+@platform_admin_required
 def update_level(level_id):
     """Atualizar nível de experiência"""
     level = ExperienceLevel.query.get_or_404(level_id)
@@ -150,16 +156,18 @@ def update_level(level_id):
     if 'order' in data:
         level.order = data['order']
 
+    _audit_admin('catalog.level.updated', 'experience_level', level.id, details={'fields': sorted(data.keys())})
     db.session.commit()
     return jsonify(level.to_dict())
 
 @config_bp.route('/levels/<int:level_id>', methods=['DELETE'])
-@admin_required
+@platform_admin_required
 def delete_level(level_id):
     """Excluir nível de experiência"""
     level = ExperienceLevel.query.get(level_id)
     if not level:
         return jsonify({'error': 'Nível não encontrado'}), 404
+    _audit_admin('catalog.level.deleted', 'experience_level', level.id, details={})
     db.session.delete(level)
     db.session.commit()
     return jsonify({'message': 'Nível excluído com sucesso'}), 200
@@ -181,7 +189,7 @@ def get_modality(modality_id):
     return jsonify(modality.to_dict())
 
 @config_bp.route('/modalities', methods=['POST'])
-@admin_required
+@platform_admin_required
 def create_modality():
     """Criar nova modalidade de trabalho"""
     data = request.get_json()
@@ -200,12 +208,14 @@ def create_modality():
     )
 
     db.session.add(modality)
+    db.session.flush()
+    _audit_admin('catalog.modality.created', 'work_modality', modality.id, details={})
     db.session.commit()
 
     return jsonify(modality.to_dict()), 201
 
 @config_bp.route('/modalities/<int:modality_id>', methods=['PUT'])
-@admin_required
+@platform_admin_required
 def update_modality(modality_id):
     """Atualizar modalidade de trabalho"""
     modality = WorkModality.query.get_or_404(modality_id)
@@ -218,16 +228,18 @@ def update_modality(modality_id):
     if 'icon' in data:
         modality.icon = data['icon']
 
+    _audit_admin('catalog.modality.updated', 'work_modality', modality.id, details={'fields': sorted(data.keys())})
     db.session.commit()
     return jsonify(modality.to_dict())
 
 @config_bp.route('/modalities/<int:modality_id>', methods=['DELETE'])
-@admin_required
+@platform_admin_required
 def delete_modality(modality_id):
     """Excluir modalidade de trabalho"""
     modality = WorkModality.query.get(modality_id)
     if not modality:
         return jsonify({'error': 'Modalidade não encontrada'}), 404
+    _audit_admin('catalog.modality.deleted', 'work_modality', modality.id, details={})
     db.session.delete(modality)
     db.session.commit()
     return jsonify({'message': 'Modalidade excluída com sucesso'}), 200
@@ -249,7 +261,7 @@ def get_software(software_id):
     return jsonify(software.to_dict())
 
 @config_bp.route('/softwares', methods=['POST'])
-@admin_required
+@platform_admin_required
 def create_software():
     """Criar novo software/ERP"""
     data = request.get_json()
@@ -269,12 +281,14 @@ def create_software():
     )
 
     db.session.add(software)
+    db.session.flush()
+    _audit_admin('catalog.software.created', 'software', software.id, details={})
     db.session.commit()
 
     return jsonify(software.to_dict()), 201
 
 @config_bp.route('/softwares/<int:software_id>', methods=['PUT'])
-@admin_required
+@platform_admin_required
 def update_software(software_id):
     """Atualizar software/ERP"""
     software = Software.query.get_or_404(software_id)
@@ -289,16 +303,18 @@ def update_software(software_id):
     if 'vendor' in data:
         software.vendor = data['vendor']
 
+    _audit_admin('catalog.software.updated', 'software', software.id, details={'fields': sorted(data.keys())})
     db.session.commit()
     return jsonify(software.to_dict())
 
 @config_bp.route('/softwares/<int:software_id>', methods=['DELETE'])
-@admin_required
+@platform_admin_required
 def delete_software(software_id):
     """Excluir software/ERP"""
     software = Software.query.get(software_id)
     if not software:
         return jsonify({'error': 'Software não encontrado'}), 404
+    _audit_admin('catalog.software.deleted', 'software', software.id, details={})
     db.session.delete(software)
     db.session.commit()
     return jsonify({'message': 'Software excluído com sucesso'}), 200
@@ -320,7 +336,7 @@ def get_technology(tech_id):
     return jsonify(technology.to_dict())
 
 @config_bp.route('/technologies', methods=['POST'])
-@admin_required
+@platform_admin_required
 def create_technology():
     """Criar nova tecnologia"""
     data = request.get_json()
@@ -341,12 +357,14 @@ def create_technology():
     )
 
     db.session.add(technology)
+    db.session.flush()
+    _audit_admin('catalog.technology.created', 'technology', technology.id, details={})
     db.session.commit()
 
     return jsonify(technology.to_dict()), 201
 
 @config_bp.route('/technologies/<int:tech_id>', methods=['PUT'])
-@admin_required
+@platform_admin_required
 def update_technology(tech_id):
     """Atualizar tecnologia"""
     technology = Technology.query.get_or_404(tech_id)
@@ -363,16 +381,18 @@ def update_technology(tech_id):
     if 'color' in data:
         technology.color = data['color']
 
+    _audit_admin('catalog.technology.updated', 'technology', technology.id, details={'fields': sorted(data.keys())})
     db.session.commit()
     return jsonify(technology.to_dict())
 
 @config_bp.route('/technologies/<int:tech_id>', methods=['DELETE'])
-@admin_required
+@platform_admin_required
 def delete_technology(tech_id):
     """Excluir tecnologia"""
     technology = Technology.query.get(tech_id)
     if not technology:
         return jsonify({'error': 'Tecnologia não encontrada'}), 404
+    _audit_admin('catalog.technology.deleted', 'technology', technology.id, details={})
     db.session.delete(technology)
     db.session.commit()
     return jsonify({'message': 'Tecnologia excluída com sucesso'}), 200
@@ -394,7 +414,7 @@ def get_tag(tag_id):
     return jsonify(tag.to_dict())
 
 @config_bp.route('/tags', methods=['POST'])
-@admin_required
+@platform_admin_required
 def create_tag():
     """Criar nova tag"""
     data = request.get_json()
@@ -413,12 +433,14 @@ def create_tag():
     )
 
     db.session.add(tag)
+    db.session.flush()
+    _audit_admin('catalog.tag.created', 'tag', tag.id, details={})
     db.session.commit()
 
     return jsonify(tag.to_dict()), 201
 
 @config_bp.route('/tags/<int:tag_id>', methods=['PUT'])
-@admin_required
+@platform_admin_required
 def update_tag(tag_id):
     """Atualizar tag"""
     tag = Tag.query.get_or_404(tag_id)
@@ -431,16 +453,18 @@ def update_tag(tag_id):
     if 'color' in data:
         tag.color = data['color']
 
+    _audit_admin('catalog.tag.updated', 'tag', tag.id, details={'fields': sorted(data.keys())})
     db.session.commit()
     return jsonify(tag.to_dict())
 
 @config_bp.route('/tags/<int:tag_id>', methods=['DELETE'])
-@admin_required
+@platform_admin_required
 def delete_tag(tag_id):
     """Excluir tag"""
     tag = Tag.query.get(tag_id)
     if not tag:
         return jsonify({'error': 'Tag não encontrada'}), 404
+    _audit_admin('catalog.tag.deleted', 'tag', tag.id, details={})
     db.session.delete(tag)
     db.session.commit()
     return jsonify({'message': 'Tag excluída com sucesso'}), 200
@@ -448,7 +472,7 @@ def delete_tag(tag_id):
 # ==================== SEED DATA ====================
 
 @config_bp.route('/seed', methods=['POST'])
-@admin_required
+@platform_admin_required
 def seed_config_data():
     """Popular dados iniciais de configuração"""
     try:
@@ -559,6 +583,7 @@ def seed_config_data():
                 tag = Tag(**tag_data)
                 db.session.add(tag)
 
+        _audit_admin('catalog.seeded', 'catalog', details={})
         db.session.commit()
 
         return jsonify({

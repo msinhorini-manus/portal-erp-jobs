@@ -34,6 +34,7 @@ from src.models.session_family import SessionFamily
 from src.models.company_user import CompanyUser
 from src.models.company_team import CompanyInvitation, CompanyAuditEvent
 from src.models.legal_acceptance import LegalAcceptance
+from src.models.admin_scope import AdminSite, AdminAuditEvent
 
 # Import routes
 from src.routes.auth import auth_bp

@@ -14,6 +14,7 @@ class AdminPermission:
     """Admin permission constants"""
     # User Management
     MANAGE_ADMINS = 'manage_admins'
+    MANAGE_USERS = 'manage_users'
     MANAGE_CANDIDATES = 'manage_candidates'
     MANAGE_COMPANIES = 'manage_companies'
     APPROVE_COMPANIES = 'approve_companies'
@@ -35,6 +36,7 @@ class AdminPermission:
 DEFAULT_PERMISSIONS = {
     AdminRole.SUPER_ADMIN: {
         AdminPermission.MANAGE_ADMINS: True,
+        AdminPermission.MANAGE_USERS: True,
         AdminPermission.MANAGE_CANDIDATES: True,
         AdminPermission.MANAGE_COMPANIES: True,
         AdminPermission.APPROVE_COMPANIES: True,
@@ -50,6 +52,7 @@ DEFAULT_PERMISSIONS = {
     },
     AdminRole.ADMIN: {
         AdminPermission.MANAGE_ADMINS: False,
+        AdminPermission.MANAGE_USERS: True,
         AdminPermission.MANAGE_CANDIDATES: True,
         AdminPermission.MANAGE_COMPANIES: True,
         AdminPermission.APPROVE_COMPANIES: True,
@@ -65,6 +68,7 @@ DEFAULT_PERMISSIONS = {
     },
     AdminRole.MODERATOR: {
         AdminPermission.MANAGE_ADMINS: False,
+        AdminPermission.MANAGE_USERS: False,
         AdminPermission.MANAGE_CANDIDATES: True,
         AdminPermission.MANAGE_COMPANIES: False,
         AdminPermission.APPROVE_COMPANIES: False,
@@ -89,6 +93,7 @@ class Admin(db.Model):
     name = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(50), default=AdminRole.ADMIN)
     permissions = db.Column(db.JSON, default=lambda: DEFAULT_PERMISSIONS[AdminRole.ADMIN])
+    is_platform_admin = db.Column(db.Boolean, nullable=False, default=False)
 
     # Profile
     avatar_url = db.Column(db.String(500), nullable=True)
@@ -103,23 +108,39 @@ class Admin(db.Model):
 
     # Relationship
     user = db.relationship('User', backref='admin', uselist=False)
+    site_assignments = db.relationship(
+        'AdminSite',
+        back_populates='admin',
+        cascade='all, delete-orphan',
+        lazy='selectin',
+    )
 
     def has_permission(self, permission):
         """Check if admin has a specific permission"""
         if self.role == AdminRole.SUPER_ADMIN:
             return True
-        return self.permissions.get(permission, False)
+        configured = self.permissions or {}
+        if permission in configured:
+            return bool(configured[permission])
+        return bool(DEFAULT_PERMISSIONS.get(self.role, {}).get(permission, False))
+
+    def has_site_access(self, site_id):
+        """Return whether this administrator is explicitly active on a site."""
+        return any(
+            assignment.site_id == site_id and assignment.is_active
+            for assignment in self.site_assignments
+        )
 
     def set_role(self, role):
         """Set role and update permissions to defaults"""
         self.role = role
-        self.permissions = DEFAULT_PERMISSIONS.get(role, DEFAULT_PERMISSIONS[AdminRole.MODERATOR])
+        self.permissions = dict(DEFAULT_PERMISSIONS.get(role, DEFAULT_PERMISSIONS[AdminRole.MODERATOR]))
 
     def update_permission(self, permission, value):
         """Update a specific permission"""
-        if self.permissions is None:
-            self.permissions = {}
-        self.permissions[permission] = value
+        permissions = dict(self.permissions or {})
+        permissions[permission] = bool(value)
+        self.permissions = permissions
 
     def __repr__(self):
         return f'<Admin {self.name}>'
@@ -131,6 +152,7 @@ class Admin(db.Model):
             'user_id': self.user_id,
             'name': self.name,
             'role': self.role,
+            'is_platform_admin': self.is_platform_admin,
             'avatar_url': self.avatar_url,
             'phone': self.phone,
             'last_activity': self.last_activity.isoformat() if self.last_activity else None,
@@ -140,5 +162,6 @@ class Admin(db.Model):
 
         if include_permissions:
             data['permissions'] = self.permissions
+            data['sites'] = [assignment.to_dict() for assignment in self.site_assignments]
 
         return data

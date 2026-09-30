@@ -40,10 +40,13 @@ As revisões seguintes são cumulativas:
 | `20260922_05` | Famílias de sessão JWT rotativas e `password_changed_at` para revogação global |
 | `20260922_06` | Lifecycle explícito de vagas com `status`, `is_featured`, constraints e backfill |
 | `20260929_07` | Convites e auditoria de equipe, aceites legais versionados e backfill de owners legados |
+| `20260930_08` | Escopo regional explícito de administradores, autoridade global separada e auditoria administrativa append-only |
 
 Antes de reiniciar a API após `20260922_06`, confirme: `alembic current`, `integrity_check=ok`, `foreign_key_check` vazio, existência de `auth_session_families`, `users.password_changed_at`, `jobs.status` e `jobs.is_featured`, todas as empresas/candidatos legados com presença BR, todas as vagas/candidaturas com `site_id` BR e nenhuma inconsistência entre `jobs.status` e `jobs.is_active`. O código da Onda 4 não deve iniciar sobre uma base anterior a `20260922_06`.
 
 Para a Onda 8, `alembic current` deve retornar `20260929_07`. Confirme as tabelas `company_invitations`, `company_audit_events` e `legal_acceptances`, além de zero empresas sem vínculo owner ativo e aceito. O smoke deve cobrir convite, aceite, alteração de papel, bloqueio de `viewer`, revogação de sessão e preservação do último owner. Verifique também `/sobre`, `/contato`, `/termos`, `/privacidade`, canonicals, sitemap completo e JSON-LD das páginas públicas.
+
+Para a Onda Admin 0, faça o preflight **antes** da migration: deve existir o site `BR` e deve haver no máximo um `super_admin` ativo legado. A revisão `20260930_08` aborta antes do DDL quando encontra mais de um, exigindo seleção operacional explícita em vez de promover todos. Após o upgrade, confirme: `alembic current=20260930_08`, coluna `admins.is_platform_admin`, uma atribuição BR para cada administrador legado, no máximo um platform admin proveniente do backfill, tabelas `admin_sites` e `admin_audit_events`, triggers SQLite `admin_audit_events_no_update`/`admin_audit_events_no_delete`, integridade `ok` e zero violações de FK. O smoke deve cobrir login com site autorizado, rejeição cross-site, negação de catálogos/sites para super-admin apenas regional, revogação de sessões ao remover um site e `404` nas antigas rotas `/api/auth/admin/register` e `/api/auth/admin/list`.
 
 O Next deve iniciar com `NEXT_INTERNAL_API_ORIGIN=http://127.0.0.1:5000`. Esse endereço é somente server-side. Chamadas internas transportam o domínio regional em `X-Regional-Host`; o Flask aceita esse cabeçalho apenas por loopback, e o Nginx remove qualquer valor enviado por clientes públicos.
 

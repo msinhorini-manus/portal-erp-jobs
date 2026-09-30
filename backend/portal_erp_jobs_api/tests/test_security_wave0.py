@@ -29,6 +29,7 @@ from src.models.application import Application, ApplicationStatus, ApplicationSt
 from src.models.site import Site, SiteDomain, SiteLocale  # noqa: E402
 from src.models.session_family import SessionFamily  # noqa: E402
 from src.models.admin import Admin  # noqa: E402
+from src.models.admin_scope import AdminSite  # noqa: E402
 from src.models.education import Education  # noqa: E402
 from src.rate_limit import auth_rate_limiter  # noqa: E402
 
@@ -101,6 +102,7 @@ class WaveZeroSecurityTests(unittest.TestCase):
             db.session.add_all([company, candidate, admin])
             db.session.flush()
             db.session.add_all([
+                AdminSite(admin_id=admin.id, site_id=br.id, is_active=True),
                 CompanySite(
                     company_id=company.id,
                     site_id=br.id,
