@@ -6,6 +6,7 @@ import { Code2, Settings, Headphones, Cloud, Database, Shield, Users, Smartphone
 export const metadata: Metadata = {
   title: 'Áreas de Atuação',
   description: 'Explore vagas por área de especialização no setor de software e ERP. Desenvolvimento, Consultoria, DevOps, Dados, Segurança e mais.',
+  alternates: { canonical: '/areas' },
 }
 
 const iconMap: Record<string, any> = {

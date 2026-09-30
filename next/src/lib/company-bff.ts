@@ -118,6 +118,18 @@ export async function publicCompanyAuthRequest(
   return response
 }
 
+export async function publicCompanyRequest(request: NextRequest, backendPath: string) {
+  const method = request.method.toUpperCase()
+  let body: string | undefined
+  if (!['GET', 'HEAD'].includes(method)) {
+    const parsed = await readSafeJson(request)
+    if (parsed === null) return jsonResponse({ error: 'Contexto empresarial ou regional não pode ser fornecido pelo navegador.' }, 400)
+    body = JSON.stringify(parsed)
+  }
+  const backend = await callCompanyBackend(request, backendPath, { method, body })
+  return jsonResponse(await parseBody(backend), backend.status)
+}
+
 async function executeRefresh(request: NextRequest, refreshToken: string) {
   const backend = await callCompanyBackend(request, '/auth/refresh', { method: 'POST' }, refreshToken)
   const payload = await parseBody(backend)

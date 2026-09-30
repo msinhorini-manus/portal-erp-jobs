@@ -6,6 +6,7 @@ import { buildJobApiParams, JobSearchParams } from '@/lib/job-search'
 export const metadata: Metadata = {
   title: 'Buscar Vagas',
   description: 'Encontre vagas de emprego no setor de software e ERP. Filtros por área, tecnologia, modalidade, nível e salário.',
+  alternates: { canonical: '/vagas' },
 }
 
 const fallbackPage = { jobs: [], total: 0, pages: 0, current_page: 1, per_page: 20 }

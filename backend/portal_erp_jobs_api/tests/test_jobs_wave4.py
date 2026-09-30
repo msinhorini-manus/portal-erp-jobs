@@ -487,6 +487,8 @@ class JobsWave4Tests(unittest.TestCase):
                 "password": "Wave4!Valid2026",
                 "trade_name": "Duplicate Tax ID",
                 "tax_id": "WAVE4-OWNER-TAX",
+                "accept_terms": True,
+                "accept_privacy": True,
             },
         )
         self.assertEqual(duplicate_tax_id.status_code, 409, duplicate_tax_id.get_json())

@@ -11,6 +11,7 @@ class CompanyUserRole:
     ADMIN = 'admin'  # Can manage jobs and view all data
     HR = 'hr'  # Can manage jobs and candidates
     VIEWER = 'viewer'  # Read-only access
+    ALL = (OWNER, ADMIN, HR, VIEWER)
 
 class CompanyUser(db.Model):
     """Company User model - links users to companies with roles"""
@@ -47,11 +48,22 @@ class CompanyUser(db.Model):
     # Unique constraint: one user can only be in a company once
     __table_args__ = (
         db.UniqueConstraint('company_id', 'user_id', name='unique_company_user'),
+        db.Index(
+            'uq_company_users_one_active_membership_per_user',
+            'user_id',
+            unique=True,
+            sqlite_where=db.text('is_active = 1'),
+            postgresql_where=db.text('is_active = true'),
+        ),
     )
 
     def can_manage_jobs(self):
         """Check if user can manage jobs"""
         return self.role in [CompanyUserRole.OWNER, CompanyUserRole.ADMIN, CompanyUserRole.HR]
+
+    def can_view_jobs(self):
+        """All company roles can view the private job inventory."""
+        return self.role in CompanyUserRole.ALL
 
     def can_manage_users(self):
         """Check if user can manage other company users"""
@@ -60,6 +72,14 @@ class CompanyUser(db.Model):
     def can_view_candidates(self):
         """Check if user can view candidates"""
         return self.role in [CompanyUserRole.OWNER, CompanyUserRole.ADMIN, CompanyUserRole.HR]
+
+    def can_manage_candidates(self):
+        """Recruiting roles can transition applications."""
+        return self.role in [CompanyUserRole.OWNER, CompanyUserRole.ADMIN, CompanyUserRole.HR]
+
+    def can_manage_company(self):
+        """Only owners and administrators can edit the company profile."""
+        return self.role in [CompanyUserRole.OWNER, CompanyUserRole.ADMIN]
 
     def is_owner(self):
         """Check if user is the company owner"""

@@ -82,11 +82,17 @@ def get_company_access(*, require_approved=False, permission=None):
     if error:
         return None, None, None, error, status
 
-    company_user = CompanyUser.query.filter_by(user_id=user.id, is_active=True).first()
-    if company_user:
-        company = db.session.get(Company, company_user.company_id)
-    else:
-        company = Company.query.filter_by(user_id=user.id).first()
+    try:
+        company_id = int(get_jwt().get("company_id"))
+    except (TypeError, ValueError):
+        return None, None, None, _error("Sessão empresarial inválida.", 401), 401
+    company_user = CompanyUser.query.filter_by(
+        user_id=user.id,
+        company_id=company_id,
+        is_active=True,
+        invitation_accepted=True,
+    ).first()
+    company = db.session.get(Company, company_id) if company_user else None
 
     if not company:
         return None, None, None, _error("Perfil de empresa não encontrado.", 404), 404
@@ -97,13 +103,16 @@ def get_company_access(*, require_approved=False, permission=None):
     if require_approved and membership.status != CompanyStatus.APPROVED:
         return None, None, None, _error("Empresa ainda não está aprovada neste site.", 403), 403
 
-    if permission and company_user:
+    if permission:
         allowed = {
+            "view_jobs": company_user.can_view_jobs,
             "manage_jobs": company_user.can_manage_jobs,
             "view_candidates": company_user.can_view_candidates,
+            "manage_candidates": company_user.can_manage_candidates,
+            "manage_company": company_user.can_manage_company,
             "manage_users": company_user.can_manage_users,
         }.get(permission)
-        if not allowed or not company_user.invitation_accepted:
+        if not allowed or not allowed():
             return None, None, None, _error("Permissão insuficiente.", 403), 403
 
     return company, membership, company_user, None, None

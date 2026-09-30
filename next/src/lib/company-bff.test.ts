@@ -7,6 +7,7 @@ import {
   authenticatedCompanyProxy,
   logoutCompanySession,
   publicCompanyAuthRequest,
+  publicCompanyRequest,
   resolveCompanyRoute,
   validateCompanyCsrf,
 } from './company-bff'
@@ -109,7 +110,26 @@ describe('company BFF', () => {
     expect(resolveCompanyRoute('applications', 'GET', new URLSearchParams('company_id=8'), COMPANY_ROUTES)).toEqual({ error: 'query' })
     expect(resolveCompanyRoute('candidates', 'GET', new URLSearchParams('tech=Python&city=Sao%20Paulo'), COMPANY_ROUTES)).toEqual({ target: '/candidates/search?city=Sao+Paulo&tech=Python' })
     expect(resolveCompanyRoute('candidates', 'GET', new URLSearchParams('min_experience=5&available_immediately=true'), COMPANY_ROUTES)).toEqual({ target: '/candidates/search?min_experience=5&available_immediately=true' })
+    expect(resolveCompanyRoute('team/members', 'GET', new URLSearchParams(), COMPANY_ROUTES)).toEqual({ target: '/company-team/members' })
+    expect(resolveCompanyRoute('team/members/12', 'PATCH', new URLSearchParams(), COMPANY_ROUTES)).toEqual({ target: '/company-team/members/12' })
+    expect(resolveCompanyRoute('team/invitations/9/resend', 'POST', new URLSearchParams(), COMPANY_ROUTES)).toEqual({ target: '/company-team/invitations/9/resend' })
+    expect(resolveCompanyRoute('team/audit', 'DELETE', new URLSearchParams(), COMPANY_ROUTES)).toEqual({ error: 'method' })
     expect(resolveCompanyRoute('jobs/12/toggle-status/extra', 'PATCH', new URLSearchParams(), COMPANY_ROUTES)).toEqual({ error: 'path' })
+  })
+
+  it('proxies only safe public invitation payloads without caching', async () => {
+    const mockedFetch = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) => new Response(JSON.stringify({ message: 'accepted' }), { status: 200, headers: { 'content-type': 'application/json' } }))
+    vi.stubGlobal('fetch', mockedFetch)
+    const valid = new NextRequest('https://jobs.portalerp.com.br/bff/company/invitations/invite-token', { method: 'POST', body: JSON.stringify({ password: 'ValidPass2026', accept_terms: true, accept_privacy: true }) })
+    const response = await publicCompanyRequest(valid, '/company-team/invitations/invite-token')
+    expect(response.status).toBe(200)
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
+    expect(String(mockedFetch.mock.calls[0][0])).toContain('/api/company-team/invitations/invite-token')
+
+    const forged = new NextRequest('https://jobs.portalerp.com.br/bff/company/invitations/invite-token', { method: 'POST', body: JSON.stringify({ company_id: 9 }) })
+    const blocked = await publicCompanyRequest(forged, '/company-team/invitations/invite-token')
+    expect(blocked.status).toBe(400)
+    expect(mockedFetch).toHaveBeenCalledTimes(1)
   })
 
   it('rejects a candidate identity before opening the company UI', async () => {

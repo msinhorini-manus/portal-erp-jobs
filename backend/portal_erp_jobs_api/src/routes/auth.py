@@ -13,6 +13,7 @@ from src.models.session_family import SessionFamily
 from src.models.company import Company, CompanyStatus
 from src.models.candidate import Candidate
 from src.models.company_user import CompanyUser, CompanyUserRole
+from src.models.legal_acceptance import LegalAcceptance
 from src.config import db
 from src.rate_limit import auth_rate_limiter
 from src.regional_access import ensure_candidate_site, ensure_company_site, get_active_user, token_claims
@@ -33,6 +34,7 @@ RECOVERY_UNAVAILABLE = {
     'error': 'Serviço de recuperação temporariamente indisponível. Tente novamente mais tarde.'
 }
 _DUMMY_PASSWORD_HASH = generate_password_hash('not-a-real-password')
+LEGAL_DOCUMENT_VERSION = '2026-09-29'
 
 
 def _password_policy_error(password):
@@ -99,6 +101,49 @@ def _user_agent_hash():
     return hashlib.sha256(value.encode('utf-8')).hexdigest() if value else None
 
 
+def _legal_consent_error(data):
+    if data.get('accept_terms') is not True or data.get('accept_privacy') is not True:
+        return 'É necessário aceitar os Termos de Uso e a Política de Privacidade'
+    return None
+
+
+def _record_legal_acceptances(user, site):
+    existing = {
+        item.document_type
+        for item in LegalAcceptance.query.filter_by(
+            user_id=user.id,
+            site_id=site.id,
+            document_version=LEGAL_DOCUMENT_VERSION,
+        ).all()
+    }
+    for document_type in ('terms', 'privacy'):
+        if document_type in existing:
+            continue
+        db.session.add(LegalAcceptance(
+            user_id=user.id,
+            site_id=site.id,
+            document_type=document_type,
+            document_version=LEGAL_DOCUMENT_VERSION,
+            ip_prefix=_client_ip_prefix(),
+            user_agent_hash=_user_agent_hash(),
+        ))
+
+
+def _active_company_membership(user):
+    return CompanyUser.query.filter_by(
+        user_id=user.id,
+        is_active=True,
+        invitation_accepted=True,
+    ).first()
+
+
+def _existing_company_site(company, site):
+    return next(
+        (membership for membership in company.site_memberships if membership.site_id == site.id),
+        None,
+    )
+
+
 def _issue_tokens(user, site, *, company=None, candidate=None, admin=None):
     family_id = str(uuid.uuid4())
     refresh_jti = str(uuid.uuid4())
@@ -161,6 +206,10 @@ def register_company():
         if existing_user:
             return jsonify({'error': 'Email já cadastrado'}), 409
 
+        consent_error = _legal_consent_error(data)
+        if consent_error:
+            return jsonify({'error': consent_error}), 400
+
         tax_id = str(data.get('cnpj') or data.get('tax_id') or '').strip()
         if not tax_id:
             return jsonify({'error': 'Identificação fiscal é obrigatória'}), 400
@@ -209,6 +258,7 @@ def register_company():
             is_active=True,
             invitation_accepted=True,
         ))
+        _record_legal_acceptances(new_user, site)
         db.session.commit()
 
         access_token, refresh_token = _issue_tokens(
@@ -261,24 +311,16 @@ def login_company():
         if not user:
             return jsonify(INVALID_CREDENTIALS), 401
 
-        # Buscar empresa
-        company = Company.query.filter_by(user_id=user.id).first()
+        # CompanyUser ativo e aceito é a única fonte de autoridade empresarial.
+        member = _active_company_membership(user)
+        company = member.company if member else None
 
         if not company:
-            return jsonify({'error': 'Empresa não encontrada'}), 404
+            return jsonify({'error': 'Acesso empresarial inativo ou pendente'}), 403
 
-        company_site = ensure_company_site(company, site)
-        owner = CompanyUser.query.filter_by(company_id=company.id, user_id=user.id).first()
-        if not owner:
-            db.session.add(CompanyUser(
-                company_id=company.id,
-                user_id=user.id,
-                role=CompanyUserRole.OWNER,
-                name=company.company_name,
-                position='Owner',
-                is_active=True,
-                invitation_accepted=True,
-            ))
+        company_site = _existing_company_site(company, site)
+        if not company_site:
+            return jsonify({'error': 'Acesso empresarial inativo ou pendente'}), 403
         db.session.commit()
 
         access_token, refresh_token = _issue_tokens(user, site, company=company)
@@ -292,7 +334,8 @@ def login_company():
                 'company_id': company.id,
                 'company_name': company.company_name,
                 'site_code': site.code,
-                'site_status': company_site.status
+                'site_status': company_site.status,
+                'role': member.role,
             },
             'access_token': access_token,
             'refresh_token': refresh_token
@@ -329,6 +372,10 @@ def register_candidate():
         existing_user = User.query.filter_by(email=data['email']).first()
         if existing_user:
             return jsonify({'error': 'Email já cadastrado'}), 409
+
+        consent_error = _legal_consent_error(data)
+        if consent_error:
+            return jsonify({'error': consent_error}), 400
 
         # Criar usuário
         new_user = User(
@@ -369,6 +416,7 @@ def register_candidate():
         db.session.add(new_candidate)
         db.session.flush()
         candidate_site = ensure_candidate_site(new_candidate, site)
+        _record_legal_acceptances(new_user, site)
         db.session.commit()
 
         access_token, refresh_token = _issue_tokens(
@@ -490,7 +538,12 @@ def refresh():
             db.session.commit()
             return jsonify({'error': 'Sessão inválida ou revogada. Faça login novamente.'}), 401
 
-        company = Company.query.filter_by(user_id=user.id).first() if user.user_type == 'company' else None
+        company_member = _active_company_membership(user) if user.user_type == 'company' else None
+        company = company_member.company if company_member else None
+        if user.user_type == 'company' and company is None:
+            family.revoke()
+            db.session.commit()
+            return jsonify({'error': 'Acesso empresarial inativo ou pendente'}), 403
         candidate = Candidate.query.filter_by(user_id=user.id).first() if user.user_type == 'candidate' else None
         admin = None
         if user.user_type == 'admin':
@@ -566,7 +619,8 @@ def get_current_user():
             'created_at': user.created_at.isoformat()
         }
         if user.user_type == 'company':
-            company = Company.query.filter_by(user_id=user.id).first()
+            company_member = _active_company_membership(user)
+            company = company_member.company if company_member else None
             if company:
                 membership = next(
                     (
@@ -584,7 +638,18 @@ def get_current_user():
                         else company.company_name
                     ),
                     'site_status': membership.status if membership else company.status,
+                    'role': company_member.role,
+                    'permissions': {
+                        'view_jobs': company_member.can_view_jobs(),
+                        'manage_jobs': company_member.can_manage_jobs(),
+                        'view_candidates': company_member.can_view_candidates(),
+                        'manage_candidates': company_member.can_manage_candidates(),
+                        'manage_company': company_member.can_manage_company(),
+                        'manage_users': company_member.can_manage_users(),
+                    },
                 })
+            else:
+                return jsonify({'error': 'Acesso empresarial inativo ou pendente'}), 403
 
         return jsonify(payload), 200
 
@@ -723,14 +788,18 @@ def login_generic():
 
         # Adicionar dados específicos do tipo
         if user.user_type == 'company':
-            company = Company.query.filter_by(user_id=user.id).first()
+            company_member = _active_company_membership(user)
+            company = company_member.company if company_member else None
             if company:
-                company_site = ensure_company_site(company, site)
+                company_site = _existing_company_site(company, site)
+                if not company_site:
+                    return jsonify({'error': 'Acesso empresarial inativo ou pendente'}), 403
                 response_data['company_id'] = company.id
                 response_data['name'] = company.company_name
                 response_data['site_status'] = company_site.status
+                response_data['role'] = company_member.role
             else:
-                return jsonify({'error': 'Perfil de empresa não encontrado'}), 404
+                return jsonify({'error': 'Acesso empresarial inativo ou pendente'}), 403
 
         elif user.user_type == 'candidate':
             candidate = Candidate.query.filter_by(user_id=user.id).first()

@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import {
   ArrowRight,
@@ -25,6 +26,10 @@ import {
 
 import { HeroSearch } from '@/components/HeroSearch'
 import { getAreas, getDashboardStats, getJobs } from '@/lib/api'
+import { requireCanonicalOrigin } from '@/lib/site'
+import { getSiteContext } from '@/lib/site-resolver.server'
+
+export const metadata: Metadata = { alternates: { canonical: '/' } }
 
 const iconMap: Record<string, typeof Code2> = {
   Code2,
@@ -87,9 +92,19 @@ export default async function HomePage() {
   try { stats = await getDashboardStats() } catch (error) { console.error('Failed to fetch dashboard stats:', error) }
 
   const featuredJobs = jobs.slice(0, 2)
+  const { site } = await getSiteContext()
+  const origin = requireCanonicalOrigin(site)
+  const structuredData = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      { '@type': 'Organization', '@id': `${origin}/#organization`, name: 'Portal ERP Group', url: 'https://portalerp.com', logo: `${origin}/icon.png` },
+      { '@type': 'WebSite', '@id': `${origin}/#website`, name: 'Jobs by Portal ERP', url: origin, publisher: { '@id': `${origin}/#organization` }, inLanguage: site.locale, potentialAction: { '@type': 'SearchAction', target: `${origin}/vagas?q={search_term_string}`, 'query-input': 'required name=search_term_string' } },
+    ],
+  }
 
   return (
     <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, '\\u003c') }} />
       <section className="overflow-hidden bg-[linear-gradient(135deg,#eff5f6_0%,#ffffff_52%,#fff7ec_100%)] py-16 sm:py-20 lg:py-24">
         <div className="container mx-auto grid items-center gap-12 px-6 lg:grid-cols-[1.08fr_0.92fr]">
           <div>

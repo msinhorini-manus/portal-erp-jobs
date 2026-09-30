@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from html import escape
 import smtplib
 import ssl
 from email.message import EmailMessage
@@ -44,6 +45,31 @@ def send_password_reset_email(*, recipient: str, reset_url: str, site_name: str)
         "<p>O link expira em 1 hora. Se você não solicitou a alteração, ignore esta mensagem.</p>"
     )
 
+    send_transactional_email(recipient=recipient, subject=subject, text=text, html=html)
+
+
+def send_company_invitation_email(*, recipient: str, invitation_url: str, company_name: str, role: str, site_name: str) -> None:
+    """Send a company-team invitation without embedding credentials."""
+    subject = f"Convite para a equipe {company_name} — {site_name}"
+    text = (
+        f"Você foi convidado para participar da equipe {company_name} no {site_name} "
+        f"com o papel {role}.\n\nAceite o convite em até 7 dias:\n{invitation_url}\n\n"
+        "Se você não esperava este convite, ignore esta mensagem."
+    )
+    html = (
+        f"<p>Você foi convidado para participar da equipe <strong>{escape(company_name)}</strong> "
+        f"no {escape(site_name)} com o papel <strong>{escape(role)}</strong>.</p>"
+        f'<p><a href="{escape(invitation_url, quote=True)}">Aceitar convite</a></p>'
+        "<p>O link expira em 7 dias. Se você não esperava este convite, ignore esta mensagem.</p>"
+    )
+    send_transactional_email(recipient=recipient, subject=subject, text=text, html=html)
+
+
+def send_transactional_email(*, recipient: str, subject: str, text: str, html: str) -> None:
+    """Deliver a transactional message through the configured provider."""
+    provider = configured_email_provider()
+    if provider is None:
+        raise EmailDeliveryUnavailable("Provedor de e-mail não configurado")
     if provider == "smtp":
         _send_smtp(recipient=recipient, subject=subject, text=text, html=html)
     else:

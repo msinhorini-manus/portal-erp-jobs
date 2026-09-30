@@ -3,6 +3,8 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getCompanyById } from '@/lib/api'
 import { Building2, MapPin, Users, Globe, Mail, Phone, ArrowLeft, Briefcase } from 'lucide-react'
+import { getSiteContext } from '@/lib/site-resolver.server'
+import { requireCanonicalOrigin } from '@/lib/site'
 
 type Props = {
   params: Promise<{ id: string }>
@@ -11,11 +13,20 @@ type Props = {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   try {
     const { id } = await params
-    const company = await getCompanyById(id)
+    const [company, { site }] = await Promise.all([getCompanyById(id), getSiteContext()])
     const companyName = company.company_name || company.trade_name || company.name || 'Empresa'
+    const canonical = `${requireCanonicalOrigin(site)}/empresas/${id}`
     return {
       title: `${companyName} - Empresa`,
       description: company.description?.substring(0, 160) || `Perfil da empresa ${companyName} no Jobs by Portal ERP`,
+      alternates: { canonical },
+      openGraph: {
+        title: `${companyName} - Empresa`,
+        description: company.description?.substring(0, 160) || `Perfil da empresa ${companyName} no Jobs by Portal ERP`,
+        type: 'website',
+        url: canonical,
+        ...(company.logo_url ? { images: [{ url: company.logo_url }] } : {}),
+      },
     }
   } catch {
     return { title: 'Empresa não encontrada' }
@@ -24,9 +35,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function CompanyDetailPage({ params }: Props) {
   let company: any
+  let origin = ''
 
   try {
     const { id } = await params
+    const context = await getSiteContext()
+    origin = requireCanonicalOrigin(context.site)
     company = await getCompanyById(id)
   } catch (e) {
     notFound()
@@ -35,9 +49,21 @@ export default async function CompanyDetailPage({ params }: Props) {
   if (!company) notFound()
 
   const companyName = company.company_name || company.trade_name || company.name || 'Empresa'
+  const organization = {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    '@id': `${origin}/empresas/${company.id}#organization`,
+    name: companyName,
+    url: `${origin}/empresas/${company.id}`,
+    ...(company.website ? { sameAs: company.website } : {}),
+    ...(company.logo_url ? { logo: company.logo_url } : {}),
+    ...(company.description ? { description: company.description } : {}),
+    ...(company.city || company.state ? { address: { '@type': 'PostalAddress', addressLocality: company.city, addressRegion: company.state, addressCountry: company.country || 'BR' } } : {}),
+  }
 
   return (
     <div className="bg-gray-50 min-h-screen">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(organization).replace(/</g, '\\u003c') }} />
       {/* Header */}
       <section className="bg-portal-dark text-white py-8">
         <div className="container mx-auto px-6">

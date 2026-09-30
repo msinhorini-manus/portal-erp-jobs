@@ -10,6 +10,7 @@ const value = (input: string | string[] | undefined) => (Array.isArray(input) ? 
 export const metadata: Metadata = {
   title: 'Empresas',
   description: 'Conheça e pesquise empresas que estão contratando no setor de software e ERP.',
+  alternates: { canonical: '/empresas' },
 }
 
 export default async function EmpresasPage({ searchParams }: { searchParams: Params }) {

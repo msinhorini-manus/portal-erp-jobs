@@ -39,8 +39,11 @@ As revisões seguintes são cumulativas:
 | `20260922_04` | Constraints compostas de site, estados de candidatura e histórico auditável |
 | `20260922_05` | Famílias de sessão JWT rotativas e `password_changed_at` para revogação global |
 | `20260922_06` | Lifecycle explícito de vagas com `status`, `is_featured`, constraints e backfill |
+| `20260929_07` | Convites e auditoria de equipe, aceites legais versionados e backfill de owners legados |
 
 Antes de reiniciar a API após `20260922_06`, confirme: `alembic current`, `integrity_check=ok`, `foreign_key_check` vazio, existência de `auth_session_families`, `users.password_changed_at`, `jobs.status` e `jobs.is_featured`, todas as empresas/candidatos legados com presença BR, todas as vagas/candidaturas com `site_id` BR e nenhuma inconsistência entre `jobs.status` e `jobs.is_active`. O código da Onda 4 não deve iniciar sobre uma base anterior a `20260922_06`.
+
+Para a Onda 8, `alembic current` deve retornar `20260929_07`. Confirme as tabelas `company_invitations`, `company_audit_events` e `legal_acceptances`, além de zero empresas sem vínculo owner ativo e aceito. O smoke deve cobrir convite, aceite, alteração de papel, bloqueio de `viewer`, revogação de sessão e preservação do último owner. Verifique também `/sobre`, `/contato`, `/termos`, `/privacidade`, canonicals, sitemap completo e JSON-LD das páginas públicas.
 
 O Next deve iniciar com `NEXT_INTERNAL_API_ORIGIN=http://127.0.0.1:5000`. Esse endereço é somente server-side. Chamadas internas transportam o domínio regional em `X-Regional-Host`; o Flask aceita esse cabeçalho apenas por loopback, e o Nginx remove qualquer valor enviado por clientes públicos.
 
@@ -57,6 +60,8 @@ Recuperação de senha exige `EMAIL_PROVIDER=smtp` com `SMTP_*` ou `EMAIL_PROVID
 O rollback restaura o código da fotografia anterior, mantém uma cópia do banco pós-incidente e reinicia os processos. A restauração do banco só deve ocorrer quando houver corrupção ou migração de dados incompatível; mudanças apenas de código devem preservar os dados mais recentes.
 
 Para rollback das migrações regionais, de autenticação ou de lifecycle de vagas, pare API e Next, preserve a base pós-incidente e restaure o snapshot SQLite feito imediatamente antes do upgrade. Os ciclos Alembic `20260922_05 → 20260922_04 → 20260922_05` e `20260922_06 → 20260922_05 → 20260922_06` foram validados em cópia da base real, mas não substituem o restore transacional em produção. Reverter apenas o código após a Onda 4 é incompatível com os contratos de lifecycle; prefira restaurar código e banco juntos.
+
+Após a revisão `20260929_07`, não use downgrade destrutivo se já houver convites, eventos ou aceites reais. Restaure em conjunto o snapshot SQLite pré-release e os diretórios de código correspondentes.
 
 ## Observação da Onda 0
 

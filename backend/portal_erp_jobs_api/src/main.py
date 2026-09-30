@@ -31,6 +31,9 @@ from src.models.project import Project
 from src.models.language import Language
 from src.models.site import Site, SiteDomain, SiteLocale
 from src.models.session_family import SessionFamily
+from src.models.company_user import CompanyUser
+from src.models.company_team import CompanyInvitation, CompanyAuditEvent
+from src.models.legal_acceptance import LegalAcceptance
 
 # Import routes
 from src.routes.auth import auth_bp
@@ -43,6 +46,7 @@ from src.routes.admin import admin_bp
 from src.routes.stats import stats_bp
 from src.routes.config import config_bp
 from src.routes.sites import sites_bp
+from src.routes.company_team import company_team_bp
 from src.regional_context import init_regional_context
 
 # Initialize Flask app
@@ -82,6 +86,19 @@ def is_token_revoked(_jwt_header, jwt_payload):
     user = db.session.get(User, user_id)
     if not user or not user.is_active:
         return True
+    if jwt_payload.get("user_type") == "company":
+        try:
+            company_id = int(jwt_payload.get("company_id"))
+        except (TypeError, ValueError):
+            return True
+        membership = CompanyUser.query.filter_by(
+            user_id=user_id,
+            company_id=company_id,
+            is_active=True,
+            invitation_accepted=True,
+        ).first()
+        if membership is None:
+            return True
     if user.password_changed_at:
         changed_at = user.password_changed_at
         if changed_at.tzinfo is None:
@@ -115,6 +132,7 @@ app.register_blueprint(admin_bp)
 app.register_blueprint(stats_bp)
 app.register_blueprint(config_bp)
 app.register_blueprint(sites_bp)
+app.register_blueprint(company_team_bp)
 
 # API root endpoint
 @app.route('/api')

@@ -6,10 +6,20 @@ export type CompanySession = {
   company_name?: string
   site_code: string
   site_status?: CompanyStatus
+  role?: CompanyRole
+  permissions?: CompanyPermissions
 }
 
 export type CompanyStatus = 'pending' | 'approved' | 'rejected' | 'suspended'
 export type CompanyRole = 'owner' | 'admin' | 'hr' | 'viewer'
+export type CompanyPermissions = {
+  view_jobs: boolean
+  manage_jobs: boolean
+  view_candidates: boolean
+  manage_candidates: boolean
+  manage_company: boolean
+  manage_users: boolean
+}
 
 export type CompanyProfile = {
   id: number
