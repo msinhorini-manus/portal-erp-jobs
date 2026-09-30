@@ -107,4 +107,27 @@ Os módulos backend usam `DATABASE_URL` temporário no import. Por isso, `unitte
 
 O deploy deve seguir `ops/DEPLOYMENT.md`, com backup transacional do banco e do código, preflight de administradores, migration antes de iniciar a nova API, smoke anônimo e autenticado e rollback conjunto de código/schema se qualquer gate falhar.
 
-**Estado atual:** implementação e validação local concluídas. Deploy produtivo depende de restabelecer o acesso SSH privado ao DigitalOcean; nenhuma alteração produtiva foi feita nesta onda até esse acesso existir.
+## Validação de produção
+
+A release de código `e96063dd838b486da602289c161b5760717275ad` foi implantada no DigitalOcean em **30/09/2026 às 11:39 UTC**. O backup transacional aprovado está em `/var/backups/portal-erp-jobs/admin0-20260930T113818Z`.
+
+As duas primeiras execuções foram interrompidas por gates do próprio script após encontrarem paths incorretos no smoke (`/api/sites` e `/api/auth/admin/login`). Em ambos os casos, o rollback automático restaurou código, banco em `20260929_07`, frontend e processos. A terceira execução, com `/api/admin/sites` e `/api/auth/login/admin`, concluiu com o marcador `admin0_deploy_ok`.
+
+| Gate produtivo | Resultado |
+|---|---|
+| Alembic | `20260930_08 (head)`, sem drift |
+| SQLite | `integrity_check=ok`, zero violações de FK |
+| Platform admin | 1 ativo; 1 atribuição regional BR |
+| Admin sem site ativo | 0 |
+| Auditoria append-only | 2 triggers presentes |
+| PM2 | API e Next online, zero restarts inesperados |
+| Paridade de runtime | 14 arquivos alterados com hash idêntico ao commit implantado |
+| HTTPS público | home, vagas, empresas, páginas legais, sitemap, robots e Admin = 200 |
+| Rotas legadas | `/api/auth/admin/list` e `/api/auth/admin/register` = 404 |
+| Proteção anônima | auditoria e mutação de sites = 401 |
+| Setup | `/api/admin/setup` = 404 |
+| Logs novos | zero traceback, erro crítico ou resposta 5xx |
+
+O E2E autenticado usou uma conta sintética temporária `@example.invalid`, percorreu login, dashboard, empresas, candidatos e vagas e validou as APIs de auditoria, administradores e sites. Todas as sete verificações passaram. A conta, sua atribuição e sua sessão foram removidas; as contagens sintéticas finais são zero e não houve evento imutável gerado pela fixture.
+
+**Estado atual:** Onda Admin 0 implantada e validada em produção. O PR só deve ser mesclado e tagueado após o registro destas evidências.
