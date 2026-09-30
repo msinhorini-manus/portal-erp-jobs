@@ -10,9 +10,9 @@ Adicionar ao topo do Portal ERP Jobs uma testeira institucional inspirada na arq
 
 - chamada principal: **ECOSSISTEMA PORTAL ERP**;
 - links institucionais: **Inteligência**, **Programa de Membros** e **Portal ERP Pro**;
-- contexto visível: **Brasil · PT**;
 - fundo claro e tipografia compacta acima da navegação principal escura;
-- versão responsiva: links institucionais são ocultados em telas menores, preservando a chamada e o contexto regional.
+- versão responsiva: links institucionais são ocultados em telas menores, preservando somente a chamada;
+- país e idioma permanecem exclusivamente no seletor oficial da navegação principal.
 
 ## Superfícies
 
