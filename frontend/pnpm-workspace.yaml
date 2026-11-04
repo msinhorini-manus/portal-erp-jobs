@@ -8,3 +8,6 @@ overrides:
   'picomatch@4': 4.0.7
   postcss: 8.5.28
   rollup: 4.63.5
+  source-map-js: 1.2.2
+  dompurify: 3.4.17
+  'vite@6': 6.4.4

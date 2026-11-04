@@ -1,557 +1,129 @@
-import { useState, useEffect } from 'react'
-import { Building2, Search, Eye, Mail, Phone, MapPin, ToggleLeft, ToggleRight, X, Calendar, Briefcase, Crown, Edit2, Save, Trash2 } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { Building2, Crown, Edit2, KeyRound, Save, ShieldCheck, X } from 'lucide-react'
 import toast, { Toaster } from 'react-hot-toast'
 
+const labels = { pending: 'Aguardando aprovação', approved: 'Aprovada', rejected: 'Rejeitada', suspended: 'Suspensa' }
+const buttonClass = 'rounded-lg border px-3 py-2 text-sm font-medium hover:bg-gray-50 disabled:opacity-50'
+const inputClass = 'mt-1 w-full rounded-lg border px-3 py-2'
+
+async function request(path, options = {}) {
+  const response = await fetch(`/api/admin${path}`, {
+    ...options, cache: 'no-store',
+    headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}`, 'Content-Type': 'application/json' },
+  })
+  const payload = await response.json()
+  if (!response.ok) throw new Error(payload.error || 'Não foi possível concluir a operação.')
+  return payload
+}
+
 export default function AdminCompaniesContent() {
-  const [companies, setCompanies] = useState([])
+  const [params] = useSearchParams()
+  const [search, setSearch] = useState(params.get('search') || '')
+  const [status, setStatus] = useState('')
+  const [page, setPage] = useState(1)
+  const [result, setResult] = useState({ companies: [], total: 0, pages: 1 })
   const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState('')
-  const [selectedCompany, setSelectedCompany] = useState(null)
-  const [showModal, setShowModal] = useState(false)
+  const [capabilities, setCapabilities] = useState({ is_platform_admin: false, can_approve_companies: false })
+  const [selected, setSelected] = useState(null)
   const [editMode, setEditMode] = useState(false)
   const [editData, setEditData] = useState({})
+  const [decision, setDecision] = useState(null)
+  const [reason, setReason] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const load = useCallback(async (signal) => {
+    setLoading(true)
+    try {
+      const query = new URLSearchParams({ search, status, page: String(page), per_page: '25' })
+      setResult(await request(`/companies?${query}`, { signal }))
+    } catch (error) { if (error.name !== 'AbortError') toast.error(error.message) }
+    finally { if (!signal?.aborted) setLoading(false) }
+  }, [search, status, page])
 
   useEffect(() => {
-    loadCompanies()
+    const controller = new AbortController()
+    const timer = setTimeout(() => load(controller.signal), 250)
+    return () => { clearTimeout(timer); controller.abort() }
+  }, [load])
+  useEffect(() => {
+    const controller = new AbortController()
+    request('/access-capabilities', { signal: controller.signal }).then(setCapabilities).catch(() => {})
+    return () => controller.abort()
   }, [])
 
-  const loadCompanies = async () => {
+  async function view(company) {
     try {
-      const token = localStorage.getItem('authToken')
-      const response = await fetch('/api/admin/companies', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      })
-      if (response.ok) {
-        const data = await response.json()
-        setCompanies(data.companies || [])
-      } else {
-        toast.error('Erro ao carregar empresas')
-      }
-    } catch (error) {
-      console.error('Erro:', error)
-      toast.error('Erro ao conectar com o servidor')
-    } finally {
-      setLoading(false)
-    }
+      const data = await request(`/companies/${company.id}`)
+      setSelected({ ...data.company, jobs: data.jobs || [], stats: data.stats || {} })
+      setEditData({ name: data.company.name || '', phone: data.company.phone || '', city: data.company.city || '', state: data.company.state || '', is_member: Boolean(data.company.is_member), max_active_jobs: data.company.max_active_jobs ?? 3 })
+      setEditMode(false)
+    } catch (error) { toast.error(error.message) }
   }
 
-  const deleteCompany = async (companyId) => {
-    if (!confirm('Tem certeza que deseja suspender esta empresa neste site? As vagas ativas também serão desativadas.')) {
-      return
-    }
-
+  async function save(event) {
+    event.preventDefault()
+    setBusy(true)
     try {
-      const token = localStorage.getItem('authToken')
-      const response = await fetch(`/api/admin/companies/${companyId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      })
-
-      if (response.ok) {
-        toast.success('Empresa suspensa neste site')
-        loadCompanies()
-      } else {
-        const error = await response.json()
-        toast.error(error.error || 'Erro ao suspender empresa')
-      }
-    } catch (error) {
-      console.error('Erro:', error)
-      toast.error('Erro ao conectar com o servidor')
-    }
+      await request(`/companies/${selected.id}`, { method: 'PUT', body: JSON.stringify(editData) })
+      toast.success('Dados da empresa atualizados. Aprovação não foi alterada.')
+      setSelected(null)
+      await load()
+    } catch (error) { toast.error(error.message) }
+    finally { setBusy(false) }
   }
 
-  const toggleCompanyStatus = async (companyId, currentStatus) => {
+  async function decide(event) {
+    event.preventDefault()
+    setBusy(true)
     try {
-      const token = localStorage.getItem('authToken')
-      const response = await fetch(`/api/admin/companies/${companyId}/toggle-active`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+      const { company, kind } = decision
+      const path = kind === 'suspend' ? 'toggle-active' : kind
+      await request(`/companies/${company.id}/${path}`, {
+        method: kind === 'suspend' ? 'PATCH' : 'POST',
+        body: JSON.stringify(kind === 'suspend' ? { is_active: false } : { reason: reason.trim() }),
       })
-
-      if (response.ok) {
-        toast.success(currentStatus ? 'Empresa desativada' : 'Empresa ativada')
-        loadCompanies()
-      } else {
-        toast.error('Erro ao atualizar status')
-      }
-    } catch (error) {
-      console.error('Erro:', error)
-      toast.error('Erro ao conectar com o servidor')
-    }
-  }
-
-  const toggleMemberStatus = async (companyId, currentStatus) => {
-    try {
-      const token = localStorage.getItem('authToken')
-      const response = await fetch(`/api/admin/companies/${companyId}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ is_member: !currentStatus })
-      })
-
-      if (response.ok) {
-        toast.success(currentStatus ? 'Status de membro removido' : 'Empresa marcada como membro')
-        loadCompanies()
-      } else {
-        toast.error('Erro ao atualizar status de membro')
-      }
-    } catch (error) {
-      console.error('Erro:', error)
-      toast.error('Erro ao conectar com o servidor')
-    }
-  }
-
-  const viewCompanyDetails = async (companyId) => {
-    try {
-      const token = localStorage.getItem('authToken')
-      const response = await fetch(`/api/admin/companies/${companyId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      })
-      if (response.ok) {
-        const data = await response.json()
-        const company = data.company || data
-        setSelectedCompany({
-          ...company,
-          jobs: data.jobs || [],
-          stats: data.stats || {}
-        })
-        setEditData({
-          name: company.name || '',
-          phone: company.phone || '',
-          city: company.city || '',
-          state: company.state || '',
-          is_member: company.is_member || false,
-          max_active_jobs: company.max_active_jobs || 3
-        })
-        setShowModal(true)
-        setEditMode(false)
-      }
-    } catch (error) {
-      console.error('Erro:', error)
-      toast.error('Erro ao carregar detalhes')
-    }
-  }
-
-  const saveCompanySettings = async () => {
-    try {
-      const token = localStorage.getItem('authToken')
-      const response = await fetch(`/api/admin/companies/${selectedCompany.id}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(editData)
-      })
-
-      if (response.ok) {
-        toast.success('Empresa atualizada com sucesso')
-        setEditMode(false)
-        loadCompanies()
-        setSelectedCompany({
-          ...selectedCompany,
-          name: editData.name,
-          ...editData
-        })
-      } else {
-        toast.error('Erro ao salvar alterações')
-      }
-    } catch (error) {
-      console.error('Erro:', error)
-      toast.error('Erro ao conectar com o servidor')
-    }
-  }
-
-  const filteredCompanies = companies.filter(company =>
-    company.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    company.email?.toLowerCase().includes(searchTerm.toLowerCase())
-  )
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto mb-4"></div>
-          <p className="text-gray-600">Carregando empresas...</p>
-        </div>
-      </div>
-    )
+      toast.success(kind === 'approve' ? 'Empresa aprovada pelo administrador. Vagas não foram republicadas.' : kind === 'reject' ? 'Empresa rejeitada.' : 'Empresa suspensa neste site.')
+      setDecision(null)
+      setReason('')
+      await load()
+    } catch (error) { toast.error(error.message) }
+    finally { setBusy(false) }
   }
 
   return (
-    <>
+    <section className="space-y-6">
       <Toaster position="top-right" />
-
-      {/* Header */}
-      <div className="mb-8 flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Gestão de Empresas</h1>
-          <p className="text-gray-600">{companies.length} empresas cadastradas</p>
-        </div>
-      </div>
-
-      {/* Search */}
-      <div className="bg-white rounded-lg shadow-md p-4 mb-6">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-          <input
-            type="text"
-            placeholder="Buscar por nome ou email..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-          />
-        </div>
-      </div>
-
-      {/* Companies Table */}
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">Empresa</th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">Contato</th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">Localização</th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">Vagas</th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">Membro</th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">Status</th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">Ações</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {filteredCompanies.length === 0 ? (
-              <tr>
-                <td colSpan="7" className="px-6 py-12 text-center text-gray-500">
-                  <Building2 className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                  <p>Nenhuma empresa encontrada</p>
-                </td>
-              </tr>
-            ) : (
-              filteredCompanies.map((company) => (
-                <tr key={company.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center relative">
-                        <span className="text-blue-600 font-semibold">
-                          {company.name?.charAt(0) || 'E'}
-                        </span>
-                        {company.is_member && (
-                          <Crown className="w-4 h-4 text-yellow-500 absolute -top-1 -right-1" />
-                        )}
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900">{company.name}</p>
-                        <p className="text-sm text-gray-500">ID: {company.id}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <Mail className="w-4 h-4" />
-                        {company.email}
-                      </div>
-                      {company.phone && (
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <Phone className="w-4 h-4" />
-                          {company.phone}
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    {company.city && company.state ? (
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <MapPin className="w-4 h-4" />
-                        {company.city}, {company.state}
-                      </div>
-                    ) : (
-                      <span className="text-gray-400">-</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col gap-1">
-                      <span className="px-3 py-1 bg-orange-100 text-orange-800 rounded-full text-sm font-medium inline-block w-fit">
-                        {company.active_jobs || 0} / {company.max_active_jobs || 3}
-                      </span>
-                      <span className="text-xs text-gray-500">
-                        {company.jobs_count || 0} total
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <button
-                      onClick={() => toggleMemberStatus(company.id, company.is_member)}
-                      className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-                        company.is_member
-                          ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      }`}
-                    >
-                      <Crown className="w-4 h-4" />
-                      {company.is_member ? 'Membro' : 'Não'}
-                    </button>
-                  </td>
-                  <td className="px-6 py-4">
-                    <button
-                      onClick={() => toggleCompanyStatus(company.id, company.is_active)}
-                      className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-                        company.is_active
-                          ? 'bg-green-100 text-green-800 hover:bg-green-200'
-                          : 'bg-red-100 text-red-800 hover:bg-red-200'
-                      }`}
-                    >
-                      {company.is_active ? (
-                        <>
-                          <ToggleRight className="w-4 h-4" />
-                          Ativa
-                        </>
-                      ) : (
-                        <>
-                          <ToggleLeft className="w-4 h-4" />
-                          Inativa
-                        </>
-                      )}
-                    </button>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => viewCompanyDetails(company.id)}
-                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        title="Ver/Editar"
-                      >
-                        <Edit2 className="w-5 h-5" />
-                      </button>
-                      <button
-                        onClick={() => deleteCompany(company.id)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Suspender neste site"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Modal de Detalhes/Editar */}
-      {showModal && selectedCompany && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b flex justify-between items-center">
-              <h2 className="text-xl font-bold text-gray-900">
-                {editMode ? 'Editar Empresa' : 'Detalhes da Empresa'}
-              </h2>
-              <button
-                onClick={() => setShowModal(false)}
-                className="p-2 hover:bg-gray-100 rounded-lg"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-6 space-y-6">
-              {editMode ? (
-                /* Modo de Edição */
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Nome da Empresa</label>
-                      <input
-                        type="text"
-                        value={editData.name}
-                        onChange={(e) => setEditData({...editData, name: e.target.value})}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Telefone</label>
-                      <input
-                        type="text"
-                        value={editData.phone}
-                        onChange={(e) => setEditData({...editData, phone: e.target.value})}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Cidade</label>
-                      <input
-                        type="text"
-                        value={editData.city}
-                        onChange={(e) => setEditData({...editData, city: e.target.value})}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Estado</label>
-                      <select
-                        value={editData.state}
-                        onChange={(e) => setEditData({...editData, state: e.target.value})}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                      >
-                        <option value="">Selecione...</option>
-                        <option value="AC">Acre</option>
-                        <option value="AL">Alagoas</option>
-                        <option value="AP">Amapá</option>
-                        <option value="AM">Amazonas</option>
-                        <option value="BA">Bahia</option>
-                        <option value="CE">Ceará</option>
-                        <option value="DF">Distrito Federal</option>
-                        <option value="ES">Espírito Santo</option>
-                        <option value="GO">Goiás</option>
-                        <option value="MA">Maranhão</option>
-                        <option value="MT">Mato Grosso</option>
-                        <option value="MS">Mato Grosso do Sul</option>
-                        <option value="MG">Minas Gerais</option>
-                        <option value="PA">Pará</option>
-                        <option value="PB">Paraíba</option>
-                        <option value="PR">Paraná</option>
-                        <option value="PE">Pernambuco</option>
-                        <option value="PI">Piauí</option>
-                        <option value="RJ">Rio de Janeiro</option>
-                        <option value="RN">Rio Grande do Norte</option>
-                        <option value="RS">Rio Grande do Sul</option>
-                        <option value="RO">Rondônia</option>
-                        <option value="RR">Roraima</option>
-                        <option value="SC">Santa Catarina</option>
-                        <option value="SP">São Paulo</option>
-                        <option value="SE">Sergipe</option>
-                        <option value="TO">Tocantins</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Limite de Vagas</label>
-                      <input
-                        type="number"
-                        min="1"
-                        max="100"
-                        value={editData.max_active_jobs}
-                        onChange={(e) => setEditData({...editData, max_active_jobs: parseInt(e.target.value) || 3})}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <label className="flex items-center gap-3 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={editData.is_member}
-                          onChange={(e) => setEditData({...editData, is_member: e.target.checked})}
-                          className="w-5 h-5 rounded border-gray-300 text-yellow-500 focus:ring-yellow-500"
-                        />
-                        <span className="text-gray-700 flex items-center gap-2">
-                          <Crown className="w-4 h-4 text-yellow-500" />
-                          Empresa Membro do Portal ERP
-                        </span>
-                      </label>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                /* Modo de Visualização */
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Nome</label>
-                    <p className="text-gray-900">{selectedCompany.name}</p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Email</label>
-                    <p className="text-gray-900">{selectedCompany.email}</p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Telefone</label>
-                    <p className="text-gray-900">{selectedCompany.phone || '-'}</p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">CNPJ</label>
-                    <p className="text-gray-900">{selectedCompany.cnpj || '-'}</p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Localização</label>
-                    <p className="text-gray-900">
-                      {selectedCompany.city && selectedCompany.state
-                        ? `${selectedCompany.city}, ${selectedCompany.state}`
-                        : '-'}
-                    </p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Status</label>
-                    <p className={`font-medium ${selectedCompany.is_active ? 'text-green-600' : 'text-red-600'}`}>
-                      {selectedCompany.is_active ? 'Ativa' : 'Inativa'}
-                    </p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Total de Vagas</label>
-                    <p className="text-gray-900">{selectedCompany.jobs_count || 0}</p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Limite de Vagas</label>
-                    <p className="text-gray-900">{selectedCompany.max_active_jobs || 3}</p>
-                  </div>
-                  <div className="col-span-2">
-                    <label className="text-sm font-medium text-gray-500">Membro Portal ERP</label>
-                    <p className={`flex items-center gap-2 ${selectedCompany.is_member ? 'text-yellow-600' : 'text-gray-500'}`}>
-                      <Crown className="w-4 h-4" />
-                      {selectedCompany.is_member ? 'Sim, é membro' : 'Não é membro'}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* Botões de Ação */}
-              <div className="flex justify-end gap-3 pt-4 border-t">
-                {editMode ? (
-                  <>
-                    <button
-                      onClick={() => setEditMode(false)}
-                      className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      onClick={saveCompanySettings}
-                      className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                    >
-                      <Save className="w-4 h-4" />
-                      Salvar
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button
-                      onClick={() => setShowModal(false)}
-                      className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                    >
-                      Fechar
-                    </button>
-                    <button
-                      onClick={() => setEditMode(true)}
-                      className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                      Editar
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
+      <div><h1 className="text-3xl font-bold text-gray-900">Gestão de Empresas</h1><p className="mt-2 text-gray-600">{result.total} empresas cadastradas neste site.</p></div>
+      <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><strong>Aprovação administrativa obrigatória.</strong> Toda nova empresa fica aguardando aprovação. Somente após liberação do administrador poderá publicar vagas e consultar candidatos. Recuperar senha, ativar conta ou marcar como membro não aprova a empresa.</div>
+      <div className="flex flex-wrap gap-3 rounded-lg bg-white p-4 shadow-sm"><input aria-label="Buscar empresas" placeholder="Buscar por nome, e-mail ou identificação fiscal" className="min-w-60 flex-1 rounded-lg border px-3 py-2" value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} /><select aria-label="Status de aprovação" className="rounded-lg border px-3 py-2" value={status} onChange={e => { setStatus(e.target.value); setPage(1) }}><option value="">Todos os status</option>{Object.entries(labels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
+      <div className="overflow-x-auto rounded-lg bg-white shadow-sm"><table className="w-full text-left text-sm"><thead className="bg-gray-50 text-gray-600"><tr><th className="p-4">Empresa / contato</th><th className="p-4">Vagas / plano</th><th className="p-4">Aprovação</th><th className="p-4">Conta do responsável</th><th className="p-4">Ações</th></tr></thead><tbody>
+        {result.companies.map(company => <tr key={company.id} className="border-t align-top">
+          <td className="p-4"><p className="flex items-center gap-2 font-semibold"><Building2 size={18} />{company.name}</p><p>{company.email}</p><p className="text-gray-500">{[company.city, company.state].filter(Boolean).join(' / ') || 'Localização não informada'}</p></td>
+          <td className="p-4"><p>{company.active_jobs || 0} / {company.max_active_jobs ?? 3} vagas ativas</p><p className="text-gray-500">{company.jobs_count || 0} vagas no histórico</p><p className="flex items-center gap-1"><Crown size={14} />{company.is_member ? 'Membro Portal ERP' : 'Não membro'}</p></td>
+          <td className="p-4"><span className={`rounded-full px-3 py-1 ${company.site_status === 'approved' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-900'}`}>{labels[company.site_status] || 'Não informado'}</span></td>
+          <td className="p-4">{company.global_active ? 'Ativa' : <span className="font-semibold text-red-700">Conta global desativada</span>}</td>
+          <td className="space-y-2 p-4"><button className={`${buttonClass} flex items-center gap-2`} onClick={() => view(company)}><Edit2 size={16} />Ver / editar</button>
+            {company.site_status !== 'approved' && capabilities.can_approve_companies && <button className="flex items-center gap-2 rounded-lg bg-green-700 px-3 py-2 font-semibold text-white" onClick={() => { setDecision({ company, kind: 'approve' }); setReason('') }}><ShieldCheck size={16} />Aprovar e liberar</button>}
+            {company.site_status === 'approved' && <button className={buttonClass} onClick={() => { setDecision({ company, kind: 'suspend' }); setReason('') }}>Suspender neste site</button>}
+            {company.site_status !== 'rejected' && capabilities.can_approve_companies && <button className={buttonClass} onClick={() => { setDecision({ company, kind: 'reject' }); setReason('') }}>Rejeitar cadastro</button>}
+            {capabilities.is_platform_admin && <Link className="flex items-center gap-2 text-blue-700 underline" to={`/admin/usuarios?search=${encodeURIComponent(company.name)}`}><KeyRound size={16} />Usuários / senhas</Link>}
+          </td>
+        </tr>)}
+        {!result.companies.length && <tr><td colSpan={5} className="p-8 text-center text-gray-500">{loading ? 'Carregando empresas...' : 'Nenhuma empresa encontrada.'}</td></tr>}
+      </tbody></table></div>
+      <div className="flex items-center justify-between text-sm"><span>Página {page} de {Math.max(1, result.pages)}</span><div className="flex gap-2"><button className={buttonClass} disabled={page <= 1 || loading} onClick={() => setPage(page - 1)}>Anterior</button><button className={buttonClass} disabled={page >= result.pages || loading} onClick={() => setPage(page + 1)}>Próxima</button></div></div>
+      {decision && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"><form onSubmit={decide} role="dialog" aria-modal="true" aria-labelledby="company-decision-title" className="w-full max-w-lg space-y-4 rounded-xl bg-white p-6">
+        <h2 id="company-decision-title" className="text-xl font-semibold">{decision.kind === 'approve' ? 'Confirmar aprovação da empresa' : decision.kind === 'reject' ? 'Rejeitar empresa' : 'Suspender empresa'}</h2><p><strong>{decision.company.name}</strong></p>
+        <p className="text-sm">{decision.kind === 'approve' ? 'Você está liberando esta empresa neste site. A decisão será auditada. Contas desativadas globalmente continuam bloqueadas e vagas antigas não serão republicadas.' : 'A empresa não poderá publicar vagas nem consultar candidatos. As vagas ativas deste site serão desativadas.'}</p>
+        {decision.kind === 'reject' && <label className="block text-sm font-medium">Motivo da rejeição<textarea className={inputClass} required maxLength={500} value={reason} onChange={e => setReason(e.target.value)} /></label>}
+        <div className="flex justify-end gap-3"><button type="button" className={buttonClass} disabled={busy} onClick={() => setDecision(null)}>Cancelar</button><button className="rounded-lg bg-[#F7941D] px-4 py-2 font-semibold text-white disabled:opacity-50" disabled={busy || (decision.kind === 'reject' && !reason.trim())}>{busy ? 'Processando...' : decision.kind === 'approve' ? 'Confirmar aprovação' : 'Confirmar decisão'}</button></div>
+      </form></div>}
+      {selected && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"><form onSubmit={save} role="dialog" aria-modal="true" aria-labelledby="company-details-title" className="max-h-[90vh] w-full max-w-2xl space-y-5 overflow-y-auto rounded-xl bg-white p-6">
+        <div className="flex items-center justify-between"><h2 id="company-details-title" className="text-xl font-semibold">{editMode ? 'Editar Empresa' : 'Detalhes da Empresa'}</h2><button type="button" aria-label="Fechar detalhes" disabled={busy} onClick={() => setSelected(null)}><X /></button></div>
+        {editMode ? <div className="grid gap-4 sm:grid-cols-2">{[['name', 'Nome da empresa'], ['phone', 'Telefone'], ['city', 'Cidade'], ['state', 'Estado']].map(([field, label]) => <label key={field} className="text-sm font-medium">{label}<input className={inputClass} value={editData[field]} onChange={e => setEditData({ ...editData, [field]: e.target.value })} /></label>)}<label className="text-sm font-medium">Limite de vagas<input className={inputClass} type="number" min={0} max={100} required value={editData.max_active_jobs} onChange={e => setEditData({ ...editData, max_active_jobs: Number(e.target.value) })} /></label><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={editData.is_member} onChange={e => setEditData({ ...editData, is_member: e.target.checked })} />Membro Portal ERP (não altera aprovação)</label></div> : <div className="grid gap-4 sm:grid-cols-2">{[['Nome', selected.name], ['E-mail do responsável', selected.email], ['Identificação fiscal', selected.cnpj], ['Telefone', selected.phone], ['Localização', [selected.city, selected.state].filter(Boolean).join(' / ')], ['Aprovação', labels[selected.site_status]], ['Conta global do responsável', selected.global_active ? 'Ativa' : 'Desativada'], ['Vagas no histórico', selected.stats.total_jobs || 0], ['Limite de vagas', selected.max_active_jobs ?? 3], ['Membro Portal ERP', selected.is_member ? 'Sim' : 'Não']].map(([label, value]) => <div key={label}><p className="text-sm text-gray-500">{label}</p><p>{value ?? '—'}</p></div>)}</div>}
+        <div className="flex justify-end gap-3 border-t pt-4"><button type="button" className={buttonClass} disabled={busy} onClick={() => { if (editMode) setEditMode(false); else setSelected(null) }}>{editMode ? 'Cancelar' : 'Fechar'}</button>{editMode ? <button className="flex items-center gap-2 rounded-lg bg-green-700 px-4 py-2 text-white" disabled={busy}><Save size={16} />Salvar</button> : <button type="button" className={buttonClass} onClick={() => setEditMode(true)}>Editar</button>}</div>
+      </form></div>}
+    </section>
   )
 }

@@ -911,8 +911,12 @@ def reset_password():
     """
     try:
         data = request.get_json(silent=True) or {}
+        if not isinstance(data, dict):
+            return jsonify({'error': 'O corpo da requisição deve ser um objeto JSON'}), 400
         token = data.get('token', '')
         new_password = data.get('new_password', '')
+        if not isinstance(token, str) or len(token) > 256 or not isinstance(new_password, str) or len(new_password) > 1024:
+            return jsonify({'error': 'Token ou senha inválidos'}), 400
         limited = _rate_limit(
             'reset-password', token, 'AUTH_RESET_RATE_LIMIT', 'AUTH_RESET_RATE_WINDOW'
         )
@@ -932,11 +936,31 @@ def reset_password():
         if not user or not user.verify_reset_token(token):
             return jsonify({'error': 'Token inválido ou expirado'}), 400
 
-        # Redefinir senha, consumir token e revogar todas as sessões.
-        user.set_password(new_password)
-        user.clear_reset_token()
-        user.failed_login_attempts = 0
-        user.locked_until = None
+        # Compare-and-consume prevents two concurrent resets from succeeding.
+        # Do not mutate the ORM object before the conditional update (autoflush).
+        password_hash = generate_password_hash(new_password)
+        changed_at = datetime.utcnow()
+        if db.engine.dialect.name == 'sqlite':
+            # SQLite evaluates 'now' when executing the write, after lock waits.
+            unexpired = db.func.julianday(User.reset_token_expires) > db.func.julianday('now')
+        elif db.engine.dialect.name == 'postgresql':
+            unexpired = User.reset_token_expires > db.func.clock_timestamp()
+        else:
+            unexpired = User.reset_token_expires > db.func.current_timestamp()
+        updated = User.query.filter_by(id=user.id, reset_token=token_hash).filter(
+            unexpired,
+        ).update({
+            'password_hash': password_hash,
+            'password_changed_at': changed_at,
+            'updated_at': changed_at,
+            'reset_token': None,
+            'reset_token_expires': None,
+            'failed_login_attempts': 0,
+            'locked_until': None,
+        }, synchronize_session=False)
+        if updated != 1:
+            db.session.rollback()
+            return jsonify({'error': 'Token inválido ou expirado'}), 400
         user.revoke_all_sessions()
 
         db.session.commit()

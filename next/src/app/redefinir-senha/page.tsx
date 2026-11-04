@@ -2,9 +2,9 @@ import type { Metadata } from 'next'
 import { ResetPasswordForm } from '@/components/candidate/ResetPasswordForm'
 import { getSiteContext } from '@/lib/site-resolver.server'
 
-export const metadata: Metadata = { title: 'Redefinir senha', robots: { index: false, follow: false } }
+export const metadata: Metadata = { title: 'Redefinir senha', robots: { index: false, follow: false }, referrer: 'no-referrer' }
 
-export default async function ResetPasswordPage({ searchParams }: { searchParams: Promise<{ token?: string }> }) {
+export default async function ResetPasswordPage({ searchParams }: { searchParams: Promise<{ token?: string; type?: string }> }) {
   const [{ locale }, params] = await Promise.all([getSiteContext(), searchParams])
-  return <ResetPasswordForm locale={locale} token={params.token || ''} />
+  return <ResetPasswordForm locale={locale} token={params.token || ''} accountType={params.type === 'company' ? 'company' : 'candidate'} />
 }

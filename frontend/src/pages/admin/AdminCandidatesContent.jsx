@@ -1,11 +1,16 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Users, Search, Eye, Mail, Phone, MapPin, ToggleLeft, ToggleRight, X, Plus, Edit2, Trash2, Save, Briefcase, GraduationCap, Link as LinkIcon } from 'lucide-react'
 import toast, { Toaster } from 'react-hot-toast'
 
 export default function AdminCandidatesContent() {
+  const [params] = useSearchParams()
   const [candidates, setCandidates] = useState([])
   const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState('')
+  const [searchTerm, setSearchTerm] = useState(params.get('search') || '')
+  const [page, setPage] = useState(1)
+  const [pagination, setPagination] = useState({ total: 0, pages: 1 })
+  const [platformAdmin, setPlatformAdmin] = useState(false)
   const [selectedCandidate, setSelectedCandidate] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -24,14 +29,12 @@ export default function AdminCandidatesContent() {
     github_url: ''
   })
 
-  useEffect(() => {
-    loadCandidates()
-  }, [])
-
-  const loadCandidates = async () => {
+  const loadCandidates = useCallback(async (signal) => {
     try {
       const token = localStorage.getItem('authToken')
-      const response = await fetch('/api/admin/candidates', {
+      const query = new URLSearchParams({ search: searchTerm, page: String(page), per_page: '25' })
+      const response = await fetch(`/api/admin/candidates?${query}`, {
+        signal,
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -39,16 +42,29 @@ export default function AdminCandidatesContent() {
       if (response.ok) {
         const data = await response.json()
         setCandidates(data.candidates || [])
+        setPagination({ total: data.total || 0, pages: data.pages || 1 })
       } else {
         toast.error('Erro ao carregar candidatos')
       }
     } catch (error) {
-      console.error('Erro:', error)
-      toast.error('Erro ao conectar com o servidor')
+      if (error.name !== 'AbortError') toast.error('Erro ao conectar com o servidor')
     } finally {
-      setLoading(false)
+      if (!signal?.aborted) setLoading(false)
     }
-  }
+  }, [searchTerm, page])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    const timer = setTimeout(() => loadCandidates(controller.signal), 250)
+    return () => { clearTimeout(timer); controller.abort() }
+  }, [loadCandidates])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    fetch('/api/admin/access-capabilities', { headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }, signal: controller.signal, cache: 'no-store' })
+      .then(async response => { if (response.ok) setPlatformAdmin(Boolean((await response.json()).is_platform_admin)) }).catch(() => {})
+    return () => controller.abort()
+  }, [])
 
   const createCandidate = async () => {
     if (!createData.first_name || !createData.last_name || !createData.email || !createData.password) {
@@ -94,7 +110,7 @@ export default function AdminCandidatesContent() {
   }
 
   const deleteCandidate = async (candidateId) => {
-    if (!confirm('Tem certeza que deseja excluir este candidato? Esta ação não pode ser desfeita.')) {
+    if (!confirm('Suspender este candidato neste site? O currículo e o histórico serão preservados.')) {
       return
     }
 
@@ -108,7 +124,7 @@ export default function AdminCandidatesContent() {
       })
 
       if (response.ok) {
-        toast.success('Candidato excluído com sucesso')
+        toast.success('Candidato suspenso neste site')
         loadCandidates()
       } else {
         const error = await response.json()
@@ -126,15 +142,18 @@ export default function AdminCandidatesContent() {
       const response = await fetch(`/api/admin/candidates/${candidateId}/toggle-active`, {
         method: 'PATCH',
         headers: {
-          'Authorization': `Bearer ${token}`
-        }
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ is_active: !currentStatus })
       })
 
       if (response.ok) {
-        toast.success(currentStatus ? 'Candidato desativado' : 'Candidato ativado')
+        toast.success(currentStatus ? 'Acesso regional suspenso' : 'Acesso regional reativado. Contas globais desativadas precisam ser reativadas em Usuários e acessos.')
         loadCandidates()
       } else {
-        toast.error('Erro ao atualizar status')
+        const error = await response.json()
+        toast.error(error.error || 'Erro ao atualizar status')
       }
     } catch (error) {
       console.error('Erro:', error)
@@ -203,10 +222,8 @@ export default function AdminCandidatesContent() {
     }
   }
 
-  const filteredCandidates = candidates.filter(candidate =>
-    candidate.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    candidate.email?.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  // Search normalization and pagination are owned by the backend.
+  const filteredCandidates = candidates
 
   if (loading) {
     return (
@@ -227,7 +244,7 @@ export default function AdminCandidatesContent() {
       <div className="mb-8 flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Gestão de Candidatos</h1>
-          <p className="text-gray-600">{candidates.length} candidatos cadastrados</p>
+          <p className="text-gray-600">{pagination.total} candidatos cadastrados. Conta global e acesso regional são separados.</p>
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
@@ -246,7 +263,7 @@ export default function AdminCandidatesContent() {
             type="text"
             placeholder="Buscar por nome ou email..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => { setSearchTerm(e.target.value); setPage(1) }}
             className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
           />
         </div>
@@ -320,25 +337,27 @@ export default function AdminCandidatesContent() {
                   </td>
                   <td className="px-6 py-4">
                     <button
-                      onClick={() => toggleCandidateStatus(candidate.id, candidate.is_active)}
+                      onClick={() => toggleCandidateStatus(candidate.id, candidate.regional_active)}
                       className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-                        candidate.is_active
+                        candidate.regional_active
                           ? 'bg-green-100 text-green-800 hover:bg-green-200'
                           : 'bg-red-100 text-red-800 hover:bg-red-200'
                       }`}
                     >
-                      {candidate.is_active ? (
+                      {candidate.regional_active ? (
                         <>
                           <ToggleRight className="w-4 h-4" />
-                          Ativo
+                          Ativo neste site
                         </>
                       ) : (
                         <>
                           <ToggleLeft className="w-4 h-4" />
-                          Inativo
+                          Suspenso neste site
                         </>
                       )}
                     </button>
+                    {!candidate.global_active && <p className="mt-2 text-sm font-semibold text-red-700">Conta global desativada</p>}
+                    {platformAdmin && <Link className="mt-2 block text-sm text-blue-700 underline" to={`/admin/usuarios?search=${encodeURIComponent(candidate.email)}`}>Conta / redefinir senha</Link>}
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
@@ -352,7 +371,7 @@ export default function AdminCandidatesContent() {
                       <button
                         onClick={() => deleteCandidate(candidate.id)}
                         className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Excluir"
+                        title="Suspender neste site"
                       >
                         <Trash2 className="w-5 h-5" />
                       </button>
@@ -364,6 +383,8 @@ export default function AdminCandidatesContent() {
           </tbody>
         </table>
       </div>
+
+      <div className="mt-4 flex items-center justify-between text-sm"><span>Página {page} de {Math.max(1, pagination.pages)}</span><div className="flex gap-2"><button disabled={page <= 1} className="rounded border px-3 py-2 disabled:opacity-50" onClick={() => setPage(page - 1)}>Anterior</button><button disabled={page >= pagination.pages} className="rounded border px-3 py-2 disabled:opacity-50" onClick={() => setPage(page + 1)}>Próxima</button></div></div>
 
       {/* Modal de Criar Candidato */}
       {showCreateModal && (
