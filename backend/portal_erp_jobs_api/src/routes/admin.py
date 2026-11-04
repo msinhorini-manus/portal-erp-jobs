@@ -429,11 +429,12 @@ def toggle_user_active(user_id):
         else:
             if membership.status not in (CompanyStatus.APPROVED, CompanyStatus.SUSPENDED):
                 return jsonify({'error': 'Use o fluxo de aprovação para empresas pendentes ou rejeitadas'}), 409
-            membership.status = (
-                CompanyStatus.SUSPENDED
-                if membership.status == CompanyStatus.APPROVED
-                else CompanyStatus.APPROVED
-            )
+            if membership.status == CompanyStatus.SUSPENDED:
+                if not _current_admin().has_permission(AdminPermission.APPROVE_COMPANIES):
+                    return jsonify({'error': 'A liberação empresarial exige permissão de aprovação'}), 403
+                membership.approve(_current_admin().id)
+            else:
+                membership.status = CompanyStatus.SUSPENDED
             is_active = membership.status == CompanyStatus.APPROVED
             if not is_active:
                 Job.query.filter_by(company_id=membership.company_id, site_id=site.id).update({
@@ -531,14 +532,16 @@ def get_all_companies():
         search = request.args.get('search', '')
         status = request.args.get('status', None)  # active, inactive, all
 
-        query = Company.query.join(CompanySite).filter(CompanySite.site_id == site.id)
+        query = Company.query.join(CompanySite).join(User, User.id == Company.user_id).filter(CompanySite.site_id == site.id)
 
         # Search filter
         if search:
             query = query.filter(
                 db.or_(
                     text_contains(Company.company_name, search),
-                    text_contains(Company.cnpj, search)
+                    text_contains(Company.cnpj, search),
+                    text_contains(User.email, search),
+                    text_contains(CompanySite.display_name, search),
                 )
             )
 
@@ -547,6 +550,8 @@ def get_all_companies():
             query = query.filter(CompanySite.status == CompanyStatus.APPROVED)
         elif status == 'inactive':
             query = query.filter(CompanySite.status != CompanyStatus.APPROVED)
+        elif status in CompanyStatus.ALL:
+            query = query.filter(CompanySite.status == status)
 
         pagination = query.order_by(Company.created_at.desc()).paginate(
             page=page, per_page=per_page, error_out=False
@@ -573,6 +578,7 @@ def get_all_companies():
                 'website': membership.website or company.website,
                 'description': membership.description or company.description,
                 'is_active': bool(user and user.is_active and membership.status == CompanyStatus.APPROVED),
+                'global_active': bool(user and user.is_active),
                 'site_status': membership.status,
                 'is_member': membership.is_member,
                 'max_active_jobs': membership.max_active_jobs,
@@ -640,7 +646,8 @@ def get_company_details(company_id):
                 'is_member': membership.is_member,
                 'max_active_jobs': membership.max_active_jobs,
                 'created_at': company.created_at.isoformat() if company.created_at else None,
-                'updated_at': company.updated_at.isoformat() if company.updated_at else None
+                'updated_at': company.updated_at.isoformat() if company.updated_at else None,
+                'global_active': bool(user and user.is_active),
             },
             'jobs': jobs_data,
             'stats': {
@@ -735,11 +742,16 @@ def toggle_company_active(company_id):
             return jsonify({'error': 'Use o fluxo de aprovação para empresas pendentes ou rejeitadas'}), 409
 
         site = get_current_site()
-        membership.status = (
-            CompanyStatus.SUSPENDED
-            if membership.status == CompanyStatus.APPROVED
-            else CompanyStatus.APPROVED
-        )
+        data = request.get_json(silent=True) or {}
+        if not isinstance(data, dict) or ('is_active' in data and not isinstance(data['is_active'], bool)):
+            return jsonify({'error': 'is_active deve ser booleano'}), 400
+        desired = data.get('is_active', membership.status != CompanyStatus.APPROVED)
+        if desired:
+            if not _current_admin().has_permission(AdminPermission.APPROVE_COMPANIES):
+                return jsonify({'error': 'A liberação empresarial exige permissão de aprovação'}), 403
+            membership.approve(_current_admin().id)
+        else:
+            membership.status = CompanyStatus.SUSPENDED
         if membership.status != CompanyStatus.APPROVED:
             Job.query.filter_by(company_id=company.id, site_id=site.id).update({
                 'is_active': False,
@@ -900,6 +912,8 @@ def get_all_candidates():
                 'city': candidate.city,
                 'state': candidate.state,
                 'is_active': membership.is_active and (user.is_active if user else False),
+                'global_active': bool(user and user.is_active),
+                'regional_active': membership.is_active,
                 'is_discoverable': membership.is_discoverable,
                 'created_at': candidate.created_at.isoformat() if candidate.created_at else None,
                 'applications_count': applications_count
@@ -928,7 +942,10 @@ def toggle_candidate_active(candidate_id):
             return jsonify({'error': 'Candidate not found'}), 404
         candidate, candidate_site = candidate_result
 
-        candidate_site.is_active = not candidate_site.is_active
+        data = request.get_json(silent=True) or {}
+        if not isinstance(data, dict) or ('is_active' in data and not isinstance(data['is_active'], bool)):
+            return jsonify({'error': 'is_active deve ser booleano'}), 400
+        candidate_site.is_active = data.get('is_active', not candidate_site.is_active)
         if not candidate_site.is_active:
             candidate_site.is_discoverable = False
             _revoke_site_sessions(candidate.user_id, get_current_site().id)

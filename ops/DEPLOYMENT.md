@@ -58,6 +58,10 @@ O currículo candidato deve ser validado pelo BFF em sete superfícies: perfil c
 
 Recuperação de senha exige `EMAIL_PROVIDER=smtp` com `SMTP_*` ou `EMAIL_PROVIDER=resend` com `RESEND_API_KEY`, além de `EMAIL_FROM`. Sem configuração completa, o comportamento esperado é `503` genérico sem token persistido. Não considere a entrega de e-mail homologada sem teste real no domínio remetente.
 
+O fluxo administrativo de 04/11/2026 é separado: `/api/admin/access-users/<id>/password-reset` emite um link manual de uma hora, com token no fragmento, sem depender do provedor e sem enviar e-mail automaticamente. Exige autoridade de plataforma, senha atual do administrador e motivo. O consumo em `/api/auth/reset-password` é atômico e deve rejeitar token expirado inclusive após hashing ou espera pelo lock SQLite. Reativar uma conta previamente inativa deve revogar suas famílias antigas e exigir novo login.
+
+Esta correção mantém o schema `20260930_08`: não executar migration ou restaurar o banco apenas para trocar código. Preparar também um novo venv com PyJWT/Werkzeug corrigidos, sem instalar sobre o processo ativo, e reconstruir Next/SPA com seus lockfiles congelados. Os gates devem incluir as suítes `test_admin_access` e `test_admin_approval_access`, cada uma em processo isolado, além das regressões existentes. No E2E, reativação e recuperação não podem aprovar empresas nem restaurar membros removidos; uma empresa nova deve continuar pending e bloqueada para vagas/candidatos até aprovação explícita. Limpar todas as fixtures após o teste, inspecionar logs incrementais e confirmar hashes/markers antes de fechar a release.
+
 ## Rollback
 
 O rollback restaura o código da fotografia anterior, mantém uma cópia do banco pós-incidente e reinicia os processos. A restauração do banco só deve ocorrer quando houver corrupção ou migração de dados incompatível; mudanças apenas de código devem preservar os dados mais recentes.

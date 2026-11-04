@@ -44,6 +44,7 @@ from src.routes.jobs import jobs_bp
 from src.routes.applications import applications_bp
 from src.routes.resume import resume_bp
 from src.routes.admin import admin_bp
+from src.routes.admin_access import admin_access_bp
 from src.routes.stats import stats_bp
 from src.routes.config import config_bp
 from src.routes.sites import sites_bp
@@ -130,6 +131,7 @@ app.register_blueprint(jobs_bp)
 app.register_blueprint(applications_bp)
 app.register_blueprint(resume_bp)
 app.register_blueprint(admin_bp)
+app.register_blueprint(admin_access_bp)
 app.register_blueprint(stats_bp)
 app.register_blueprint(config_bp)
 app.register_blueprint(sites_bp)

@@ -1,16 +1,30 @@
 'use client'
 
 import Link from 'next/link'
-import { FormEvent, useState } from 'react'
+import { FormEvent, useEffect, useState } from 'react'
 
 import { AuthShell, buttonClass, inputClass } from './AuthShell'
 import { authPath, candidateFetch } from '@/lib/candidate-client'
+import { companyAuthPath, companyFetch } from '@/lib/company-client'
 
-export function ResetPasswordForm({ locale, token }: { locale: string; token: string }) {
+export function ResetPasswordForm({ locale, token, accountType = 'candidate' }: { locale: string; token: string; accountType?: 'candidate' | 'company' }) {
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
+  const [resetToken, setResetToken] = useState(token)
+  const [ready, setReady] = useState(Boolean(token))
   const spanish = locale.startsWith('es')
+  const loginPath = accountType === 'company' ? '/empresa/login' : '/candidato/login'
+  const recoveryPath = accountType === 'company' ? '/empresa/recuperar-senha' : '/recuperar-senha'
+
+  useEffect(() => {
+    const privateToken = new URLSearchParams(window.location.hash.slice(1)).get('token')
+    if (!token && privateToken) {
+      setResetToken(privateToken)
+      window.history.replaceState(null, '', window.location.pathname + window.location.search)
+    }
+    setReady(true)
+  }, [token])
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -27,7 +41,9 @@ export function ResetPasswordForm({ locale, token }: { locale: string; token: st
     setLoading(true)
     setError('')
     try {
-      await candidateFetch(authPath('reset-password'), { method: 'POST', body: JSON.stringify({ token, new_password: password }) })
+      const options = { method: 'POST', body: JSON.stringify({ token: resetToken, new_password: password }) }
+      if (accountType === 'company') await companyFetch(companyAuthPath('reset-password'), options)
+      else await candidateFetch(authPath('reset-password'), options)
       setSuccess(true)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Link inválido ou expirado.')
@@ -36,13 +52,14 @@ export function ResetPasswordForm({ locale, token }: { locale: string; token: st
     }
   }
 
-  if (!token) {
-    return <AuthShell title={spanish ? 'Enlace inválido' : 'Link inválido'} description={spanish ? 'Solicita un nuevo enlace de recuperación.' : 'Solicite um novo link de recuperação.'}><Link className={buttonClass} href="/recuperar-senha">{spanish ? 'Solicitar nuevo enlace' : 'Solicitar novo link'}</Link></AuthShell>
+  if (!ready) return <AuthShell title={spanish ? 'Validando enlace' : 'Validando link'} description={spanish ? 'Espera un momento.' : 'Aguarde um momento.'}><p className="text-sm">{spanish ? 'Cargando...' : 'Carregando...'}</p></AuthShell>
+  if (!resetToken) {
+    return <AuthShell title={spanish ? 'Enlace inválido' : 'Link inválido'} description={spanish ? 'Solicita un nuevo enlace de recuperación.' : 'Solicite um novo link de recuperação.'}><Link className={buttonClass} href={recoveryPath}>{spanish ? 'Solicitar nuevo enlace' : 'Solicitar novo link'}</Link></AuthShell>
   }
   return (
     <AuthShell title={spanish ? 'Nueva contraseña' : 'Nova senha'} description={spanish ? 'El enlace es de un solo uso y expira automáticamente.' : 'O link é de uso único e expira automaticamente.'}>
       {success ? (
-        <div className="space-y-5 text-center"><div className="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-800">{spanish ? 'Contraseña actualizada. Todas las sesiones anteriores fueron cerradas.' : 'Senha atualizada. Todas as sessões anteriores foram encerradas.'}</div><Link className={buttonClass} href="/candidato/login">{spanish ? 'Ingresar' : 'Entrar'}</Link></div>
+        <div className="space-y-5 text-center"><div className="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-800">{spanish ? 'Contraseña actualizada. Todas las sesiones anteriores fueron cerradas.' : 'Senha atualizada. Todas as sessões anteriores foram encerradas.'}</div><Link className={buttonClass} href={loginPath}>{spanish ? 'Ingresar' : 'Entrar'}</Link></div>
       ) : (
         <form onSubmit={submit} className="space-y-4">
           {error && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}

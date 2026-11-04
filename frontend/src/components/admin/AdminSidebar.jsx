@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard,
@@ -8,12 +9,25 @@ import {
   Code,
   GraduationCap,
   MapPin,
-  Settings,
+  ShieldCheck,
   Database
 } from 'lucide-react'
 
 export default function AdminSidebar() {
   const location = useLocation()
+  const [platformAdmin, setPlatformAdmin] = useState(false)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    fetch('/api/admin/access-capabilities', {
+      headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` },
+      signal: controller.signal,
+      cache: 'no-store',
+    }).then(async response => {
+      if (response.ok) setPlatformAdmin(Boolean((await response.json()).is_platform_admin))
+    }).catch(() => {})
+    return () => controller.abort()
+  }, [])
 
   const isActive = (path) => {
     return location.pathname === path
@@ -39,7 +53,8 @@ export default function AdminSidebar() {
       items: [
         { path: '/admin/empresas', icon: Building2, label: 'Empresas' },
         { path: '/admin/candidatos', icon: Users, label: 'Candidatos' },
-        { path: '/admin/vagas', icon: Briefcase, label: 'Vagas' }
+        { path: '/admin/vagas', icon: Briefcase, label: 'Vagas' },
+        ...(platformAdmin ? [{ path: '/admin/usuarios', icon: ShieldCheck, label: 'Usuários e acessos' }] : [])
       ]
     },
     {
