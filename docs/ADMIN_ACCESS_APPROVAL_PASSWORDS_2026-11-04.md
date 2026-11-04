@@ -1,6 +1,6 @@
 # Admin — reativação, senhas e aprovação de empresas
 
-**Situação em 04/11/2026:** correção implementada e homologada localmente. **Ainda não implantada em produção:** o servidor DigitalOcean `161.35.228.99` responde por SSH, mas recusa a chave temporária de deploy solicitada nesta tarefa. Não houve alteração de usuários ou liberação de empresas reais durante a implementação.
+**Situação em 04/11/2026:** correção implantada e validada em produção no DigitalOcean, em `https://jobs.portalerp.com.br`. Código runtime: `b5be33b379af304e4b4222b265235fb74d0b8823`. O acesso SSH foi restabelecido após a instalação da chave pública; a implantação transacional terminou em 04/11/2026 às 20:11 UTC. Nenhuma empresa real foi aprovada e nenhuma senha de usuário real foi alterada nos testes.
 
 ## Como o administrador vai operar
 
@@ -38,12 +38,20 @@ A auditoria encontrou dependências afetadas já presentes na plataforma. Foram 
 
 Após as correções, o `pip-audit` não encontrou vulnerabilidades conhecidas e o `pip check` passou. Os audits de produção do Next e do SPA ficaram com **zero findings altos ou críticos**. Permanecem um finding moderado no Next e quatro baixos/moderados no SPA, envolvendo parsing CSS, ZIP e o servidor de desenvolvimento Vite. Não foram apresentados como resolvidos. A produção usa o bundle estático, não o servidor de desenvolvimento Vite. Builds reproduzíveis com lockfile congelado passaram.
 
-## Implantação pendente
+## Implantação e validação produtiva
 
-A implantação deve continuar no DigitalOcean, com a mesma API Flask, o mesmo banco e o mesmo contexto regional. Não há migração para outra hospedagem nem criação de um banco paralelo produtivo.
+A implantação permaneceu no DigitalOcean, com a mesma API Flask, o mesmo banco e o mesmo contexto regional. Não houve migração de hospedagem, alteração de schema ou criação de banco paralelo produtivo. Backup consistente: `/var/backups/portal-erp-jobs/admin-access-20261104T200733Z`, com banco íntegro e hashes das fotografias de código verificados.
 
-Antes da troca de runtime, restabelecer o SSH, confirmar o schema 08 e a integridade do banco, verificar processos e espaço, criar backup consistente e preparar API/venv, SPA e Next em diretórios de release. Não instalar os novos pins Python sobre o processo ativo. Trocar os processos de forma serializada e manter rollback de código/ambientes. Como não há migration, rollback de código deve preservar o banco produtivo e seus registros mais recentes.
+API/venv, SPA e Next foram preparados fora dos diretórios ativos. Os 110 testes backend passaram novamente no servidor, assim como instalação congelada, audits no nível high, lint/build do SPA, testes/TypeScript/build do Next e Alembic. A troca de runtime foi serializada, com rollback de código e ambientes preparado e preservação do banco. O deploy passou sem precisar de rollback. API e Next ficaram online, com zero restarts.
 
-Depois do deploy, executar smoke HTTPS, E2E com fixture sintética estritamente escopada, confirmar a regra de aprovação e a revogação, limpar a fixture e verificar integridade, logs incrementais, hashes e markers. Só após esses gates considerar a correção implantada e fechar a release em `main`/tag.
+O Chromium produtivo concluiu nove gates: identidade sintética; reativação global/desbloqueio sem bypass regional; reativação regional do candidato; busca normalizada; desativação/reativação com reautenticação positiva/negativa e revogação de access/refresh; recuperação individual do candidato via Next com uso único; recuperação empresarial sem aprovação implícita; aprovação explícita liberando permissões; e logout de todas as sessões abertas pelo teste. Não foi criada vaga: a tentativa incompleta passou de bloqueio de aprovação para erro de validação somente depois da liberação.
+
+O roteiro foi retomado após timeout de carregamento e uma espera curta demais pela atualização do diálogo. O diagnóstico pontual confirmou o 403, a mensagem no modal e a limpeza da senha digitada; as assertions funcionais e de segurança não foram removidas. O resultado consolidado passou sem respostas HTTP inesperadas. Não foram capturados HAR, traces ou screenshots contendo credenciais ou tokens.
+
+As duas contas sintéticas, candidato, empresa, presenças regionais, owner e suas famílias de sessão foram removidos por cleanup transacional estritamente escopado. As contagens finais de usuários e empresas sintéticos ficaram em zero. Os oito eventos de auditoria válidos foram preservados byte/logicamente, com count e SHA-256 iguais antes/depois, sem remover triggers nem alterar autoria. O administrador legítimo foi usado apenas para ações sintéticas; sua senha, autoridade e sessões preexistentes não foram alteradas.
+
+Depois da limpeza: schema `20260930_08`, integridade `ok`, FK zero, empresas sem owner zero, conflitos de membership zero e dois triggers de auditoria presentes. Os 21 arquivos runtime alterados corresponderam ao commit implantado; os três markers API/SPA/Next também corresponderam. Smoke HTTPS público e canonicals passaram; endpoints administrativos anônimos retornaram 401. Houve uma falha transitória de transporte TLS no primeiro smoke externo, resolvida com tentativas limitadas e certificado ainda validado; a origem canônica foi conferida também pelo Nginx no servidor.
+
+Os logs não indicaram erro funcional nos requests do E2E. O Next registrou erro regional 404 para tráfego externo de scanner, correlacionado com request raiz 500 de origem diferente do teste; o mesmo comportamento já existia antes do deploy, e o resolver regional não mudou. Não foi apresentado como corrigido. Uma próxima onda deve rejeitar hosts desconhecidos/IP antes da renderização para evitar esse ruído e resposta 500 fora do host canônico.
 
 A entrega automática de e-mail transacional não foi homologada por esta correção; o fluxo administrativo é manual e explícito. O Admin continua na SPA legada, e a recuperação reutiliza o frontend Next existente. O limitador de autenticação continua local ao processo; deve receber armazenamento compartilhado antes de ampliar workers/réplicas.
