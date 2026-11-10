@@ -76,6 +76,8 @@ def downgrade():
     with op.batch_alter_table("site_domains", naming_convention=NAMING) as batch:
         batch.drop_constraint(PAIR_CONSTRAINT, type_="unique")
         batch.drop_index("ix_site_domains_hostname")
-        batch.create_unique_constraint("uq_site_domains_hostname", ["hostname"])
+        # Legacy ORM enforces hostname uniqueness with this unique index.
+        # Adding a second named UNIQUE duplicates that protection and creates
+        # Alembic drift when returning to the legacy runtime after rollback.
         batch.create_unique_constraint("uq_site_domain_prefix", ["site_id", "url_prefix"])
         batch.create_index("ix_site_domains_hostname", ["hostname"], unique=True)

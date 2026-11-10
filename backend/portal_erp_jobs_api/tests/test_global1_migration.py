@@ -71,6 +71,16 @@ class GlobalOneMigrationTests(unittest.TestCase):
         self.run_alembic("upgrade", "20261110_09")
         self.assertEqual(before, self.snapshot())
 
+    def test_downgrade_has_only_unique_index_for_legacy_hostname(self):
+        self.run_alembic("upgrade", "20261110_09")
+        self.run_alembic("downgrade", "20260930_08")
+        ddl = self.sql("SELECT sql FROM sqlite_master WHERE name='site_domains'")[0][0]
+        self.assertNotIn('uq_site_domains_hostname', ddl)
+        indexes = {row[1]: row[2] for row in self.sql('PRAGMA index_list(site_domains)')}
+        self.assertEqual(indexes['ix_site_domains_hostname'], 1)
+        self.assertEqual(indexes['uq_site_domains_primary'], 1)
+        self.assertEqual(self.sql('PRAGMA foreign_key_check'), [])
+
     def test_reused_host_and_same_site_prefix_alias_are_allowed_but_pair_and_primary_are_unique(self):
         self.run_alembic("upgrade", "20261110_09")
         self.add_domain("jobs.portalerp.com.br", "/mx", primary=1)
