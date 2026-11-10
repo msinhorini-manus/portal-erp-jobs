@@ -1,3 +1,4 @@
+import { internalApiOrigin, requestRegion, trustedRegionalHeaders } from './regional-transport'
 import { NextRequest, NextResponse } from 'next/server'
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 
@@ -9,17 +10,11 @@ const ACCESS_MAX_AGE = 15 * 60
 const REFRESH_MAX_AGE = 7 * 24 * 60 * 60
 const refreshFlights = new Map<string, Promise<{ access_token: string; refresh_token: string } | null>>()
 
-function backendOrigin(request: NextRequest) {
-  return process.env.NEXT_INTERNAL_API_ORIGIN?.replace(/\/$/, '') || request.nextUrl.origin
-}
+function backendOrigin(_request: NextRequest) { return internalApiOrigin() }
 
 function regionalHeaders(request: NextRequest, headers?: HeadersInit) {
-  const result = new Headers(headers)
-  const internal = backendOrigin(request)
-  if (internal !== request.nextUrl.origin) {
-    result.set('X-Regional-Host', request.headers.get('host') || request.nextUrl.host)
-  }
-  return result
+  const { host, prefix } = requestRegion(request)
+  return trustedRegionalHeaders(host, prefix, headers)
 }
 
 async function parseBody(response: Response) {
@@ -42,13 +37,13 @@ export function validateCsrf(request: NextRequest) {
   return Boolean(cookie && header && safeEqual(cookie, header))
 }
 
-export function clearSessionCookies(response: NextResponse) {
+export function clearSessionCookies(response: NextResponse, request: NextRequest) {
   for (const name of [ACCESS_COOKIE, REFRESH_COOKIE, CSRF_COOKIE]) {
     response.cookies.set(name, '', {
       httpOnly: name !== CSRF_COOKIE,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      path: '/',
+      path: requestRegion(request).prefix,
       maxAge: 0,
     })
   }
@@ -58,11 +53,12 @@ export function clearSessionCookies(response: NextResponse) {
 export function setSessionCookies(
   response: NextResponse,
   tokens: { access_token: string; refresh_token?: string },
+  request: NextRequest,
 ) {
   const common = {
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'strict' as const,
-    path: '/',
+    path: requestRegion(request).prefix,
   }
   response.cookies.set(ACCESS_COOKIE, tokens.access_token, {
     ...common,
@@ -127,7 +123,7 @@ export async function publicAuthRequest(
 
   const response = jsonResponse(payload, backend.status)
   if (backend.ok && options.establishSession && accessToken && refreshToken) {
-    setSessionCookies(response, { access_token: accessToken, refresh_token: refreshToken })
+    setSessionCookies(response, { access_token: accessToken, refresh_token: refreshToken }, request)
   }
   return response
 }
@@ -145,7 +141,7 @@ async function executeRefresh(request: NextRequest, refreshToken: string) {
 async function refreshSession(request: NextRequest) {
   const refreshToken = request.cookies.get(REFRESH_COOKIE)?.value
   if (!refreshToken) return null
-  const refreshKey = createHash('sha256').update(refreshToken).digest('hex')
+  const refreshKey = createHash('sha256').update(`${requestRegion(request).host}:${requestRegion(request).prefix}:${refreshToken}`).digest('hex')
   const active = refreshFlights.get(refreshKey)
   if (active) return active
 
@@ -174,7 +170,7 @@ export async function authenticatedProxy(
   if (backend.status === 401) {
     rotatedTokens = await refreshSession(request)
     if (!rotatedTokens) {
-      return clearSessionCookies(jsonResponse({ error: 'Sessão expirada. Faça login novamente.' }, 401))
+      return clearSessionCookies(jsonResponse({ error: 'Sessão expirada. Faça login novamente.' }, 401), request)
     }
     accessToken = rotatedTokens.access_token
     backend = await execute(accessToken)
@@ -182,9 +178,9 @@ export async function authenticatedProxy(
 
   const payload = await parseBody(backend)
   const response = jsonResponse(payload, backend.status)
-  if (rotatedTokens) setSessionCookies(response, rotatedTokens)
+  if (rotatedTokens) setSessionCookies(response, rotatedTokens, request)
   if (backend.status === 401 || backend.status === 403 && (payload as { error?: string }).error?.includes('Sessão')) {
-    clearSessionCookies(response)
+    clearSessionCookies(response, request)
   }
   return response
 }
@@ -202,5 +198,5 @@ export async function logoutSession(request: NextRequest) {
     backend = await callBackend(request, '/auth/logout', { method: 'POST' }, refreshToken)
   }
   const payload = backend ? await parseBody(backend) : { message: 'Sessão encerrada.' }
-  return clearSessionCookies(jsonResponse(payload, backend?.status || 200))
+  return clearSessionCookies(jsonResponse(payload, backend?.status || 200), request)
 }

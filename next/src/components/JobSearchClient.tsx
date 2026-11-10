@@ -1,7 +1,7 @@
 'use client'
 
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import Link from '@/components/RegionalLink'
+import { useRouter } from '@/lib/regional-navigation'
 import { useState } from 'react'
 import { Building2, Clock, Filter, MapPin, Search } from 'lucide-react'
 

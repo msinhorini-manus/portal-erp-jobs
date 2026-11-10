@@ -1,11 +1,13 @@
+import { appFetch, ADMIN_EXPIRED_MESSAGE } from '@/lib/regional-runtime.js'
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
 export default function AdminLoginPage() {
+  const [params] = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [error, setError] = useState(params.get('reason') === 'session-expired' ? ADMIN_EXPIRED_MESSAGE : '');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { login } = useAuth();
@@ -16,7 +18,7 @@ export default function AdminLoginPage() {
     setLoading(true);
 
     try {
-      const response = await fetch('/api/auth/login/admin', {
+      const response = await appFetch('/api/auth/login/admin', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -39,12 +41,16 @@ export default function AdminLoginPage() {
 
         // Store auth data
         localStorage.setItem('authToken', data.access_token);
+        if (data.refresh_token) localStorage.setItem('refreshToken', data.refresh_token);
+        else localStorage.removeItem('refreshToken');
         localStorage.setItem('userType', 'admin');
         localStorage.setItem('userId', data.user_id);
         localStorage.setItem('adminData', JSON.stringify({
           id: data.user_id,
           email: data.email,
-          name: data.name || 'Admin'
+          name: data.name || 'Admin',
+          user_type: 'admin',
+          site_code: data.site_code
         }));
 
         // Update auth context
@@ -57,10 +63,10 @@ export default function AdminLoginPage() {
         // Redirect to admin dashboard
         navigate('/admin');
       } else {
-        setError(data.message || 'Email ou senha inválidos');
+        setError(typeof data.error === 'string' ? data.error : data.error?.message || data.message || 'Email ou senha inválidos');
       }
     } catch (error) {
-      console.error('Erro ao fazer login:', error);
+      if (error.name === 'AbortError') return;
       setError('Erro ao conectar com o servidor. Tente novamente.');
     } finally {
       setLoading(false);

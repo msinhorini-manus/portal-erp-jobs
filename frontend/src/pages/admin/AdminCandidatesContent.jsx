@@ -1,3 +1,4 @@
+import { appFetch } from '@/lib/regional-runtime.js'
 import { useState, useEffect, useCallback } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Users, Search, Eye, Mail, Phone, MapPin, ToggleLeft, ToggleRight, X, Plus, Edit2, Trash2, Save, Briefcase, GraduationCap, Link as LinkIcon } from 'lucide-react'
@@ -33,7 +34,7 @@ export default function AdminCandidatesContent() {
     try {
       const token = localStorage.getItem('authToken')
       const query = new URLSearchParams({ search: searchTerm, page: String(page), per_page: '25' })
-      const response = await fetch(`/api/admin/candidates?${query}`, {
+      const response = await appFetch(`/api/admin/candidates?${query}`, {
         signal,
         headers: {
           'Authorization': `Bearer ${token}`
@@ -61,7 +62,7 @@ export default function AdminCandidatesContent() {
 
   useEffect(() => {
     const controller = new AbortController()
-    fetch('/api/admin/access-capabilities', { headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }, signal: controller.signal, cache: 'no-store' })
+    appFetch('/api/admin/access-capabilities', { headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }, signal: controller.signal, cache: 'no-store' })
       .then(async response => { if (response.ok) setPlatformAdmin(Boolean((await response.json()).is_platform_admin)) }).catch(() => {})
     return () => controller.abort()
   }, [])
@@ -74,7 +75,7 @@ export default function AdminCandidatesContent() {
 
     try {
       const token = localStorage.getItem('authToken')
-      const response = await fetch('/api/admin/candidates', {
+      const response = await appFetch('/api/admin/candidates', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -116,7 +117,7 @@ export default function AdminCandidatesContent() {
 
     try {
       const token = localStorage.getItem('authToken')
-      const response = await fetch(`/api/admin/candidates/${candidateId}`, {
+      const response = await appFetch(`/api/admin/candidates/${candidateId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -139,7 +140,7 @@ export default function AdminCandidatesContent() {
   const toggleCandidateStatus = async (candidateId, currentStatus) => {
     try {
       const token = localStorage.getItem('authToken')
-      const response = await fetch(`/api/admin/candidates/${candidateId}/toggle-active`, {
+      const response = await appFetch(`/api/admin/candidates/${candidateId}/toggle-active`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -164,7 +165,7 @@ export default function AdminCandidatesContent() {
   const viewCandidateDetails = async (candidateId) => {
     try {
       const token = localStorage.getItem('authToken')
-      const response = await fetch(`/api/admin/candidates/${candidateId}`, {
+      const response = await appFetch(`/api/admin/candidates/${candidateId}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -195,7 +196,7 @@ export default function AdminCandidatesContent() {
   const saveCandidateSettings = async () => {
     try {
       const token = localStorage.getItem('authToken')
-      const response = await fetch(`/api/admin/candidates/${selectedCandidate.id}`, {
+      const response = await appFetch(`/api/admin/candidates/${selectedCandidate.id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,

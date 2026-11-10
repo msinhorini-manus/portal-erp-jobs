@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import Link from '@/components/RegionalLink'
 import { useState } from 'react'
 import { Building2, Menu, User, X } from 'lucide-react'
 

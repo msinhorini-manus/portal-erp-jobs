@@ -1,3 +1,4 @@
+import { appFetch } from '@/lib/regional-runtime.js'
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Briefcase, Search, Eye, CheckCircle, XCircle, Clock, Building2, MapPin, DollarSign, Star, X } from 'lucide-react'
@@ -19,7 +20,7 @@ export default function AdminJobs() {
   const loadJobs = async () => {
     try {
       const token = localStorage.getItem('authToken')
-      const response = await fetch('/api/admin/jobs', {
+      const response = await appFetch('/api/admin/jobs', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -41,7 +42,7 @@ export default function AdminJobs() {
   const updateJobStatus = async (jobId, newStatus) => {
     try {
       const token = localStorage.getItem('authToken')
-      const response = await fetch(`/api/admin/jobs/${jobId}/status`, {
+      const response = await appFetch(`/api/admin/jobs/${jobId}/status`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -72,7 +73,7 @@ export default function AdminJobs() {
   const toggleFeatured = async (jobId, currentFeatured) => {
     try {
       const token = localStorage.getItem('authToken')
-      const response = await fetch(`/api/admin/jobs/${jobId}/featured`, {
+      const response = await appFetch(`/api/admin/jobs/${jobId}/featured`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -96,7 +97,7 @@ export default function AdminJobs() {
   const viewJobDetails = async (jobId) => {
     try {
       const token = localStorage.getItem('authToken')
-      const response = await fetch(`/api/admin/jobs/${jobId}`, {
+      const response = await appFetch(`/api/admin/jobs/${jobId}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

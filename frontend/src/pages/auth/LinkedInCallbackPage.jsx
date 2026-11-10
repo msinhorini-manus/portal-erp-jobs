@@ -1,3 +1,4 @@
+import { regionalHref } from '@/lib/regional-runtime.js'
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -30,7 +31,7 @@ export default function LinkedInCallbackPage() {
         }
 
         // Login with LinkedIn code
-        const redirectUri = `${window.location.origin}/auth/linkedin/callback`;
+        const redirectUri = `${window.location.origin}${regionalHref('/auth/linkedin/callback')}`;
         const result = await loginWithLinkedIn(code, redirectUri);
 
         if (result.success) {

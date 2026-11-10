@@ -1,9 +1,11 @@
+import { configuredApiBase } from '@/lib/regional-runtime.js'
+import { appFetch, readCandidateCsrf } from '@/lib/regional-runtime.js'
 /**
  * API Service for Portal ERP Jobs
  * Handles all HTTP requests to the backend
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+const API_BASE_URL = configuredApiBase(import.meta.env.VITE_API_URL);
 let legacyRefreshFlight = null;
 
 function clearLegacyAuthStorage() {
@@ -22,16 +24,17 @@ async function refreshLegacySession() {
   if (legacyRefreshFlight) return legacyRefreshFlight;
 
   legacyRefreshFlight = (async () => {
-    const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+    const response = await appFetch(`${API_BASE_URL}/auth/refresh`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${refreshToken}` },
       cache: 'no-store',
     });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok || !data.access_token || !data.refresh_token) {
+    if (response.status === 401) {
       clearLegacyAuthStorage();
       return null;
     }
+    if (!response.ok || !data.access_token || !data.refresh_token) return null;
     localStorage.setItem('authToken', data.access_token);
     localStorage.setItem('refreshToken', data.refresh_token);
     return data.access_token;
@@ -69,57 +72,45 @@ async function fetchAPI(endpoint, options = {}) {
     },
   };
 
-  try {
-    const response = await fetch(url, config);
+  const response = await appFetch(url, config);
 
-    if (response.status === 401 && !__retried && endpoint !== '/auth/refresh') {
-      const renewedAccess = await refreshLegacySession();
-      if (renewedAccess) {
-        return fetchAPI(endpoint, {
-          ...requestOptions,
-          __retried: true,
-          headers: {
-            ...requestOptions.headers,
-            Authorization: `Bearer ${renewedAccess}`,
-          },
-        });
-      }
+  if (response.status === 401 && !__retried && !endpoint.startsWith('/auth/') && localStorage.getItem('userType') !== 'admin') {
+    const renewedAccess = await refreshLegacySession();
+    if (renewedAccess) {
+      return fetchAPI(endpoint, {
+        ...requestOptions,
+        __retried: true,
+        headers: {
+          ...requestOptions.headers,
+          Authorization: `Bearer ${renewedAccess}`,
+        },
+      });
     }
+  }
 
-    // Handle non-JSON responses
-    const contentType = response.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      return { success: true };
-    }
-
-    const data = await response.json();
-
+  // Handle non-JSON responses
+  const contentType = response.headers.get('content-type');
+  if (!contentType || !contentType.includes('application/json')) {
     if (!response.ok) {
-      // Log detailed error for debugging
-      console.error('🔴 API Error Response:', data);
-      const errorMessage = data.message || data.error || `HTTP error! status: ${response.status}`;
-      const error = new Error(errorMessage);
-      error.response = data; // Attach full response
-      throw error;
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
+    return { success: true };
+  }
 
-    return data;
-  } catch (error) {
-    console.error('API Error:', error);
+  const data = await response.json();
+
+  if (!response.ok) {
+    const errorMessage = data.message || (typeof data.error === 'string' ? data.error : data.error?.message) || `HTTP error! status: ${response.status}`;
+    const error = new Error(errorMessage);
+    error.response = data; // Attach full response
     throw error;
   }
+
+  return data;
+
 }
 
-function readCookie(name) {
-  const prefix = `${encodeURIComponent(name)}=`;
-  return document.cookie
-    .split('; ')
-    .find((value) => value.startsWith(prefix))
-    ?.slice(prefix.length) || '';
-}
+
 
 /** Candidate-only bridge used while the resume builder remains in the SPA. */
 async function fetchCandidateBFF(endpoint, options = {}) {
@@ -129,9 +120,9 @@ async function fetchCandidateBFF(endpoint, options = {}) {
     ...(options.headers || {}),
   };
   if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
-    headers['X-CSRF-Token'] = decodeURIComponent(readCookie('pej_csrf'));
+    headers['X-CSRF-Token'] = readCandidateCsrf();
   }
-  const response = await fetch(`/bff/candidate${endpoint}`, {
+  const response = await appFetch(`/bff/candidate${endpoint}`, {
     ...options,
     headers,
     credentials: 'same-origin',
@@ -277,13 +268,13 @@ export const authAPI = {
     const refreshToken = localStorage.getItem('refreshToken');
     try {
       let response = accessToken
-        ? await fetch(`${API_BASE_URL}/auth/logout`, {
+        ? await appFetch(`${API_BASE_URL}/auth/logout`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${accessToken}` },
         })
         : null;
       if ((!response || !response.ok) && refreshToken) {
-        response = await fetch(`${API_BASE_URL}/auth/logout`, {
+        response = await appFetch(`${API_BASE_URL}/auth/logout`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${refreshToken}` },
         });

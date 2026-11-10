@@ -1,10 +1,12 @@
+import { configuredApiBase } from '@/lib/regional-runtime.js'
+import { appFetch } from '@/lib/regional-runtime.js'
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Building2, MapPin, Globe, Phone, Mail, Calendar, Users, Save, Edit2, X, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/contexts/AuthContext'
 
-const API_BASE = import.meta.env.VITE_API_URL || ''
+const API_BASE = configuredApiBase(import.meta.env.VITE_API_URL)
 
 export default function CompanyProfilePage() {
   const navigate = useNavigate()
@@ -36,7 +38,7 @@ export default function CompanyProfilePage() {
   const fetchCompanyProfile = async () => {
     try {
       setLoading(true)
-      const response = await fetch(`${API_BASE}/api/companies/me`, {
+      const response = await appFetch(`${API_BASE}/companies/me`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -72,7 +74,7 @@ export default function CompanyProfilePage() {
       setSaving(true)
       setError(null)
 
-      const response = await fetch(`${API_BASE}/api/companies/me`, {
+      const response = await appFetch(`${API_BASE}/companies/me`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

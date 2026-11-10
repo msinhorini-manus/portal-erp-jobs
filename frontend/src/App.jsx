@@ -1,3 +1,6 @@
+import { useEffect, useState } from 'react'
+import { resolveRegionalContext } from './lib/regional-context.js'
+import { setRegionalRuntime } from './lib/regional-runtime.js'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import './App.css'
 import { AuthProvider } from './contexts/AuthContext'
@@ -61,9 +64,23 @@ import GoogleCallbackPage from './pages/auth/GoogleCallbackPage'
 import LinkedInCallbackPage from './pages/auth/LinkedInCallbackPage'
 
 function App() {
+  const [regional, setRegional] = useState(null)
+  const [contextError, setContextError] = useState('')
+  useEffect(() => {
+    let active = true
+    resolveRegionalContext().then(context => {
+      if (!active) return
+      setRegionalRuntime(context)
+      if (context.site.locale) document.documentElement.lang = context.site.locale
+      setRegional(context)
+    }).catch(error => { if (active) setContextError(error.message) })
+    return () => { active = false }
+  }, [])
+  if (contextError) return <div role="alert" className="p-8 text-red-800">{contextError}</div>
+  if (!regional) return <div role="status" className="p-8 text-gray-600">Validando região...</div>
   return (
     <AuthProvider>
-      <Router>
+      <Router basename={regional.basename || '/'}>
         <Routes>
           {/* Auth Routes - Sem layout */}
           <Route path="/login" element={<LoginPage />} />

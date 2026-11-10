@@ -18,6 +18,7 @@ from src.regional_access import get_company_access
 from src.regional_context import get_current_site
 from src.rate_limit import auth_rate_limiter
 from src.services.email import EmailDeliveryUnavailable, configured_email_provider, send_company_invitation_email
+from src.services.regional_urls import trusted_regional_base_url
 
 
 company_team_bp = Blueprint("company_team", __name__, url_prefix="/api/company-team")
@@ -87,7 +88,7 @@ def _active_owner_count(company_id: int) -> int:
 
 
 def _send_invitation(invitation: CompanyInvitation, raw_token: str, company_name: str, site) -> tuple[str, str]:
-    invitation_url = f"{site.canonical_origin.rstrip('/')}/empresa/convite/{quote(raw_token)}"
+    invitation_url = f"{trusted_regional_base_url(site)}/empresa/convite/{quote(raw_token)}"
     if configured_email_provider() is None:
         return "manual", invitation_url
     try:
@@ -115,6 +116,7 @@ def list_members():
     ).all()
     invitations = CompanyInvitation.query.filter_by(
         company_id=company.id,
+        site_id=get_current_site().id,
         status=CompanyInvitationStatus.PENDING,
     ).order_by(CompanyInvitation.created_at.desc()).all()
     now = datetime.utcnow()
@@ -162,6 +164,8 @@ def create_invitation():
         email=email,
         status=CompanyInvitationStatus.PENDING,
     ).first()
+    if not trusted_regional_base_url(get_current_site()):
+        return jsonify({"error": "Base regional segura de convite indisponível"}), 503
     raw_token = secrets.token_urlsafe(32)
     if invitation is None:
         invitation = CompanyInvitation(
@@ -212,8 +216,12 @@ def resend_invitation(invitation_id):
     invitation = CompanyInvitation.query.filter_by(id=invitation_id, company_id=company.id).first()
     if not invitation or invitation.status != CompanyInvitationStatus.PENDING:
         return jsonify({"error": "Convite pendente não encontrado"}), 404
+    if invitation.site_id != get_current_site().id:
+        return jsonify({"error": "Convite pendente não encontrado"}), 404
     if not _can_assign(actor, invitation.role):
         return jsonify({"error": "Você não pode reenviar este convite"}), 403
+    if not trusted_regional_base_url(get_current_site()):
+        return jsonify({"error": "Base regional segura de convite indisponível"}), 503
     raw_token = secrets.token_urlsafe(32)
     invitation.token_hash = _token_hash(raw_token)
     invitation.expires_at = datetime.utcnow() + INVITATION_TTL
@@ -241,7 +249,9 @@ def cancel_invitation(invitation_id):
     company, _, actor, error, status = get_company_access(permission="manage_users")
     if error:
         return error, status
-    invitation = CompanyInvitation.query.filter_by(id=invitation_id, company_id=company.id).first()
+    invitation = CompanyInvitation.query.filter_by(
+        id=invitation_id, company_id=company.id, site_id=get_current_site().id,
+    ).first()
     if not invitation or invitation.status != CompanyInvitationStatus.PENDING:
         return jsonify({"error": "Convite pendente não encontrado"}), 404
     if not _can_assign(actor, invitation.role):

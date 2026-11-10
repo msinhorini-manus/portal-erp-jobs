@@ -270,6 +270,7 @@ class WaveZeroSecurityTests(unittest.TestCase):
         response = self.client.post(
             "/api/auth/forgot-password",
             json={"email": "security-test@example.com"},
+            headers={"Host": "jobs.portalerp.com.br"},
         )
         self.assertEqual(response.status_code, 503)
         self.assertNotIn("_debug_token", response.get_json())
@@ -525,7 +526,9 @@ class WaveZeroSecurityTests(unittest.TestCase):
         ]
         for method, path, payload in requests:
             with self.subTest(method=method, path=path):
-                response = getattr(self.client, method)(path, json=payload)
+                response = getattr(self.client, method)(
+                    path, json=payload, headers={"Host": "jobs.portalerp.com.br"},
+                )
                 self.assertEqual(response.status_code, 401)
 
     def test_migration_endpoint_is_not_registered(self):

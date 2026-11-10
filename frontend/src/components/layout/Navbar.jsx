@@ -1,5 +1,6 @@
+import Link from '@/components/BridgeLink.jsx'
 import { useState, useRef, useEffect } from 'react'
-import { Link, useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { Plus, Menu, X, User, Building2, Shield, LogOut, Home, Briefcase, Users, BarChart3, FileText, Settings, ChevronDown, LayoutDashboard } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/contexts/AuthContext'
@@ -105,9 +106,14 @@ export default function Navbar() {
     }
   }
 
-  const handleLogout = () => {
-    logout()
-    navigate('/')
+  const handleLogout = async () => {
+    try {
+      await logout()
+    } catch {
+      window.alert('Não foi possível encerrar a sessão. Tente novamente.')
+      return
+    }
+    if (userType !== 'candidate') navigate('/')
     setMobileMenuOpen(false)
     setUserMenuOpen(false)
   }

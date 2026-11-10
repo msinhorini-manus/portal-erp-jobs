@@ -1,7 +1,8 @@
 'use client'
+import { browserRegionalPath } from '@/lib/regional-routes'
 
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import Link from '@/components/RegionalLink'
+import { useRouter } from '@/lib/regional-navigation'
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { BriefcaseBusiness, FileText, LogOut, Search, Settings, UserRoundCheck } from 'lucide-react'
 
@@ -90,7 +91,7 @@ export function CandidateDashboard({ locale }: { locale: string }) {
         candidateFetch<Profile>(candidatePath('profile')),
         candidateFetch<{ applications: Application[] }>(candidatePath('applications?per_page=100')),
         candidateFetch<Resume>(candidatePath('resume')),
-        fetch('/api/jobs/?per_page=100', { cache: 'no-store' }).then(async response => {
+        fetch(browserRegionalPath('/api/jobs/?per_page=100'), { cache: 'no-store' }).then(async response => {
           if (!response.ok) throw new Error('Não foi possível carregar as vagas.')
           return response.json() as Promise<{ jobs: Job[] }>
         }),

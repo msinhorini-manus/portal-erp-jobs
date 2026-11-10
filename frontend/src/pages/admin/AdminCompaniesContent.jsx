@@ -1,3 +1,4 @@
+import { appFetch } from '@/lib/regional-runtime.js'
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Building2, Crown, Edit2, KeyRound, Save, ShieldCheck, X } from 'lucide-react'
@@ -8,7 +9,7 @@ const buttonClass = 'rounded-lg border px-3 py-2 text-sm font-medium hover:bg-gr
 const inputClass = 'mt-1 w-full rounded-lg border px-3 py-2'
 
 async function request(path, options = {}) {
-  const response = await fetch(`/api/admin${path}`, {
+  const response = await appFetch(`/api/admin${path}`, {
     ...options, cache: 'no-store',
     headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}`, 'Content-Type': 'application/json' },
   })

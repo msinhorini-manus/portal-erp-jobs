@@ -581,7 +581,7 @@ class AdminAccessTests(unittest.TestCase):
         self.assertEqual(urlparse(response.get_json()['reset_url']).netloc, BR_HOST)
         with app.app_context():
             site = db.session.get(Site, self.br_id)
-            site.domains.append(SiteDomain(hostname='trusted-alias.invalid', url_prefix='/alias', is_primary=False, is_active=True))
+            site.domains.append(SiteDomain(hostname='trusted-alias.invalid', url_prefix='', is_primary=False, is_active=True))
             db.session.commit()
         response = self._action('candidate', 'password-reset', headers={**self.headers, 'Host': 'trusted-alias.invalid'})
         self.assertEqual(response.status_code, 200)

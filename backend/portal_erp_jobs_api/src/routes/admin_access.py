@@ -4,7 +4,7 @@ Schema 08 is sufficient. Company approval and team membership are deliberately
 read-only here. See ACCESS_API_CONTRACT.md for the canonical frontend DTO.
 """
 from functools import wraps
-from urllib.parse import urlencode, urlparse
+from urllib.parse import urlencode
 
 from flask import Blueprint, current_app, jsonify, request
 from sqlalchemy import or_
@@ -14,7 +14,6 @@ from src.models import (
     AdminPermission, Candidate, CandidateSite, Company, CompanySite,
     CompanyStatus, CompanyUser, User,
 )
-from src.models.site import normalize_origin
 from src.rate_limit import auth_rate_limiter
 from src.regional_context import get_current_site
 from src.routes.admin import (
@@ -22,6 +21,7 @@ from src.routes.admin import (
     admin_required, platform_admin_required,
 )
 from src.services.jobs import pagination_args, text_contains
+from src.services.regional_urls import trusted_regional_base_url
 
 
 admin_access_bp = Blueprint('admin_access', __name__, url_prefix='/api/admin')
@@ -173,20 +173,8 @@ def _reauth_target(user_id, *, requires_status=False):
 
 
 def _trusted_reset_origin(site):
-    """Fail closed on invalid DB configuration; never use Host/forwarded headers."""
-    raw = site.canonical_origin
-    if not isinstance(raw, str) or '\\' in raw or any(ord(char) <= 32 or ord(char) == 127 for char in raw):
-        return None
-    try:
-        origin = normalize_origin(raw)
-        hostname = urlparse(origin).hostname if origin else None
-    except (ValueError, TypeError):
-        return None
-    if not hostname or not any(
-        domain.is_active and domain.hostname == hostname for domain in site.domains
-    ):
-        return None
-    return origin
+    """Compatibility wrapper: security links use the regional base, not origin."""
+    return trusted_regional_base_url(site)
 
 
 @admin_access_bp.route('/access-capabilities', methods=['GET'])

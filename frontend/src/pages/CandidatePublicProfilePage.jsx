@@ -1,8 +1,10 @@
+import { configuredApiBase } from '@/lib/regional-runtime.js'
+import { appFetch } from '@/lib/regional-runtime.js'
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-const API_BASE = `${API_URL}/api`;
+const API_URL = configuredApiBase(import.meta.env.VITE_API_URL);
+const API_BASE = API_URL;
 
 export default function CandidatePublicProfilePage() {
   const { id } = useParams();
@@ -18,7 +20,7 @@ export default function CandidatePublicProfilePage() {
   const loadCandidateProfile = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE}/candidates/${id}/profile`);
+      const response = await appFetch(`${API_BASE}/candidates/${id}/profile`);
 
       if (!response.ok) {
         const errorData = await response.json();

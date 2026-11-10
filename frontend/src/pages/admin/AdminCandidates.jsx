@@ -1,3 +1,4 @@
+import { appFetch } from '@/lib/regional-runtime.js'
 import { useState, useEffect } from 'react'
 import { Users, Search, Eye, Mail, Phone, MapPin, Calendar, Briefcase, ToggleLeft, ToggleRight, X } from 'lucide-react'
 import toast, { Toaster } from 'react-hot-toast'
@@ -17,7 +18,7 @@ export default function AdminCandidates() {
   const loadCandidates = async () => {
     try {
       const token = localStorage.getItem('authToken')
-      const response = await fetch('/api/admin/candidates', {
+      const response = await appFetch('/api/admin/candidates', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -39,7 +40,7 @@ export default function AdminCandidates() {
   const toggleCandidateStatus = async (candidateId, currentStatus) => {
     try {
       const token = localStorage.getItem('authToken')
-      const response = await fetch(`/api/admin/candidates/${candidateId}/toggle-status`, {
+      const response = await appFetch(`/api/admin/candidates/${candidateId}/toggle-status`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -63,7 +64,7 @@ export default function AdminCandidates() {
   const viewCandidateDetails = async (candidateId) => {
     try {
       const token = localStorage.getItem('authToken')
-      const response = await fetch(`/api/admin/candidates/${candidateId}`, {
+      const response = await appFetch(`/api/admin/candidates/${candidateId}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

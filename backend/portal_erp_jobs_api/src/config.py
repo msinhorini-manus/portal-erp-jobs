@@ -67,12 +67,12 @@ class Config:
 
     CORS_ORIGINS = _csv_env(
         "CORS_ORIGINS",
-        "https://jobs.portalerp.com.br",
+        "https://jobs.portalerp.com.br,https://jobs.portalerp.com",
     )
     ALLOW_ADMIN_SETUP = os.getenv("ALLOW_ADMIN_SETUP", "false").lower() == "true"
     REGIONAL_ALLOW_DEVELOPMENT_FALLBACK = (
         ENVIRONMENT != "production"
-        and os.getenv("REGIONAL_ALLOW_DEVELOPMENT_FALLBACK", "true").lower() == "true"
+        and os.getenv("REGIONAL_ALLOW_DEVELOPMENT_FALLBACK", "false").lower() == "true"
     )
 
     APP_NAME = os.getenv("APP_NAME", "Portal ERP Jobs")

@@ -1,44 +1,48 @@
 import { headers } from 'next/headers'
-
+import { notFound } from 'next/navigation'
+import { cache } from 'react'
 import type { ActiveSitesResponse, RegionalContext, RegionalSite } from './site'
-import { getSelectableSites } from './site'
+import { getSelectableSites, requireRegionalBaseUrl } from './site'
+import { countryPrefix } from './regional-routes'
+import { internalApiOrigin, normalizeRequestHost, trustedRegionalHeaders } from './regional-transport'
 
-function normalizeRequestHost(host: string | null): string {
-  const value = (host || '').trim().toLowerCase()
-  if (!value) {
-    throw new Error('Request host is unavailable')
-  }
-  return value
+export class RegionalApiError extends Error {
+  constructor(public status: number) { super(`Regional context unavailable (${status})`) }
 }
-
-async function requestApi<T>(path: string, revalidate = 60): Promise<T> {
-  const requestHeaders = await headers()
-  const host = normalizeRequestHost(requestHeaders.get('host'))
-  const forwardedProto = requestHeaders.get('x-forwarded-proto')?.split(',')[0]?.trim()
-  const protocol = forwardedProto || (host.startsWith('localhost') || host.startsWith('127.0.0.1') ? 'http' : 'https')
-  const publicOrigin = `${protocol}://${host}`
-  const internalOrigin = process.env.NEXT_INTERNAL_API_ORIGIN?.replace(/\/$/, '') || publicOrigin
-
-  const response = await fetch(`${internalOrigin}/api${path}`, {
-    headers: internalOrigin === publicOrigin ? undefined : { 'X-Regional-Host': host },
-    next: { revalidate, tags: [`regional-context:${host}`] },
-  })
-
-  if (!response.ok) {
-    throw new Error(`Regional context unavailable (${response.status})`)
-  }
-  return response.json() as Promise<T>
+export async function serverRegion(country?: string) {
+  const h = await headers()
+  const host = normalizeRequestHost(h.get('host'))
+  const routeCountry = country || h.get('x-next-regional-country') || ''
+  let prefix: string
+  try { prefix = countryPrefix(routeCountry) } catch { notFound() }
+  if (country && h.get('x-next-regional-country') && h.get('x-next-regional-country') !== country) notFound()
+  return { host, prefix }
 }
-
-export async function getSiteContext(): Promise<RegionalContext> {
-  const context = await requestApi<RegionalContext>('/context')
-  if (!context.site.is_active || context.locale !== context.site.locale) {
-    throw new Error('Regional context is inconsistent or inactive')
-  }
+export function assertRegionalContext(context: RegionalContext, prefix: string) {
+  if (!context?.site?.is_active || context.locale !== context.site.locale || context.site.url_prefix !== prefix || context.site.country_code.toLowerCase() !== prefix.slice(1)) throw new RegionalApiError(404)
+  requireRegionalBaseUrl(context.site)
   return context
 }
-
-export async function getActiveSites(): Promise<RegionalSite[]> {
-  const response = await requestApi<ActiveSitesResponse>('/sites')
-  return getSelectableSites(response.sites)
+export const resolveSiteFor = cache(async (host: string, prefix: string): Promise<RegionalContext> => {
+  const response = await fetch(`${internalApiOrigin()}/api/context`, { headers: trustedRegionalHeaders(host, prefix), cache: 'no-store' })
+  if (!response.ok) throw new RegionalApiError(response.status)
+  return assertRegionalContext(await response.json(), prefix)
+})
+export async function getSiteContext(country?: string): Promise<RegionalContext> {
+  const { host, prefix } = await serverRegion(country)
+  try { return await resolveSiteFor(host, prefix) } catch (error) {
+    if (error instanceof RegionalApiError && [400, 404].includes(error.status)) notFound()
+    throw error
+  }
+}
+export async function getActiveSites(country?: string): Promise<RegionalSite[]> {
+  const { host, prefix } = await serverRegion(country)
+  return activeSitesFor(host, prefix)
+}
+export async function activeSitesFor(host: string, prefix: string): Promise<RegionalSite[]> {
+  const response = await fetch(`${internalApiOrigin()}/api/sites`, { headers: trustedRegionalHeaders(host, prefix), cache: 'no-store' })
+  if (!response.ok) throw new RegionalApiError(response.status)
+  const payload = await response.json() as ActiveSitesResponse
+  if (!Array.isArray(payload.sites)) throw new Error('Invalid active sites response')
+  return getSelectableSites(payload.sites)
 }

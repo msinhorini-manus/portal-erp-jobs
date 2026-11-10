@@ -1,4 +1,5 @@
-import { Link, useNavigate } from 'react-router-dom'
+import Link from '@/components/BridgeLink.jsx'
+import { useNavigate } from 'react-router-dom'
 import { Plus, LayoutDashboard, Briefcase, FileText, Users, Building2, LogOut, ChevronDown, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useState, useRef, useEffect } from 'react'

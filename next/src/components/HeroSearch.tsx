@@ -1,7 +1,7 @@
 'use client'
 
 import { FormEvent, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/regional-navigation'
 import { MapPin, Search } from 'lucide-react'
 
 export function HeroSearch() {

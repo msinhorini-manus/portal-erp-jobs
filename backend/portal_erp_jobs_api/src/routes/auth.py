@@ -16,8 +16,9 @@ from src.models.company_user import CompanyUser, CompanyUserRole
 from src.models.legal_acceptance import LegalAcceptance
 from src.config import db
 from src.rate_limit import auth_rate_limiter
-from src.regional_access import ensure_candidate_site, ensure_company_site, get_active_user, token_claims
+from src.regional_access import ensure_candidate_site, ensure_company_site, get_active_user, token_claims, validate_session_site
 from src.regional_context import get_current_site
+from src.services.regional_urls import trusted_regional_base_url
 from src.services.email import (
     EmailDeliveryUnavailable,
     configured_email_provider,
@@ -600,8 +601,13 @@ def refresh():
 @jwt_required(verify_type=False, skip_revocation_check=True)
 def logout():
     """Revoke the family represented by either an access or refresh token."""
+    site, error, status = validate_session_site()
+    if error:
+        return error, status
     claims = get_jwt()
-    family = SessionFamily.query.filter_by(family_id=claims.get('family_id')).first()
+    family = SessionFamily.query.filter_by(
+        family_id=claims.get('family_id'), site_id=site.id,
+    ).first()
     if family:
         family.revoke()
         db.session.commit()
@@ -879,12 +885,13 @@ def forgot_password():
         if not user:
             return jsonify(GENERIC_RECOVERY), 200
 
-        if not site.canonical_origin:
+        regional_base = trusted_regional_base_url(site)
+        if not regional_base:
             return jsonify(RECOVERY_UNAVAILABLE), 503
 
         raw_token = user.generate_reset_token()
         reset_url = (
-            f"{site.canonical_origin.rstrip('/')}/redefinir-senha?token={quote(raw_token)}"
+            f"{regional_base}/redefinir-senha?token={quote(raw_token)}"
         )
         try:
             send_password_reset_email(

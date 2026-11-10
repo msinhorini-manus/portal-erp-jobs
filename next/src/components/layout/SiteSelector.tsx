@@ -1,7 +1,7 @@
 'use client'
 
 import type { RegionalSite } from '@/lib/site'
-import { requireCanonicalOrigin } from '@/lib/site'
+import { requireRegionalBaseUrl } from '@/lib/site'
 
 type Props = {
   currentSite: RegionalSite
@@ -14,8 +14,8 @@ export function SiteSelector({ currentSite, sites, compact = false }: Props) {
     const target = sites.find((site) => site.code === code)
     if (!target || target.code === currentSite.code) return
 
-    const origin = requireCanonicalOrigin(target)
-    window.location.assign(`${origin}${window.location.pathname}${window.location.search}${window.location.hash}`)
+    const origin = requireRegionalBaseUrl(target)
+    window.location.assign(origin)
   }
 
   return (

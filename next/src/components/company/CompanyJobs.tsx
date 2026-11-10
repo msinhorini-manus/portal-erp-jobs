@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import Link from '@/components/RegionalLink'
 import { Edit, Pause, Play, Plus, Search, Trash2, UsersRound } from 'lucide-react'
 import { useEffect, useState } from 'react'
 

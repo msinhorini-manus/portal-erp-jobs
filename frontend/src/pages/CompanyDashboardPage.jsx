@@ -1,3 +1,5 @@
+import { configuredApiBase } from '@/lib/regional-runtime.js'
+import { appFetch } from '@/lib/regional-runtime.js'
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Plus, Briefcase, Users, Eye, TrendingUp, Edit, Trash2, BarChart3 } from 'lucide-react'
@@ -6,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { useAuth } from '@/contexts/AuthContext'
 
-const API_URL = import.meta.env.VITE_API_URL || '';
+const API_URL = configuredApiBase(import.meta.env.VITE_API_URL);
 
 export default function CompanyDashboardPage() {
   const navigate = useNavigate()
@@ -40,7 +42,7 @@ export default function CompanyDashboardPage() {
       }
 
       // Carregar estatísticas da empresa
-      const statsResponse = await fetch(`${API_URL}/api/stats/company`, {
+      const statsResponse = await appFetch(`${API_URL}/stats/company`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -52,7 +54,7 @@ export default function CompanyDashboardPage() {
       }
 
       // Carregar vagas recentes da empresa
-      const jobsResponse = await fetch(`${API_URL}/api/jobs/my-jobs`, {
+      const jobsResponse = await appFetch(`${API_URL}/jobs/my-jobs`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

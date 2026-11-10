@@ -1,3 +1,4 @@
+import { appFetch } from '@/lib/regional-runtime.js'
 import { useState, useEffect } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import {
@@ -94,7 +95,7 @@ export default function JobDetailPage() {
       const token = localStorage.getItem('authToken')
       if (!token) return
 
-      const response = await fetch('/api/applications/my-applications', {
+      const response = await appFetch('/api/applications/my-applications', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -135,7 +136,7 @@ export default function JobDetailPage() {
       setError(null)
 
       const token = localStorage.getItem('authToken')
-      const response = await fetch('/api/applications/', {
+      const response = await appFetch('/api/applications/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

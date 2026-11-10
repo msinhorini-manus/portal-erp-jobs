@@ -1,3 +1,4 @@
+import { browserPrefix, browserRegionalPath, safeRegionalReturn } from './regional-routes'
 export type CandidateSession = {
   id: number
   email: string
@@ -19,9 +20,8 @@ export function clearLegacyCandidateSession() {
   }
 }
 
-export function safeReturnPath(value: string | null, fallback = '/candidato/dashboard') {
-  if (!value || !value.startsWith('/') || value.startsWith('//')) return fallback
-  return value
+export function safeReturnPath(value: string | null, fallback = '/candidato/dashboard', prefix = browserPrefix()) {
+  return safeRegionalReturn(value, prefix, fallback, false)
 }
 
 function readCookie(name: string) {
@@ -41,7 +41,7 @@ export async function candidateFetch<T>(path: string, init: RequestInit = {}): P
     headers.set('X-CSRF-Token', decodeURIComponent(readCookie('pej_csrf')))
   }
 
-  const response = await fetch(path, {
+  const response = await fetch(browserRegionalPath(path), {
     ...init,
     headers,
     credentials: 'same-origin',
@@ -57,9 +57,9 @@ export async function candidateFetch<T>(path: string, init: RequestInit = {}): P
 }
 
 export function authPath(path: string) {
-  return `/bff/auth/${path}`
+  return browserRegionalPath(`/bff/auth/${path}`)
 }
 
 export function candidatePath(path: string) {
-  return `/bff/candidate/${path}`
+  return browserRegionalPath(`/bff/candidate/${path}`)
 }

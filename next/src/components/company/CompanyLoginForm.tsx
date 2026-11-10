@@ -1,7 +1,7 @@
 'use client'
 
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import Link from '@/components/RegionalLink'
+import { useRouter } from '@/lib/regional-navigation'
 import { FormEvent, useEffect, useState } from 'react'
 
 import { AuthShell, buttonClass, inputClass } from '@/components/candidate/AuthShell'
