@@ -1,12 +1,12 @@
 # Global Wave 1 — implantação exclusiva do Portal ERP Jobs
 
-**Estado em 10/11/2026:** implementação local em homologação; não implantada. A aplicação produtiva e a regra Cloudflare continuam como antes. Este documento não certifica lançamento nem indexação Google.
+**Estado atualizado em 10/11/2026:** migração implantada e gates produtivos aprovados em `https://jobs.portalerp.com/br`. Runtime final `2cb460476cc11640b248a7ba6ee58383dcbfab10`, schema `20261110_09`. Somente BR ativo. Este documento certifica a migração técnica, não a indexação Google nem a homologação de todos os serviços operacionais de lançamento.
 
 ## Escopo e origem existente
 
 Reaproveitar a mesma plataforma, API Flask e banco SQLite no DigitalOcean. O destino brasileiro é `https://jobs.portalerp.com/br`. O domínio editorial `portalerp.com/br` e todos os outros sites do ecossistema ficam fora do escopo. Nginx, DNS, TLS e redirects devem usar somente os hosts exatos `jobs.portalerp.com` e `jobs.portalerp.com.br`, sem wildcard.
 
-O usuário confirmou que o host global já existe, com redirecionamento Cloudflare para o host brasileiro antigo. Não criar outra plataforma ou banco. O Nginx atualmente instalado na origem contém somente o host antigo; será necessário preparar o atendimento do host global na origem e validar sua rota antes da retirada do redirect da borda. Não presumir o DNS/origin apenas a partir do hostname público de um proxy Cloudflare.
+Antes da migração, o host global já existia com redirecionamento Cloudflare para o host brasileiro antigo, e o Nginx atendia somente o host antigo. Essa condição foi corrigida: a origem final atende os dois hosts exatos, o global serve `/br`, e o legado redireciona a navegação para os equivalentes. Não foi criada outra plataforma ou banco. O DNS/origin foi reconfirmado pelo conector autorizado, não presumido a partir do proxy.
 
 ## Backup já comprovado
 
@@ -23,7 +23,7 @@ Como o sistema continua recebendo gravações, **fazer outro backup consistente 
 - Cookies candidato/empresa host-only e `Path=/br`, sem compartilhar `Domain=.portalerp.com`; backend confere o site do JWT e o vínculo atual.
 - Canonical/OG/sitemap do Brasil com `/br`, HTML pt-BR; sem hreflang fictício para países desativados; recuperação/convites/Admin privados com noindex.
 - SPA Admin em `/admin`, currículo visual em `/br/candidato/curriculo`, APIs `/br/api/*` e BFF `/br/bff/*`. Assets globais.
-- `ops/nginx.jobs-global.conf`: configuração candidata isolada, ainda não instalada.
+- `ops/nginx.jobs-global.conf`: base da configuração final instalada; renderização transacional e backups exclusivos do Jobs na origem.
 - `ops/jobs_region_cutover.py`: alteração estritamente escopada ao cadastro BR, auditada, idempotente e com rollback somente de configuração. Não muda dados de negócio ou sessões e não restaura banco antigo.
 
 Os servidores de API e Next devem ouvir somente em loopback na origem. Nginx encaminha Host interno `127.0.0.1:5000` com `X-Regional-Host` externo validado e `X-Regional-Prefix` derivado da URL; remove cabeçalhos do browser. Next recebe o Host externo exato e sanitiza novamente seu contexto. Não adicionar ProxyFix/CORS wildcard para contornar validações.
@@ -67,3 +67,25 @@ Usuários precisam autenticar novamente no novo host. Não transportar cookies/J
 ## Indexação e internacionalização posteriores
 
 Enviar o sitemap do novo Jobs na propriedade correta do Search Console, inspecionar URLs e acompanhar migração. Não modificar a propriedade do domínio editorial inteiro nem garantir prazo/inclusão Google. Não anunciar MX/US sem ativação/tradução/homologação. Email transacional, operação da Indexing API, monitoramento e exercícios completos de backup/restore são fluxos separados; não estão automaticamente resolvidos pela troca de domínio.
+
+## Evidência final de produção — 10/11/2026
+
+Backup final de cutover: `/var/backups/portal-erp-jobs/global1-cutover-20261110T210321Z`; backup adicional da atualização Next-only: `/var/backups/portal-erp-jobs/global1-auth-20261110T211154Z`. Os snapshots não foram restaurados por cima de gravações novas.
+
+A conta correta foi acessada por OAuth Cloudflare. DNS já estava correto: A Jobs global para `161.35.228.99`, proxied; A legado para a mesma origem, DNS-only. Foi desativada apenas a regra global→legado do Jobs. A navegação antiga retorna 301 ao equivalente global; `/admin` permanece na raiz. APIs antigas preservam método e autorização; BFF antigo exige atualização com 409. A raiz global retorna 307 para `/br`.
+
+TLS: certificado Let’s Encrypt do hostname exato, válido até 08/02/2027; SSL strict por regra somente para `jobs.portalerp.com`, sem mudar o modo Full geral da zona. `certbot.timer` habilitado/ativo, renovação dry-run aprovada e deploy-hook restrito ao lineage/domínio Jobs instalado e testado. O certificado de borda Cloudflare também foi validado.
+
+Durante a validação, uma regra geral existente de cache da zona não excluía `/br/bff/*`: a origem negava corretamente a sessão revogada, mas a borda podia devolver resposta autenticada em cache. Foi acrescentado, na última posição, bypass **somente do hostname Jobs**, preservando as cinco regras existentes e o cache de assets imutáveis. URLs privadas e depois o cache do hostname exato Jobs foram purgados; nenhuma purga geral da zona. Novas respostas privadas ficaram DYNAMIC, não HIT, e logout/replay passaram em produção.
+
+Também foi bloqueada interação com formulários AuthShell antes da hidratação React, após uma submissão nativa de credencial exclusivamente sintética durante o teste. A credencial foi invalidada, a fixture removida, e a correção passou em 59 testes Next, TypeScript/build local e remoto, SSR e browser sem JavaScript em quatro páginas. Nenhuma credencial real foi usada nesse formulário nem incluída nas evidências.
+
+O downgrade09 foi corrigido para preservar apenas o índice único de hostname legado, sem adicionar constraint redundante. Oito testes de migration passaram; roundtrip de cópia atual do banco com `alembic check` no runtime antigo e no novo passou. Readiness TLS passou após espera explícita pelo reload do Nginx. Tentativas anteriores do cutover foram abortadas com rollback e preservação do banco; outras interrupções do E2E foram expectativas/seletores do roteiro, corrigidas sem ocultar 5xx.
+
+Gates finais: integridade SQLite ok, FK zero, ownerless zero, conflitos de membership zero, dois triggers append-only intactos, somente BR ativo, pt-BR/BRL, prefixo `/br`, alias legado mantido, API/Next online em loopback com zero restarts e Alembic sem drift. Paridade de 160 arquivos de release com o runtime final; apenas o exemplo não operativo `.env.example` do backend foi excluído, pois o deploy preserva arquivos de ambiente.
+
+Chromium produtivo verificou Admin/listagens, candidato/privacidade/CV/logout/replay e empresa/aprovação obrigatória/equipe/logout/replay. A passagem completa foi retomada nos gates empresariais após aprovação da fixture; o roteiro inicial não é marcado como integralmente concluído. Todas as assertions necessárias ficaram comprovadas pelas duas passagens, sem erros JavaScript ou 5xx inesperados. Contas, vínculos, sessões e vagas sintéticas zerados; eventos de auditoria preservados. Sessões administrativas Headless do teste também foram revogadas ou encerradas, sem encerrar sessões reais do usuário.
+
+SEO externo pós-cleanup: 74 verificações aprovadas, 17 URLs no sitemap brasileiro, canonicals correspondentes, HTML pt-BR, JSON-LD retido, países desativados com 404 real, noindex privado/Admin mantido e nenhum hreflang de país não ativo. Logs incrementais API/Next/Nginx revisados e aprovados.
+
+Em um futuro rollback, remover primeiro os redirects antigo→global da origem; só reativar global→antigo após validar o destino antigo. Não criar loop. Preservar o bypass Jobs de cache privado; reverter regras novas de SSL/hook somente de modo explicitamente coordenado. Downgrade09 exige preflight e rollback do cadastro BR, nunca exclusão de negócios ou restauração automática de snapshot antigo.
