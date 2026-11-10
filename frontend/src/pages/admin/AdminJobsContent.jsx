@@ -1,3 +1,4 @@
+import { appFetch } from '@/lib/regional-runtime.js'
 import { useState, useEffect } from 'react'
 import { Briefcase, Search, Eye, Building2, MapPin, Calendar, ToggleLeft, ToggleRight, X, Users, Plus, Edit2, Trash2, Save, DollarSign, Clock } from 'lucide-react'
 import toast, { Toaster } from 'react-hot-toast'
@@ -36,7 +37,7 @@ export default function AdminJobsContent() {
   const loadJobs = async () => {
     try {
       const token = localStorage.getItem('authToken')
-      const response = await fetch('/api/admin/jobs', {
+      const response = await appFetch('/api/admin/jobs', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -58,7 +59,7 @@ export default function AdminJobsContent() {
   const loadCompanies = async () => {
     try {
       const token = localStorage.getItem('authToken')
-      const response = await fetch('/api/admin/companies', {
+      const response = await appFetch('/api/admin/companies', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -80,7 +81,7 @@ export default function AdminJobsContent() {
 
     try {
       const token = localStorage.getItem('authToken')
-      const response = await fetch('/api/admin/jobs', {
+      const response = await appFetch('/api/admin/jobs', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -125,7 +126,7 @@ export default function AdminJobsContent() {
 
     try {
       const token = localStorage.getItem('authToken')
-      const response = await fetch(`/api/admin/jobs/${jobId}`, {
+      const response = await appFetch(`/api/admin/jobs/${jobId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -148,7 +149,7 @@ export default function AdminJobsContent() {
   const toggleJobStatus = async (jobId, currentStatus) => {
     try {
       const token = localStorage.getItem('authToken')
-      const response = await fetch(`/api/admin/jobs/${jobId}/toggle-status`, {
+      const response = await appFetch(`/api/admin/jobs/${jobId}/toggle-status`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -172,7 +173,7 @@ export default function AdminJobsContent() {
   const viewJobDetails = async (jobId) => {
     try {
       const token = localStorage.getItem('authToken')
-      const response = await fetch(`/api/admin/jobs/${jobId}`, {
+      const response = await appFetch(`/api/admin/jobs/${jobId}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -206,7 +207,7 @@ export default function AdminJobsContent() {
   const saveJobSettings = async () => {
     try {
       const token = localStorage.getItem('authToken')
-      const response = await fetch(`/api/admin/jobs/${selectedJob.id}`, {
+      const response = await appFetch(`/api/admin/jobs/${selectedJob.id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,

@@ -1,3 +1,4 @@
+import { appFetch } from '@/lib/regional-runtime.js'
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Users, Search, MapPin, Briefcase, Mail, Phone, ExternalLink, Filter } from 'lucide-react'
@@ -24,7 +25,7 @@ export default function CompanyCandidatesPage() {
       if (!authToken) return
 
       // Buscar vagas da empresa
-      const jobsResponse = await fetch('/api/jobs/my-jobs', {
+      const jobsResponse = await appFetch('/api/jobs/my-jobs', {
         headers: {
           'Authorization': `Bearer ${authToken}`
         }
@@ -39,7 +40,7 @@ export default function CompanyCandidatesPage() {
       const allApplications = []
       for (const job of jobs) {
         try {
-          const appsResponse = await fetch(`/api/jobs/${job.id}/applications`, {
+          const appsResponse = await appFetch(`/api/jobs/${job.id}/applications`, {
             headers: {
               'Authorization': `Bearer ${authToken}`
             }

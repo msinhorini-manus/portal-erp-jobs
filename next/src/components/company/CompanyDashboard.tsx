@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import Link from '@/components/RegionalLink'
 import { BriefcaseBusiness, CirclePause, Gauge, Plus, UserRoundCheck } from 'lucide-react'
 import { useEffect, useState } from 'react'
 

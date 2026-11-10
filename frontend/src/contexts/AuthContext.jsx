@@ -4,6 +4,7 @@
  */
 import { createContext, useContext, useState, useEffect } from 'react';
 import { authAPI } from '@/services/api';
+import { appFetch, ADMIN_SESSION_EXPIRED, getRegionalRuntime, readCandidateCsrf, regionalHref } from '@/lib/regional-runtime.js';
 
 const AuthContext = createContext({});
 
@@ -42,6 +43,30 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     checkAuth();
+  }, []);
+
+  useEffect(() => {
+    const expired = () => {
+      // Utility has cleared only Admin-owned storage. Reload removes sensitive UI state.
+      window.location.replace('/admin/login?reason=session-expired');
+    };
+    window.addEventListener(ADMIN_SESSION_EXPIRED, expired);
+    return () => window.removeEventListener(ADMIN_SESSION_EXPIRED, expired);
+  }, []);
+
+  useEffect(() => {
+    const { basename } = getRegionalRuntime();
+    if (window.location.pathname !== `${basename}/candidato/curriculo`) return;
+    const controller = new AbortController();
+    appFetch('/bff/auth/me', { credentials: 'same-origin', cache: 'no-store', signal: controller.signal })
+      .then(async response => {
+        if (!response.ok) return;
+        const session = await response.json();
+        if (controller.signal.aborted) return;
+        setUser({ ...session, user_type: 'candidate' });
+        setIsAuthenticated(true);
+      }).catch(() => {});
+    return () => controller.abort();
   }, []);
 
   const checkAuth = () => {
@@ -299,7 +324,6 @@ export function AuthProvider({ children }) {
       const response = await authAPI.forgotPassword(email);
       return { success: true, message: response.message };
     } catch (error) {
-      console.error('Forgot password error:', error);
       const errorMessage = error.response?.data?.error || error.message || 'Erro ao solicitar recuperação de senha';
       setError(errorMessage);
       return { success: false, error: errorMessage };
@@ -317,7 +341,6 @@ export function AuthProvider({ children }) {
       const response = await authAPI.resetPassword(email, token, newPassword);
       return { success: true, message: response.message };
     } catch (error) {
-      console.error('Reset password error:', error);
       const errorMessage = error.response?.data?.error || error.message || 'Erro ao redefinir senha';
       setError(errorMessage);
       return { success: false, error: errorMessage };
@@ -345,8 +368,19 @@ export function AuthProvider({ children }) {
   };
 
   // Logout
-  const logout = () => {
-    void authAPI.logout();
+  const logout = async () => {
+    if (user?.user_type === 'candidate' && window.location.pathname.endsWith('/candidato/curriculo')) {
+      const response = await appFetch('/bff/auth/logout', {
+        method: 'POST', credentials: 'same-origin', cache: 'no-store',
+        headers: { 'X-CSRF-Token': readCandidateCsrf() },
+      });
+      if (!response.ok) throw new Error('Não foi possível encerrar a sessão. Atualize a página e tente novamente.');
+      setUser(null);
+      setIsAuthenticated(false);
+      window.location.assign(regionalHref('/candidato/login'));
+      return;
+    }
+    await authAPI.logout();
     clearAuthData();
     setUser(null);
     setIsAuthenticated(false);
@@ -368,7 +402,7 @@ export function AuthProvider({ children }) {
   };
 
   // Obter userType do localStorage ou do user
-  const userType = getUserType();
+  const userType = user?.user_type === 'candidate' ? 'candidate' : getUserType();
 
   // Obter token do localStorage
   const getToken = () => {

@@ -1,4 +1,7 @@
-import Link from 'next/link'
+'use client'
+
+import Link from '@/components/RegionalLink'
+import { useEffect, useState } from 'react'
 
 import { BrandLockup } from '@/components/layout/BrandLockup'
 
@@ -11,6 +14,8 @@ export function AuthShell({
   description: string
   children: React.ReactNode
 }) {
+  const [ready, setReady] = useState(false)
+  useEffect(() => { setReady(true) }, [])
   return (
     <section className="bg-[linear-gradient(135deg,#eff5f6_0%,#ffffff_52%,#fff7ec_100%)] px-4 py-12 sm:py-16">
       <div className="mx-auto w-full max-w-lg">
@@ -23,7 +28,9 @@ export function AuthShell({
             <h1 className="font-display text-3xl font-extrabold tracking-tight text-portal-dark">{title}</h1>
             <p className="mt-3 text-sm leading-6 text-slate-600">{description}</p>
           </div>
-          {children}
+          <fieldset disabled={!ready} aria-busy={!ready} className="m-0 min-w-0 border-0 p-0">
+            {children}
+          </fieldset>
         </div>
       </div>
     </section>

@@ -3,15 +3,15 @@ import { NextRequest } from 'next/server'
 
 import { authenticatedProxy, logoutSession, publicAuthRequest, validateCsrf } from './candidate-bff'
 import { safeReturnPath } from './candidate-client'
-import { GET as candidateRouteGet } from '../app/bff/candidate/[...path]/route'
+import { GET as candidateRouteGet } from '../app/(regional)/[country]/bff/candidate/[...path]/route'
 
 afterEach(() => vi.unstubAllGlobals())
 
 describe('candidate BFF', () => {
   it('accepts only local return paths', () => {
-    expect(safeReturnPath('/vagas/2')).toBe('/vagas/2')
-    expect(safeReturnPath('https://attacker.example')).toBe('/candidato/dashboard')
-    expect(safeReturnPath('//attacker.example')).toBe('/candidato/dashboard')
+    expect(safeReturnPath('/vagas/2', '/candidato/dashboard', '/br')).toBe('/br/vagas/2')
+    expect(safeReturnPath('https://attacker.example', '/candidato/dashboard', '/br')).toBe('/br/candidato/dashboard')
+    expect(safeReturnPath('//attacker.example', '/candidato/dashboard', '/br')).toBe('/br/candidato/dashboard')
   })
 
   it('stores tokens only in HttpOnly cookies and strips them from JSON', async () => {
@@ -20,7 +20,7 @@ describe('candidate BFF', () => {
       refresh_token: 'refresh-secret',
       user: { id: 1, user_type: 'candidate' },
     }), { status: 200, headers: { 'content-type': 'application/json' } })))
-    const request = new NextRequest('https://jobs.portalerp.com.br/bff/auth/login', {
+    const request = new NextRequest('https://jobs.portalerp.com/br/bff/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email: 'candidate@example.test', password: 'SafePassword1' }),
     })
@@ -38,10 +38,10 @@ describe('candidate BFF', () => {
   })
 
   it('requires a matching double-submit CSRF token', () => {
-    const valid = new NextRequest('https://jobs.portalerp.com.br/bff/candidate/profile', {
+    const valid = new NextRequest('https://jobs.portalerp.com/br/bff/candidate/profile', {
       headers: { cookie: 'pej_csrf=abc123', 'x-csrf-token': 'abc123' },
     })
-    const invalid = new NextRequest('https://jobs.portalerp.com.br/bff/candidate/profile', {
+    const invalid = new NextRequest('https://jobs.portalerp.com/br/bff/candidate/profile', {
       headers: { cookie: 'pej_csrf=abc123', 'x-csrf-token': 'different' },
     })
     expect(validateCsrf(valid)).toBe(true)
@@ -54,7 +54,7 @@ describe('candidate BFF', () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'new-access', refresh_token: 'new-refresh' }), { status: 200, headers: { 'content-type': 'application/json' } }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ id: 1, user_type: 'candidate' }), { status: 200, headers: { 'content-type': 'application/json' } }))
     vi.stubGlobal('fetch', mockedFetch)
-    const request = new NextRequest('https://jobs.portalerp.com.br/bff/auth/me', {
+    const request = new NextRequest('https://jobs.portalerp.com/br/bff/auth/me', {
       headers: { cookie: 'pej_access=old-access; pej_refresh=old-refresh' },
     })
 
@@ -81,7 +81,7 @@ describe('candidate BFF', () => {
       return new Response(JSON.stringify({ error: 'expired' }), { status: 401, headers: { 'content-type': 'application/json' } })
     })
     vi.stubGlobal('fetch', mockedFetch)
-    const makeRequest = () => new NextRequest('https://jobs.portalerp.com.br/bff/auth/me', {
+    const makeRequest = () => new NextRequest('https://jobs.portalerp.com/br/bff/auth/me', {
       headers: { cookie: 'pej_access=old-access; pej_refresh=old-refresh' },
     })
 
@@ -100,7 +100,7 @@ describe('candidate BFF', () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ error: 'expired' }), { status: 401, headers: { 'content-type': 'application/json' } }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ message: 'revoked' }), { status: 200, headers: { 'content-type': 'application/json' } }))
     vi.stubGlobal('fetch', mockedFetch)
-    const request = new NextRequest('https://jobs.portalerp.com.br/bff/auth/logout', {
+    const request = new NextRequest('https://jobs.portalerp.com/br/bff/auth/logout', {
       method: 'POST',
       headers: {
         cookie: 'pej_access=expired-access; pej_refresh=valid-refresh; pej_csrf=csrf-value',
@@ -119,12 +119,12 @@ describe('candidate BFF', () => {
   it('forwards only allowlisted application filters', async () => {
     const mockedFetch = vi.fn(async (_url: string | URL | Request) => new Response(JSON.stringify({ applications: [] }), { status: 200, headers: { 'content-type': 'application/json' } }))
     vi.stubGlobal('fetch', mockedFetch)
-    const request = new NextRequest('https://jobs.portalerp.com.br/bff/candidate/applications?per_page=100&status=applied', { headers: { cookie: 'pej_access=access' } })
-    const response = await candidateRouteGet(request, { params: Promise.resolve({ path: ['applications'] }) })
+    const request = new NextRequest('https://jobs.portalerp.com/br/bff/candidate/applications?per_page=100&status=applied', { headers: { cookie: 'pej_access=access' } })
+    const response = await candidateRouteGet(request, { params: Promise.resolve({ country: 'br', path: ['applications'] }) })
     expect(response.status).toBe(200)
     expect(String(mockedFetch.mock.calls[0][0])).toContain('/api/applications/?per_page=100&status=applied')
 
-    const blocked = new NextRequest('https://jobs.portalerp.com.br/bff/candidate/applications?site_id=2', { headers: { cookie: 'pej_access=access' } })
-    expect((await candidateRouteGet(blocked, { params: Promise.resolve({ path: ['applications'] }) })).status).toBe(400)
+    const blocked = new NextRequest('https://jobs.portalerp.com/br/bff/candidate/applications?site_id=2', { headers: { cookie: 'pej_access=access' } })
+    expect((await candidateRouteGet(blocked, { params: Promise.resolve({ country: 'br', path: ['applications'] }) })).status).toBe(400)
   })
 })

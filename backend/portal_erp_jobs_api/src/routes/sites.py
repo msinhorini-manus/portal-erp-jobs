@@ -123,10 +123,14 @@ def admin_update_site(code: str):
 
         if "domains" in data:
             site.domains.clear()
+            # Delete old unique pairs/primary before inserting replacements.
+            # The transaction is rolled back if any new configuration fails.
+            db.session.flush()
             for domain in data["domains"]:
                 _add_domain(site, domain)
         if "locales" in data:
             site.locales.clear()
+            db.session.flush()
             for locale in data["locales"]:
                 _add_locale(site, locale)
 

@@ -1,3 +1,4 @@
+import { internalApiOrigin, requestRegion, trustedRegionalHeaders } from './regional-transport'
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -12,16 +13,11 @@ const refreshFlights = new Map<string, Promise<Tokens | null>>()
 type Tokens = { access_token: string; refresh_token: string }
 type Payload = Record<string, unknown>
 
-function backendOrigin(request: NextRequest) {
-  return process.env.NEXT_INTERNAL_API_ORIGIN?.replace(/\/$/, '') || request.nextUrl.origin
-}
+function backendOrigin(_request: NextRequest) { return internalApiOrigin() }
 
 function regionalHeaders(request: NextRequest, headers?: HeadersInit) {
-  const result = new Headers(headers)
-  if (backendOrigin(request) !== request.nextUrl.origin) {
-    result.set('X-Regional-Host', request.headers.get('host') || request.nextUrl.host)
-  }
-  return result
+  const { host, prefix } = requestRegion(request)
+  return trustedRegionalHeaders(host, prefix, headers)
 }
 
 async function parseBody(response: Response): Promise<Payload> {
@@ -47,21 +43,21 @@ export function validateCompanyCsrf(request: NextRequest) {
   return Boolean(cookie && header && safeEqual(cookie, header))
 }
 
-export function clearCompanySessionCookies(response: NextResponse) {
+export function clearCompanySessionCookies(response: NextResponse, request: NextRequest) {
   for (const name of [COMPANY_ACCESS_COOKIE, COMPANY_REFRESH_COOKIE, COMPANY_CSRF_COOKIE]) {
     response.cookies.set(name, '', {
       httpOnly: name !== COMPANY_CSRF_COOKIE,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      path: '/',
+      path: requestRegion(request).prefix,
       maxAge: 0,
     })
   }
   return response
 }
 
-export function setCompanySessionCookies(response: NextResponse, tokens: { access_token: string; refresh_token?: string }) {
-  const common = { secure: process.env.NODE_ENV === 'production', sameSite: 'strict' as const, path: '/' }
+export function setCompanySessionCookies(response: NextResponse, tokens: { access_token: string; refresh_token?: string }, request: NextRequest) {
+  const common = { secure: process.env.NODE_ENV === 'production', sameSite: 'strict' as const, path: requestRegion(request).prefix }
   response.cookies.set(COMPANY_ACCESS_COOKIE, tokens.access_token, { ...common, httpOnly: true, maxAge: ACCESS_MAX_AGE })
   if (tokens.refresh_token) {
     response.cookies.set(COMPANY_REFRESH_COOKIE, tokens.refresh_token, { ...common, httpOnly: true, maxAge: REFRESH_MAX_AGE })
@@ -108,13 +104,13 @@ export async function publicCompanyAuthRequest(
   delete payload.refresh_token
 
   if (options.requireCompany && backend.ok && (payload.user as { user_type?: string } | undefined)?.user_type !== 'company') {
-    return clearCompanySessionCookies(jsonResponse({ error: 'Conta empresarial obrigatória.' }, 403))
+    return clearCompanySessionCookies(jsonResponse({ error: 'Conta empresarial obrigatória.' }, 403), request)
   }
   const response = jsonResponse(payload, backend.status)
   if (backend.ok && options.establishSession && accessToken && refreshToken) {
-    setCompanySessionCookies(response, { access_token: accessToken, refresh_token: refreshToken })
+    setCompanySessionCookies(response, { access_token: accessToken, refresh_token: refreshToken }, request)
   }
-  if (backend.ok && options.clearOnSuccess) clearCompanySessionCookies(response)
+  if (backend.ok && options.clearOnSuccess) clearCompanySessionCookies(response, request)
   return response
 }
 
@@ -143,7 +139,7 @@ async function executeRefresh(request: NextRequest, refreshToken: string) {
 async function refreshCompanySession(request: NextRequest) {
   const refreshToken = request.cookies.get(COMPANY_REFRESH_COOKIE)?.value
   if (!refreshToken) return null
-  const key = createHash('sha256').update(refreshToken).digest('hex')
+  const key = createHash('sha256').update(`${requestRegion(request).host}:${requestRegion(request).prefix}:${refreshToken}`).digest('hex')
   const active = refreshFlights.get(key)
   if (active) return active
   const flight = executeRefresh(request, refreshToken).finally(() => refreshFlights.delete(key))
@@ -178,20 +174,20 @@ export async function authenticatedCompanyProxy(
   let backend = await execute(accessToken)
   if (backend.status === 401) {
     rotated = await refreshCompanySession(request)
-    if (!rotated) return clearCompanySessionCookies(jsonResponse({ error: 'Sessão expirada. Faça login novamente.' }, 401))
+    if (!rotated) return clearCompanySessionCookies(jsonResponse({ error: 'Sessão expirada. Faça login novamente.' }, 401), request)
     accessToken = rotated.access_token
     backend = await execute(accessToken)
   }
 
   const payload = await parseBody(backend)
   if (options.requireCompanyResponse && backend.ok && payload.user_type !== 'company') {
-    return clearCompanySessionCookies(jsonResponse({ error: 'Conta empresarial obrigatória.' }, 403))
+    return clearCompanySessionCookies(jsonResponse({ error: 'Conta empresarial obrigatória.' }, 403), request)
   }
   const response = jsonResponse(payload, backend.status)
-  if (rotated) setCompanySessionCookies(response, rotated)
-  if (options.clearOnSuccess && backend.ok) clearCompanySessionCookies(response)
+  if (rotated) setCompanySessionCookies(response, rotated, request)
+  if (options.clearOnSuccess && backend.ok) clearCompanySessionCookies(response, request)
   if (backend.status === 401 || (backend.status === 403 && String(payload.error || '').toLowerCase().includes('sess'))) {
-    clearCompanySessionCookies(response)
+    clearCompanySessionCookies(response, request)
   }
   return response
 }
@@ -203,7 +199,7 @@ export async function logoutCompanySession(request: NextRequest) {
   let backend = access ? await callCompanyBackend(request, '/auth/logout', { method: 'POST' }, access) : null
   if ((!backend || !backend.ok) && refresh) backend = await callCompanyBackend(request, '/auth/logout', { method: 'POST' }, refresh)
   const payload = backend ? await parseBody(backend) : { message: 'Sessão encerrada.' }
-  return clearCompanySessionCookies(jsonResponse(payload, backend?.status || 200))
+  return clearCompanySessionCookies(jsonResponse(payload, backend?.status || 200), request)
 }
 
 export type CompanyRoute = {

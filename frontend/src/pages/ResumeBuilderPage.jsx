@@ -1,3 +1,4 @@
+import { appFetch, readCandidateCsrf } from '@/lib/regional-runtime.js'
 import { useState, useRef, useEffect } from 'react'
 import { Save, Download, Eye, EyeOff, Plus, Trash2 } from 'lucide-react'
 import jsPDF from 'jspdf'
@@ -44,10 +45,7 @@ const dateFromMonth = (value) => value ? `${value}-01` : null
 const temporaryId = () => `new-${crypto.randomUUID()}`
 const persistedId = (item) => typeof item.backendId === 'number' ? item.backendId : null
 
-function readCookie(name) {
-  const prefix = `${encodeURIComponent(name)}=`
-  return document.cookie.split('; ').find(value => value.startsWith(prefix))?.slice(prefix.length) || ''
-}
+
 
 function normalizeResume(data, email = '') {
   const candidate = data?.candidate || {}
@@ -199,7 +197,7 @@ export default function ResumeBuilderPage() {
   const reconcileResume = async () => {
     const [data, sessionResponse] = await Promise.all([
       resumeAPI.get(),
-      fetch('/bff/auth/me', { credentials: 'same-origin', cache: 'no-store' }),
+      appFetch('/bff/auth/me', { credentials: 'same-origin', cache: 'no-store' }),
     ])
     const session = sessionResponse.ok ? await sessionResponse.json() : {}
     setResume(normalizeResume(data, session.email || ''))
@@ -210,8 +208,8 @@ export default function ResumeBuilderPage() {
       try {
         const [data, sessionResponse, privacyResponse] = await Promise.all([
           resumeAPI.get(),
-          fetch('/bff/auth/me', { credentials: 'same-origin', cache: 'no-store' }),
-          fetch('/bff/candidate/privacy', { credentials: 'same-origin', cache: 'no-store' }),
+          appFetch('/bff/auth/me', { credentials: 'same-origin', cache: 'no-store' }),
+          appFetch('/bff/candidate/privacy', { credentials: 'same-origin', cache: 'no-store' }),
         ])
         const session = sessionResponse.ok ? await sessionResponse.json() : {}
         const privacy = privacyResponse.ok ? await privacyResponse.json() : {}
@@ -227,11 +225,11 @@ export default function ResumeBuilderPage() {
   const togglePrivacy = async () => {
     const newStatus = !curriculoPublico
     try {
-      const response = await fetch('/bff/candidate/privacy', {
+      const response = await appFetch('/bff/candidate/privacy', {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'X-CSRF-Token': decodeURIComponent(readCookie('pej_csrf')),
+          'X-CSRF-Token': readCandidateCsrf(),
         },
         credentials: 'same-origin',
         body: JSON.stringify({ curriculo_publico: newStatus }),

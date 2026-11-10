@@ -149,12 +149,29 @@ class Site(db.Model):
             None,
         )
 
+    @property
+    def url_prefix(self) -> str:
+        domain = self.primary_domain
+        return domain.url_prefix if domain else ""
+
+    @property
+    def regional_base_url(self) -> str | None:
+        origin = normalize_origin(self.canonical_origin)
+        return f"{origin}{self.url_prefix}" if origin else None
+
     def can_activate(self) -> tuple[bool, str | None]:
         """Validate the minimum data needed to make a regional site public."""
         if not self.canonical_origin:
             return False, "canonical_origin is required before activation"
         if not self.primary_domain:
             return False, "an active primary domain is required before activation"
+        hostname = urlparse(self.canonical_origin).hostname
+        if not any(
+            domain.is_active and domain.hostname == hostname
+            and domain.url_prefix == self.url_prefix
+            for domain in self.domains
+        ):
+            return False, "canonical_origin must match an active regional domain"
         if not any(
             locale.is_active
             and locale.is_default
@@ -185,6 +202,8 @@ class Site(db.Model):
             "currency_code": self.currency_code,
             "timezone": self.timezone,
             "canonical_origin": self.canonical_origin,
+            "url_prefix": self.url_prefix,
+            "regional_base_url": self.regional_base_url,
             "is_active": self.is_active,
         }
         if include_configuration:
@@ -205,7 +224,7 @@ class SiteDomain(db.Model):
 
     __tablename__ = "site_domains"
     __table_args__ = (
-        db.UniqueConstraint("site_id", "url_prefix", name="uq_site_domain_prefix"),
+        db.UniqueConstraint("hostname", "url_prefix", name="uq_site_domains_hostname_prefix"),
         db.Index(
             "uq_site_domains_primary",
             "site_id",
@@ -222,7 +241,7 @@ class SiteDomain(db.Model):
         nullable=False,
         index=True,
     )
-    hostname = db.Column(db.String(253), unique=True, nullable=False, index=True)
+    hostname = db.Column(db.String(253), nullable=False, index=True)
     url_prefix = db.Column(db.String(64), nullable=False, default="")
     is_primary = db.Column(db.Boolean, nullable=False, default=False)
     is_active = db.Column(db.Boolean, nullable=False, default=True)

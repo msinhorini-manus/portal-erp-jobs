@@ -1,3 +1,5 @@
+import { configuredApiBase } from '@/lib/regional-runtime.js'
+import { appFetch } from '@/lib/regional-runtime.js'
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { MapPin, Linkedin, Github, Loader2 } from 'lucide-react'
@@ -6,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 
-const API_URL = import.meta.env.VITE_API_URL || ''
+const API_URL = configuredApiBase(import.meta.env.VITE_API_URL)
 
 export default function CompanySearchPage() {
   const [candidates, setCandidates] = useState([])
@@ -28,7 +30,7 @@ export default function CompanySearchPage() {
   const fetchCandidates = async () => {
     try {
       setLoading(true)
-      const response = await fetch(`${API_URL}/api/candidates/public`)
+      const response = await appFetch(`${API_URL}/candidates/public`)
       if (!response.ok) {
         throw new Error('Erro ao buscar candidatos')
       }

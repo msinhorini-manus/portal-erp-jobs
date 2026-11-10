@@ -1,8 +1,10 @@
+import { configuredApiBase } from '@/lib/regional-runtime.js'
+import { appFetch } from '@/lib/regional-runtime.js'
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://jobs.portalerp.com.br/api';
+const API_BASE_URL = configuredApiBase(import.meta.env.VITE_API_URL);
 
 // Mapeamento de cores
 const colorMap = {
@@ -30,7 +32,7 @@ export default function TechnologiesPage() {
   const fetchTechnologies = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE_URL}/config/technologies`);
+      const response = await appFetch(`${API_BASE_URL}/config/technologies`);
 
       if (!response.ok) {
         throw new Error('Erro ao carregar tecnologias');

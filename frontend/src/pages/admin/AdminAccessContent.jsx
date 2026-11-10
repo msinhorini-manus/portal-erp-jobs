@@ -1,3 +1,4 @@
+import { appFetch } from '@/lib/regional-runtime.js'
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { KeyRound, LockKeyhole, ShieldCheck, X } from 'lucide-react'
@@ -6,7 +7,7 @@ const buttonClass = 'rounded-lg border px-3 py-2 text-sm font-medium disabled:op
 const statusLabels = { pending: 'Aguardando aprovação', approved: 'Aprovada', rejected: 'Rejeitada', suspended: 'Suspensa' }
 
 async function adminRequest(path, options = {}) {
-  const response = await fetch(`/api/admin${path}`, {
+  const response = await appFetch(`/api/admin${path}`, {
     ...options,
     cache: 'no-store',
     headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}`, 'Content-Type': 'application/json' },

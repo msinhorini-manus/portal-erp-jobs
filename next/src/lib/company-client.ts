@@ -1,3 +1,4 @@
+import { browserPrefix, browserRegionalPath, safeRegionalReturn } from './regional-routes'
 export type CompanySession = {
   id: number
   email: string
@@ -84,9 +85,8 @@ export function clearLegacyCompanySession() {
   for (const key of LEGACY_COMPANY_KEYS) storage.removeItem(key)
 }
 
-export function safeCompanyReturnPath(value: string | null, fallback = '/empresa/dashboard') {
-  if (!value || !value.startsWith('/') || value.startsWith('//') || !value.startsWith('/empresa/')) return fallback
-  return value
+export function safeCompanyReturnPath(value: string | null, fallback = '/empresa/dashboard', prefix = browserPrefix()) {
+  return safeRegionalReturn(value, prefix, fallback, true)
 }
 
 function readCookie(name: string) {
@@ -102,7 +102,7 @@ export async function companyFetch<T>(path: string, init: RequestInit = {}): Pro
   if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
     headers.set('X-CSRF-Token', decodeURIComponent(readCookie('pej_company_csrf')))
   }
-  const response = await fetch(path, { ...init, headers, credentials: 'same-origin', cache: 'no-store' })
+  const response = await fetch(browserRegionalPath(path), { ...init, headers, credentials: 'same-origin', cache: 'no-store' })
   const payload = await response.json().catch(() => ({})) as T & { error?: string; message?: string }
   if (!response.ok) {
     const error = new Error(payload.error || payload.message || 'Não foi possível concluir a operação.')
@@ -113,12 +113,12 @@ export async function companyFetch<T>(path: string, init: RequestInit = {}): Pro
 }
 
 export function companyAuthPath(path: string) {
-  return `/bff/company/auth/${path}`
+  return browserRegionalPath(`/bff/company/auth/${path}`)
 }
 
 export function companyPath(path: string, query?: URLSearchParams) {
   const suffix = query?.toString()
-  return `/bff/company/${path}${suffix ? `?${suffix}` : ''}`
+  return browserRegionalPath(`/bff/company/${path}${suffix ? `?${suffix}` : ''}`)
 }
 
 export function normalizeCompanyProfile(payload: Record<string, unknown>): CompanyProfileResponse {

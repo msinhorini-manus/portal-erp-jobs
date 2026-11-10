@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import Link from '@/components/RegionalLink'
 import { FormEvent, useEffect, useState } from 'react'
 
 import { AuthShell, buttonClass, inputClass } from './AuthShell'

@@ -1,4 +1,5 @@
-import { Link, useNavigate } from 'react-router-dom';
+import Link from '@/components/BridgeLink.jsx'
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Briefcase } from 'lucide-react';
 

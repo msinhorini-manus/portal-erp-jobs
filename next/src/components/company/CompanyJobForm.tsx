@@ -1,6 +1,6 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/regional-navigation'
 import { FormEvent, useEffect, useState } from 'react'
 
 import { companyAuthPath, companyFetch, companyPath, CompanySession } from '@/lib/company-client'

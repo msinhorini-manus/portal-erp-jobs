@@ -1,3 +1,4 @@
+import { appFetch } from '@/lib/regional-runtime.js'
 /**
  * Admin API Service
  * Handles all admin-related API calls
@@ -16,7 +17,7 @@ const getAuthHeaders = () => {
 export const adminAPI = {
   // Statistics
   getStats: async () => {
-    const response = await fetch(`${API_BASE_URL}/stats`, {
+    const response = await appFetch(`${API_BASE_URL}/stats`, {
       headers: getAuthHeaders()
     });
     if (!response.ok) throw new Error('Failed to fetch stats');
@@ -25,7 +26,7 @@ export const adminAPI = {
 
   // Tags
   getTags: async () => {
-    const response = await fetch(`${API_BASE_URL}/tags`, {
+    const response = await appFetch(`${API_BASE_URL}/tags`, {
       headers: getAuthHeaders()
     });
     if (!response.ok) throw new Error('Failed to fetch tags');
@@ -33,7 +34,7 @@ export const adminAPI = {
   },
 
   createTag: async (data) => {
-    const response = await fetch(`${API_BASE_URL}/tags`, {
+    const response = await appFetch(`${API_BASE_URL}/tags`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify(data)
@@ -43,7 +44,7 @@ export const adminAPI = {
   },
 
   updateTag: async (id, data) => {
-    const response = await fetch(`${API_BASE_URL}/tags/${id}`, {
+    const response = await appFetch(`${API_BASE_URL}/tags/${id}`, {
       method: 'PUT',
       headers: getAuthHeaders(),
       body: JSON.stringify(data)
@@ -53,7 +54,7 @@ export const adminAPI = {
   },
 
   deleteTag: async (id) => {
-    const response = await fetch(`${API_BASE_URL}/tags/${id}`, {
+    const response = await appFetch(`${API_BASE_URL}/tags/${id}`, {
       method: 'DELETE',
       headers: getAuthHeaders()
     });
@@ -66,7 +67,7 @@ export const adminAPI = {
     let url = `${API_BASE_URL}/users?page=${page}&per_page=${perPage}`;
     if (type) url += `&type=${type}`;
 
-    const response = await fetch(url, {
+    const response = await appFetch(url, {
       headers: getAuthHeaders()
     });
     if (!response.ok) throw new Error('Failed to fetch users');
@@ -74,7 +75,7 @@ export const adminAPI = {
   },
 
   deleteUser: async (id) => {
-    const response = await fetch(`${API_BASE_URL}/users/${id}`, {
+    const response = await appFetch(`${API_BASE_URL}/users/${id}`, {
       method: 'DELETE',
       headers: getAuthHeaders()
     });
@@ -83,7 +84,7 @@ export const adminAPI = {
   },
 
   toggleUserActive: async (id) => {
-    const response = await fetch(`${API_BASE_URL}/users/${id}/toggle-active`, {
+    const response = await appFetch(`${API_BASE_URL}/users/${id}/toggle-active`, {
       method: 'PATCH',
       headers: getAuthHeaders()
     });
@@ -96,7 +97,7 @@ export const adminAPI = {
     let url = `${API_BASE_URL}/jobs?page=${page}&per_page=${perPage}`;
     if (status) url += `&status=${status}`;
 
-    const response = await fetch(url, {
+    const response = await appFetch(url, {
       headers: getAuthHeaders()
     });
     if (!response.ok) throw new Error('Failed to fetch jobs');
@@ -104,7 +105,7 @@ export const adminAPI = {
   },
 
   deleteJob: async (id) => {
-    const response = await fetch(`${API_BASE_URL}/jobs/${id}`, {
+    const response = await appFetch(`${API_BASE_URL}/jobs/${id}`, {
       method: 'DELETE',
       headers: getAuthHeaders()
     });
@@ -118,7 +119,7 @@ export const adminAPI = {
     if (search) url += `&search=${encodeURIComponent(search)}`;
     if (status) url += `&status=${status}`;
 
-    const response = await fetch(url, {
+    const response = await appFetch(url, {
       headers: getAuthHeaders()
     });
     if (!response.ok) throw new Error(`Failed to fetch companies: ${response.status}`);
@@ -126,7 +127,7 @@ export const adminAPI = {
   },
 
   getCompanyDetails: async (id) => {
-    const response = await fetch(`${API_BASE_URL}/companies/${id}`, {
+    const response = await appFetch(`${API_BASE_URL}/companies/${id}`, {
       headers: getAuthHeaders()
     });
     if (!response.ok) throw new Error('Failed to fetch company details');
@@ -134,7 +135,7 @@ export const adminAPI = {
   },
 
   updateCompany: async (id, data) => {
-    const response = await fetch(`${API_BASE_URL}/companies/${id}`, {
+    const response = await appFetch(`${API_BASE_URL}/companies/${id}`, {
       method: 'PUT',
       headers: getAuthHeaders(),
       body: JSON.stringify(data)
@@ -144,7 +145,7 @@ export const adminAPI = {
   },
 
   toggleCompanyActive: async (id) => {
-    const response = await fetch(`${API_BASE_URL}/companies/${id}/toggle-active`, {
+    const response = await appFetch(`${API_BASE_URL}/companies/${id}/toggle-active`, {
       method: 'PATCH',
       headers: getAuthHeaders()
     });
@@ -153,7 +154,7 @@ export const adminAPI = {
   },
 
   deleteCompany: async (id) => {
-    const response = await fetch(`${API_BASE_URL}/companies/${id}`, {
+    const response = await appFetch(`${API_BASE_URL}/companies/${id}`, {
       method: 'DELETE',
       headers: getAuthHeaders()
     });
@@ -162,7 +163,7 @@ export const adminAPI = {
   },
 
   getCompanyJobs: async (companyId, page = 1, perPage = 20) => {
-    const response = await fetch(`${API_BASE_URL}/companies/${companyId}/jobs?page=${page}&per_page=${perPage}`, {
+    const response = await appFetch(`${API_BASE_URL}/companies/${companyId}/jobs?page=${page}&per_page=${perPage}`, {
       headers: getAuthHeaders()
     });
     if (!response.ok) throw new Error('Failed to fetch company jobs');
@@ -175,7 +176,7 @@ export const adminAPI = {
     if (search) url += `&search=${encodeURIComponent(search)}`;
     if (status) url += `&status=${status}`;
 
-    const response = await fetch(url, {
+    const response = await appFetch(url, {
       headers: getAuthHeaders()
     });
     if (!response.ok) throw new Error(`Failed to fetch candidates: ${response.status}`);
@@ -183,7 +184,7 @@ export const adminAPI = {
   },
 
   toggleCandidateActive: async (id) => {
-    const response = await fetch(`${API_BASE_URL}/candidates/${id}/toggle-active`, {
+    const response = await appFetch(`${API_BASE_URL}/candidates/${id}/toggle-active`, {
       method: 'PATCH',
       headers: getAuthHeaders()
     });

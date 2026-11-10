@@ -1,3 +1,4 @@
+import { appFetch } from '@/lib/regional-runtime.js'
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -46,7 +47,7 @@ export default function CandidateDashboardPage() {
       setLoadingJobs(true);
 
       // Carregar vagas ativas da API
-      const response = await fetch('/api/jobs/');
+      const response = await appFetch('/api/jobs/');
       if (response.ok) {
         const data = await response.json();
         setJobs(data.jobs || []);
@@ -55,7 +56,7 @@ export default function CandidateDashboardPage() {
       // Carregar minhas candidaturas da API
       const token = localStorage.getItem('authToken');
       if (token) {
-        const appsResponse = await fetch('/api/applications/my-applications', {
+        const appsResponse = await appFetch('/api/applications/my-applications', {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -78,7 +79,7 @@ export default function CandidateDashboardPage() {
       const token = localStorage.getItem('authToken');
       if (!token) return;
 
-      const response = await fetch('/api/resume/', {
+      const response = await appFetch('/api/resume/', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
@@ -97,7 +98,7 @@ export default function CandidateDashboardPage() {
       const token = localStorage.getItem('authToken');
       if (!token) return;
 
-      const response = await fetch('/api/candidates/profile', {
+      const response = await appFetch('/api/candidates/profile', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
@@ -134,7 +135,7 @@ export default function CandidateDashboardPage() {
       const token = localStorage.getItem('authToken');
       if (!token) return;
 
-      const response = await fetch('/api/candidates/profile', {
+      const response = await appFetch('/api/candidates/profile', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -181,7 +182,7 @@ export default function CandidateDashboardPage() {
         return;
       }
 
-      const response = await fetch('/api/applications/', {
+      const response = await appFetch('/api/applications/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

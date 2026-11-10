@@ -1,3 +1,5 @@
+import { configuredApiBase } from '@/lib/regional-runtime.js'
+import { appFetch } from '@/lib/regional-runtime.js'
 import { useState, useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { MapPin, Building2, Clock, DollarSign, X, Filter, Loader2, Search, ChevronDown, ChevronUp, Briefcase } from 'lucide-react'
@@ -6,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 
-const API_URL = import.meta.env.VITE_API_URL || '/api'
+const API_URL = configuredApiBase(import.meta.env.VITE_API_URL)
 
 // Lista de tecnologias populares para sugestão
 const POPULAR_TECHNOLOGIES = [
@@ -76,7 +78,7 @@ export default function JobSearchPage() {
       if (filters.salaryMin) params.append('salary_min_exact', filters.salaryMin)
       if (filters.salaryMax) params.append('salary_max_exact', filters.salaryMax)
 
-      const response = await fetch(`${API_URL}/jobs/?${params.toString()}`)
+      const response = await appFetch(`${API_URL}/jobs/?${params.toString()}`)
 
       if (!response.ok) {
         throw new Error('Erro ao carregar vagas')

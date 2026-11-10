@@ -1,6 +1,7 @@
 'use client'
+import { browserRegionalPath } from '@/lib/regional-routes'
 
-import Link from 'next/link'
+import Link from '@/components/RegionalLink'
 import { FormEvent, useEffect, useState } from 'react'
 
 import { BrandLockup } from '@/components/layout/BrandLockup'
@@ -21,7 +22,7 @@ export function CompanyInvitationAccept({ token }: { token: string }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch(`/bff/company/invitations/${encodeURIComponent(token)}`, { cache: 'no-store' })
+    fetch(browserRegionalPath(`/bff/company/invitations/${encodeURIComponent(token)}`), { cache: 'no-store' })
       .then(async response => {
         const payload = await response.json()
         if (!response.ok) throw new Error(payload.error || 'Convite inválido.')
@@ -36,7 +37,7 @@ export function CompanyInvitationAccept({ token }: { token: string }) {
     event.preventDefault()
     setError('')
     setMessage('')
-    const response = await fetch(`/bff/company/invitations/${encodeURIComponent(token)}`, {
+    const response = await fetch(browserRegionalPath(`/bff/company/invitations/${encodeURIComponent(token)}`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ password, accept_terms: acceptTerms, accept_privacy: acceptPrivacy }),

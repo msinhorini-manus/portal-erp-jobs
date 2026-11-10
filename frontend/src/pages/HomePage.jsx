@@ -1,3 +1,5 @@
+import { configuredApiBase } from '@/lib/regional-runtime.js'
+import { appFetch } from '@/lib/regional-runtime.js'
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Code2, Settings, Headphones, Users, TrendingUp, FileText, Cloud, Database, Shield, Briefcase } from 'lucide-react'
@@ -6,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useNavigate } from 'react-router-dom'
 
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+const API_URL = configuredApiBase(import.meta.env.VITE_API_URL);
 
 // Mapeamento de categorias com ícones e cores
 const categoryConfig = {
@@ -45,8 +47,8 @@ export default function HomePage() {
 
       // Carregar estatísticas e categorias em paralelo para melhor performance
       const [statsResponse, categoriesResponse] = await Promise.all([
-        fetch(`${API_URL}/stats/dashboard`),
-        fetch(`${API_URL}/stats/categories`)
+        appFetch(`${API_URL}/stats/dashboard`),
+        appFetch(`${API_URL}/stats/categories`)
       ]);
 
       // Processar estatísticas

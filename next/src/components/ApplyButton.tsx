@@ -1,4 +1,5 @@
 'use client'
+import { browserRegionalPath } from '@/lib/regional-routes'
 
 import { useState } from 'react'
 
@@ -21,7 +22,7 @@ export function ApplyButton({ jobId }: { jobId: number }) {
     } catch (reason) {
       const status = (reason as { status?: number }).status
       if (status === 401 || status === 403) {
-        window.location.href = `/candidato/login?redirect=${encodeURIComponent(`/vagas/${jobId}`)}`
+        window.location.href = browserRegionalPath(`/candidato/login?redirect=${encodeURIComponent(browserRegionalPath(`/vagas/${jobId}`))}`)
         return
       }
       if (status === 409) {

@@ -1,3 +1,4 @@
+import { appFetch } from '@/lib/regional-runtime.js'
 import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import {
@@ -19,7 +20,7 @@ export default function AdminSidebar() {
 
   useEffect(() => {
     const controller = new AbortController()
-    fetch('/api/admin/access-capabilities', {
+    appFetch('/api/admin/access-capabilities', {
       headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` },
       signal: controller.signal,
       cache: 'no-store',

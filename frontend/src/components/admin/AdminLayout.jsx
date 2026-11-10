@@ -11,9 +11,13 @@ export default function AdminLayout() {
   const { logout, user } = useAuth()
   const navigate = useNavigate()
 
-  const handleLogout = () => {
-    logout()
-    navigate('/admin/login')
+  const handleLogout = async () => {
+    try {
+      await logout()
+      navigate('/admin/login')
+    } catch {
+      window.alert('Não foi possível encerrar a sessão. Tente novamente.')
+    }
   }
 
   return (

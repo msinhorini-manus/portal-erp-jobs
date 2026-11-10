@@ -1,8 +1,10 @@
+import { configuredApiBase } from '@/lib/regional-runtime.js'
+import { appFetch } from '@/lib/regional-runtime.js'
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Code2, Settings, Headphones, Users, TrendingUp, FileText, Cloud, Database, Shield, Brain, Smartphone, CheckCircle, Loader2 } from 'lucide-react'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://jobs.portalerp.com.br/api';
+const API_BASE_URL = configuredApiBase(import.meta.env.VITE_API_URL);
 
 // Mapeamento de nomes de ícones para componentes
 const iconMap = {
@@ -47,7 +49,7 @@ export default function AreasPage() {
   const fetchAreas = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE_URL}/config/areas`);
+      const response = await appFetch(`${API_BASE_URL}/config/areas`);
 
       if (!response.ok) {
         throw new Error('Erro ao carregar áreas');

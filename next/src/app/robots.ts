@@ -1,20 +1,8 @@
-import { MetadataRoute } from 'next'
-
-import { getSiteContext } from '@/lib/site-resolver.server'
-import { requireCanonicalOrigin } from '@/lib/site'
-
-export default async function robots(): Promise<MetadataRoute.Robots> {
-  const { site } = await getSiteContext()
-  const origin = requireCanonicalOrigin(site)
-
+import type { MetadataRoute } from 'next'
+import { globalCanonicalOrigin } from '@/lib/global-site'
+export default function robots(): MetadataRoute.Robots {
   return {
-    rules: [
-      {
-        userAgent: '*',
-        allow: '/',
-        disallow: ['/candidato/', '/empresa/', '/admin/'],
-      },
-    ],
-    sitemap: `${origin}/sitemap.xml`,
+    rules: [{ userAgent: '*', allow: '/', disallow: ['/api/', '/*/api/', '/*/bff/'] }],
+    sitemap: `${globalCanonicalOrigin()}/sitemap.xml`,
   }
 }

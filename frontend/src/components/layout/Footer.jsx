@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import Link from '@/components/BridgeLink.jsx'
 
 import BrandLockup from './BrandLockup'
 

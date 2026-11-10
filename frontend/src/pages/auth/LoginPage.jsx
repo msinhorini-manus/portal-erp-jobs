@@ -1,3 +1,4 @@
+import { regionalHref } from '@/lib/regional-runtime.js'
 import React, { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -61,7 +62,7 @@ export default function LoginPage() {
       return;
     }
 
-    const redirectUri = `${window.location.origin}/auth/google/callback`;
+    const redirectUri = `${window.location.origin}${regionalHref('/auth/google/callback')}`;
     const scope = 'openid email profile';
     const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=${encodeURIComponent(scope)}`;
 
@@ -75,7 +76,7 @@ export default function LoginPage() {
       return;
     }
 
-    const redirectUri = `${window.location.origin}/auth/linkedin/callback`;
+    const redirectUri = `${window.location.origin}${regionalHref('/auth/linkedin/callback')}`;
     const scope = 'openid profile email';
     const linkedInAuthUrl = `https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id=${LINKEDIN_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}`;
 

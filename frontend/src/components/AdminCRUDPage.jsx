@@ -1,7 +1,9 @@
+import { configuredApiBase } from '@/lib/regional-runtime.js'
+import { appFetch } from '@/lib/regional-runtime.js'
 import { useState, useEffect } from 'react';
 import { Search, Plus, Edit, Trash2, X, Loader2 } from 'lucide-react';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://jobs.portalerp.com.br/api';
+const API_BASE_URL = configuredApiBase(import.meta.env.VITE_API_URL);
 
 const AdminCRUDPage = ({
   title,
@@ -49,7 +51,7 @@ const AdminCRUDPage = ({
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(`${API_BASE_URL}${apiEndpoint}`);
+      const response = await appFetch(`${API_BASE_URL}${apiEndpoint}`);
 
       if (!response.ok) {
         throw new Error(`Erro ao carregar dados: ${response.status}`);
@@ -115,7 +117,7 @@ const AdminCRUDPage = ({
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}${apiEndpoint}/${item.id}`, {
+      const response = await appFetch(`${API_BASE_URL}${apiEndpoint}/${item.id}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -171,7 +173,7 @@ const AdminCRUDPage = ({
 
       const method = editingItem ? 'PUT' : 'POST';
 
-      const response = await fetch(url, {
+      const response = await appFetch(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
