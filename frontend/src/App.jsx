@@ -122,7 +122,8 @@ function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/vagas" element={<JobSearchPage />} />
             <Route path="/empresas" element={<CompaniesPage />} />
-            <Route path="/empresas/:id" element={<CompanyDetailPage />} />
+            <Route path="/empresas/:companySlug/:id" element={<CompanyDetailPage collection="empresas" />} />
+            <Route path="/companies/:companySlug/:id" element={<CompanyDetailPage collection="companies" />} />
             <Route path="/areas" element={<AreasPage />} />
             <Route path="/tecnologias" element={<TechnologiesPage />} />
             <Route path="/salarios" element={<SalariesPage />} />

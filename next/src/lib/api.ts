@@ -2,6 +2,7 @@ import { publicJob } from './regional-sitemap'
 import { getSiteContext, serverRegion } from './site-resolver.server'
 import { contextCacheTag, internalApiOrigin, trustedRegionalHeaders } from './regional-transport'
 import type { RegionalContext } from './site'
+import { internalReadFetch } from './internal-read-fetch'
 export class ApiError extends Error {
   constructor(public status: number) { super(`API request failed (${status})`) }
 }
@@ -13,7 +14,8 @@ export async function fetchAPI(endpoint: string, options: SiteFetchOptions = {})
   if (site.url_prefix !== prefix || !site.is_active) throw new Error('API context does not match route')
   if (!endpoint.startsWith('/') || endpoint.startsWith('//')) throw new Error('Invalid internal API path')
   const tags = [...(init.next?.tags || []), contextCacheTag(host, prefix, site)]
-  const response = await fetch(`${internalApiOrigin()}/api${endpoint}`, {
+  const read = (init.method || 'GET').toUpperCase() === 'GET' ? internalReadFetch : fetch
+  const response = await read(`${internalApiOrigin()}/api${endpoint}`, {
     ...init, headers: trustedRegionalHeaders(host, prefix, init.headers),
     ...(init.cache === 'no-store' ? {} : { next: { revalidate: init.next?.revalidate ?? 60, tags } }),
   })
@@ -30,7 +32,7 @@ export async function getJobById(id: string, options: SiteFetchOptions = {}) {
   return job
 }
 export async function getCompanies(params?: Record<string, string>, options?: SiteFetchOptions) { return fetchAPI(`/companies/search${params ? `?${new URLSearchParams(params)}` : ''}`, options) }
-export async function getCompanyById(id: string) { return fetchAPI(`/companies/${encodeURIComponent(id)}`) }
+export async function getCompanyById(id: string, options: SiteFetchOptions = {}) { return fetchAPI(`/companies/${encodeURIComponent(id)}`, { ...options, cache: 'no-store', redirect: 'error' }) }
 export async function getLevels() { return fetchAPI('/config/levels') }
 export async function getModalities() { return fetchAPI('/config/modalities') }
 export async function getDashboardStats() { return fetchAPI('/stats/dashboard') }

@@ -116,7 +116,38 @@ for method in ['POST', 'PUT', 'PATCH', 'DELETE']:
         check(status == 405 and not (headers.get('Location') or headers.get('location')),
               path + ' ' + method + ': exact 405 without Location')
 
-for path in ['/br', '/br/vagas', JOB1_PATH, '/br/empresas', '/br/empresas/1', '/br/areas', '/br/tecnologias', '/br/salarios', '/br/conteudo', '/br/sobre', '/br/contato', '/br/termos', '/br/privacidade']:
+status, _, raw = http('/br/api/companies/1')
+check(status == 200, 'public fixture company DTO')
+company_one = json.loads(raw)
+COMPANY1_PATH = '/br/empresas/' + company_one['public_profile_slug'] + '/1'
+COMPANY4_PATH = '/br/empresas/megasoft/4'
+for method in ['GET', 'HEAD']:
+    for rejected_path in ['/br/empresas/1', '/br/empresas/1/', '/br/empresas/4', '/br/empresas/4/',
+                          '/br/empresas/wrong/4', '/br/empresas/MegaSoft/4', COMPANY4_PATH + '/',
+                          '/br/empresas/megasoft/04', '/br/empresas/megasoft/0', '/br/empresas/megasoft/9007199254740992',
+                          '/br/empresas/pending-synthetic-two/2', '/br/empresas/pending-synthetic-three/3',
+                          '/br/companies/megasoft/4', '/zz/empresas/megasoft/4', '/us/companies/megasoft/4', '/mx/empresas/megasoft/4']:
+        status, headers, _ = http(rejected_path + '?utm_source=local', method=method)
+        check(status == 404 and not (headers.get('Location') or headers.get('location')),
+              rejected_path + ' ' + method + ': exact company 404 without Location')
+    for path in [COMPANY1_PATH, COMPANY4_PATH]:
+        status, headers, _ = http(path, method=method)
+        check(status == 200 and not (headers.get('Location') or headers.get('location')),
+              path + ' ' + method + ': exact company 200 without Location')
+for method in ['POST', 'PUT', 'PATCH', 'DELETE']:
+    for path in ['/br/empresas/4', '/br/empresas/wrong/4', COMPANY4_PATH]:
+        status, headers, _ = http(path, method=method)
+        check(status == 405 and not (headers.get('Location') or headers.get('location')),
+              path + ' ' + method + ': exact company 405 without Location')
+status, _, html = http(COMPANY4_PATH)
+check('"@id":"https://jobs.portalerp.com' + COMPANY4_PATH + '#organization"' in html and
+      '"url":"https://jobs.portalerp.com' + COMPANY4_PATH + '"' in html,
+      'company Organization @id/url aligned with canonical')
+for path in ['/br/', '/br/vagas/', '/br/empresas/', '/br/candidato/login/']:
+    status, headers, _ = http(path)
+    check(status == 308 and bool(headers.get('Location') or headers.get('location')), 'unrelated slash redirect preserved ' + path)
+
+for path in ['/br', '/br/vagas', JOB1_PATH, '/br/empresas', COMPANY1_PATH, COMPANY4_PATH, '/br/areas', '/br/tecnologias', '/br/salarios', '/br/conteudo', '/br/sobre', '/br/contato', '/br/termos', '/br/privacidade']:
     status, headers, html = http(path, {'User-Agent': 'Googlebot'})
     check(status == 200, f'public {path}: 200')
     check('<html lang="pt-BR"' in html, f'{path}: regional HTML locale')
@@ -144,7 +175,8 @@ check(status == 200 and 'https://jobs.portalerp.com/br/sitemap.xml' in index and
 status, _, sitemap = http('/br/sitemap.xml')
 check(status == 200, 'regional sitemap runtime 200')
 urls = [node.text for node in ET.fromstring(sitemap).iter('{http://www.sitemaps.org/schemas/sitemap/0.9}loc')]
-check(len(urls) == 115 and any(url.endswith('/consultor-erp-local-103/103') for url in urls) and not any(url.endswith('/105') for url in urls) and not any(re.search(r'/vagas/[0-9]+$', url) for url in urls), 'regional sitemap complete across >100 jobs, no expired job')
+check(len(urls) == 116 and any(url.endswith('/consultor-erp-local-103/103') for url in urls) and not any(url.endswith('/105') for url in urls) and not any(re.search(r'/vagas/[0-9]+$', url) for url in urls), 'regional sitemap complete across >100 jobs, no expired job')
+check('https://jobs.portalerp.com' + COMPANY4_PATH in urls and not any(re.search(r'/empresas/[0-9]+$', url) for url in urls), 'sitemap company URLs descriptive only')
 for url in urls:
     check(http(url.replace('https://jobs.portalerp.com', ''))[0] == 200, f'sitemap URL {url}: 200')
 status, _, robots = http('/robots.txt')
@@ -178,6 +210,21 @@ with sync_playwright() as p:
     page.locator('form').first.locator('button[type="submit"]').click()
     page.wait_for_url('**/br/vagas?**')
     check('/br/vagas?' in page.url, 'browser hero router navigation preserves /br')
+    step = 'public company navigation'
+    page.goto(BASE + '/br/empresas', wait_until='networkidle')
+    profile_link = page.locator('a[href="' + COMPANY4_PATH + '"]')
+    expect(profile_link).to_be_visible()
+    profile_link.click()
+    page.wait_for_url('**' + COMPANY4_PATH)
+    expect(page.get_by_role('heading', name='MegaSoft', exact=True)).to_be_visible()
+    check(urlsplit(page.url).path == COMPANY4_PATH, 'browser public company directory opens exact MegaSoft friendly profile')
+    page.goto(BASE + JOB1_PATH, wait_until='networkidle')
+    employer_links = page.locator('a[href="' + COMPANY1_PATH + '"]')
+    check(employer_links.count() == 2, 'job employer header/sidebar share friendly company profile')
+    employer_links.first.click()
+    page.wait_for_url('**' + COMPANY1_PATH)
+    expect(page.get_by_role('heading', name='Local Runtime ERP', exact=True)).to_be_visible()
+    check(urlsplit(page.url).path == COMPANY1_PATH, 'browser employer opens exact friendly company profile')
     step = 'candidate login'
     page.goto(BASE + '/br/candidato/login?redirect=' + quote(JOB1_PATH, safe=''), wait_until='networkidle')
     page.locator('input[name="email"]').fill('candidate@example.invalid')

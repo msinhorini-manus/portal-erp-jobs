@@ -5,6 +5,7 @@ import type { ActiveSitesResponse, RegionalContext, RegionalSite } from './site'
 import { getSelectableSites, requireRegionalBaseUrl } from './site'
 import { countryPrefix } from './regional-routes'
 import { internalApiOrigin, normalizeRequestHost, trustedRegionalHeaders } from './regional-transport'
+import { internalReadFetch } from './internal-read-fetch'
 
 export class RegionalApiError extends Error {
   constructor(public status: number) { super(`Regional context unavailable (${status})`) }
@@ -24,7 +25,7 @@ export function assertRegionalContext(context: RegionalContext, prefix: string) 
   return context
 }
 export const resolveSiteFor = cache(async (host: string, prefix: string): Promise<RegionalContext> => {
-  const response = await fetch(`${internalApiOrigin()}/api/context`, { headers: trustedRegionalHeaders(host, prefix), cache: 'no-store' })
+  const response = await internalReadFetch(`${internalApiOrigin()}/api/context`, { headers: trustedRegionalHeaders(host, prefix), cache: 'no-store' })
   if (!response.ok) throw new RegionalApiError(response.status)
   return assertRegionalContext(await response.json(), prefix)
 })
@@ -40,7 +41,7 @@ export async function getActiveSites(country?: string): Promise<RegionalSite[]> 
   return activeSitesFor(host, prefix)
 }
 export async function activeSitesFor(host: string, prefix: string): Promise<RegionalSite[]> {
-  const response = await fetch(`${internalApiOrigin()}/api/sites`, { headers: trustedRegionalHeaders(host, prefix), cache: 'no-store' })
+  const response = await internalReadFetch(`${internalApiOrigin()}/api/sites`, { headers: trustedRegionalHeaders(host, prefix), cache: 'no-store' })
   if (!response.ok) throw new RegionalApiError(response.status)
   const payload = await response.json() as ActiveSitesResponse
   if (!Array.isArray(payload.sites)) throw new Error('Invalid active sites response')

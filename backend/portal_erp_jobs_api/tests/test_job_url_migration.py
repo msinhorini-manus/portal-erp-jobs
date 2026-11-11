@@ -76,7 +76,9 @@ class JobUrlMigrationTests(unittest.TestCase):
         tables = self.sql("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name != 'alembic_version' ORDER BY name")
         result = {}
         for (name,) in tables:
-            columns = [row[1] for row in self.sql(f'PRAGMA table_info("{name}")') if row[1] not in SLUG_COLUMNS]
+            columns = [row[1] for row in self.sql(f'PRAGMA table_info("{name}")')
+                       if row[1] not in SLUG_COLUMNS
+                       and not (name == "company_sites" and row[1] == "public_profile_slug")]
             selected = ",".join(f'"{column}"' for column in columns)
             result[name] = self.sql(f'SELECT {selected} FROM "{name}" ORDER BY 1')
         return result
@@ -114,8 +116,10 @@ class JobUrlMigrationTests(unittest.TestCase):
 
     def test_upgrade_backfill_downgrade_roundtrip_preserves_every_existing_column_and_fk(self):
         before, constraints = self.snapshot(), self.constraints()
-        self.alembic("upgrade", "head")
+        self.alembic("upgrade", "20261111_10")
         self.assertEqual(self.sql("SELECT version_num FROM alembic_version"), [("20261111_10",)])
+        self.alembic("upgrade", "head")
+        self.assertEqual(self.sql("SELECT version_num FROM alembic_version"), [("20261111_11",)])
         self.assertEqual(self.snapshot(), before)
         self.assertEqual(self.constraints(), constraints)
         self.assertEqual(self.sql("PRAGMA foreign_key_check"), [])

@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "test:regional": "node --test tests/regional-runtime.test.mjs",
+    "test:regional": "node --test tests/regional-runtime.test.mjs tests/company-urls.test.mjs",
     "preview": "vite preview",
     "start": "node server.js"
   },

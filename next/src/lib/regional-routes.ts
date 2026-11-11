@@ -1,11 +1,12 @@
 import type { RegionalSite } from './site'
 import { publicJobPath } from './public-job-url-core.js'
+import { publicCompanyPath } from './public-company-url-core.js'
 
 // Only homologated Portuguese slugs ship in wave 1. Future locales must add a
 // validated registry/route mapping, not duplicated country page trees.
 export const ROUTES = {
   'home': '/', 'jobs.index': '/vagas', 'jobs.detail': '/vagas/:companySlug/:titleSlug/:id',
-  'companies.index': '/empresas', 'companies.detail': '/empresas/:id',
+  'companies.index': '/empresas', 'companies.detail': '/empresas/:companySlug/:id',
   'areas': '/areas', 'technologies': '/tecnologias', 'salaries': '/salarios',
   'content': '/conteudo', 'about': '/sobre', 'contact': '/contato',
   'terms': '/termos', 'privacy': '/privacidade',
@@ -40,6 +41,10 @@ export function regionalizePath(prefix: string, path: string): string {
 }
 export function regionalHref(site: Pick<RegionalSite, 'url_prefix' | 'locale'>, key: RouteKey, params: Record<string, string | number> = {}): string {
   if (key === 'jobs.detail') return publicJobPath({ id: params.id, public_company_slug: String(params.companySlug ?? 'empresa'), public_title_slug: String(params.titleSlug ?? 'vaga') }, site)
+  if (key === 'companies.detail') {
+    if (params.companySlug == null) throw new Error('Missing route parameter companySlug')
+    return publicCompanyPath({ id: params.id, public_profile_slug: String(params.companySlug) }, site)
+  }
   if (site.locale !== 'pt-BR') throw new Error('Localized routes are not homologated for this locale')
   const slug = ROUTES[key].replace(/:([a-z]+)/g, (_match, name: string) => {
     if (params[name] === undefined) throw new Error(`Missing route parameter ${name}`)

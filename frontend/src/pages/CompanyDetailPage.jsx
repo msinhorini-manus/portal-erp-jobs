@@ -1,79 +1,45 @@
+import { useEffect, useState } from 'react'
+import { appFetch, getRegionalRuntime } from '@/lib/regional-runtime.js'
+import { assertPublicRegionalCompany, canonicalCompanyId, companyCollection } from '@/lib/public-company-url.js'
+import { publicCompanyLink } from '@/lib/public-company-link.js'
 import { publicJobLink } from '@/lib/public-job-link.js'
 import { Link, useParams } from 'react-router-dom'
 import { MapPin, Users, Globe, Building, Briefcase, ArrowLeft, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 
-const companies = {
-  '1': {
-    id: 1,
-    name: 'Tech Solutions Brasil',
-    logo: 'https://ui-avatars.com/api/?name=Tech+Solutions&background=F7941D&color=fff&size=200',
-    sector: 'Tecnologia',
-    size: '51-200 funcionários',
-    location: 'São Paulo, SP',
-    website: 'www.techsolutions.com.br',
-    description: 'Empresa líder em soluções de software empresarial, especializada em implementação de sistemas ERP e desenvolvimento de aplicações customizadas.',
-    about: `A Tech Solutions Brasil é uma empresa de tecnologia com mais de 15 anos de experiência no mercado. Somos especializados em soluções SAP, desenvolvimento de software customizado e consultoria em transformação digital.
-
-Nossa missão é ajudar empresas a alcançarem seus objetivos através da tecnologia, oferecendo soluções inovadoras e um time altamente qualificado.
-
-Trabalhamos com clientes de diversos setores, incluindo varejo, manufatura, serviços financeiros e saúde.`,
-    benefits: [
-      'Vale refeição',
-      'Vale transporte',
-      'Plano de saúde',
-      'Plano odontológico',
-      'Gympass',
-      'Day off de aniversário',
-      'Home office flexível',
-      'Auxílio educação'
-    ],
-    culture: [
-      'Ambiente colaborativo',
-      'Foco em inovação',
-      'Desenvolvimento contínuo',
-      'Work-life balance',
-      'Diversidade e inclusão'
-    ],
-    openJobs: [
-      {
-        id: 1,
-        title: 'Desenvolvedor Full Stack Sênior',
-        location: 'São Paulo, SP',
-        type: 'CLT',
-        modality: 'Híbrido',
-        salary: 'R$ 12.000 - R$ 18.000',
-        level: 'Sênior',
-        postedAt: '2025-01-10'
-      },
-      {
-        id: 2,
-        title: 'Consultor SAP FICO',
-        location: 'São Paulo, SP',
-        type: 'CLT',
-        modality: 'Presencial',
-        salary: 'R$ 15.000 - R$ 22.000',
-        level: 'Pleno/Sênior',
-        postedAt: '2025-01-08'
-      },
-      {
-        id: 3,
-        title: 'DevOps Engineer',
-        location: 'Remoto',
-        type: 'CLT',
-        modality: 'Remoto',
-        salary: 'R$ 10.000 - R$ 16.000',
-        level: 'Pleno',
-        postedAt: '2025-01-05'
-      }
-    ]
-  }
-}
-
-export default function CompanyDetailPage() {
-  const { id } = useParams()
-  const company = companies[id] || companies['1']
+export default function CompanyDetailPage({ collection = 'empresas' }) {
+  const { id, companySlug } = useParams()
+  const [company, setCompany] = useState(null)
+  const [error, setError] = useState('')
+  useEffect(() => {
+    let active = true
+    setCompany(null)
+    setError('')
+    const load = async () => {
+      const runtime = getRegionalRuntime()
+      if (collection !== companyCollection(runtime.site?.locale)) throw new Error('Empresa não encontrada')
+      const companyId = canonicalCompanyId(id)
+      const response = await appFetch(`/api/companies/${companyId}`, { credentials: 'omit', cache: 'no-store', redirect: 'error' })
+      if (!response.ok) throw new Error(response.status >= 500 ? 'Serviço de empresas indisponível' : 'Empresa não encontrada')
+      const data = await response.json()
+      assertPublicRegionalCompany(data, runtime.site, companyId)
+      const target = publicCompanyLink(data)
+      const current = globalThis.location.pathname.replace(runtime.basename || '', '')
+      if (current !== target) throw new Error('Empresa não encontrada')
+      if (active) setCompany({
+        ...data, name: data.company_name || data.trade_name || data.name,
+        logo: data.logo_url, size: data.company_size || data.size,
+        location: data.location || [data.city, data.state].filter(Boolean).join(', '),
+        about: data.about || data.description, benefits: data.benefits || [], culture: data.culture || [],
+        openJobs: (data.jobs || []).filter(job => !job.is_company_hidden && job.is_active !== false && (!job.status || ['active', 'approved'].includes(job.status)) && (!job.expires_at || new Date(job.expires_at).getTime() > Date.now())),
+      })
+    }
+    load().catch(err => { if (active) setError(err.message) })
+    return () => { active = false }
+  }, [id, companySlug, collection])
+  if (error) return <div role="alert" className="p-8">{error}</div>
+  if (!company) return <div role="status" className="p-8">Carregando empresa...</div>
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -114,7 +80,7 @@ export default function CompanyDetailPage() {
         <div className="container mx-auto px-6 py-12">
           <div className="flex flex-col md:flex-row gap-8 items-start">
             <img
-              src={company.logo}
+              src={company.logo || '/brand/jobs-by-portal-erp-clean-light.svg'}
               alt={company.name}
               className="w-32 h-32 rounded-lg shadow-md"
             />
@@ -135,7 +101,7 @@ export default function CompanyDetailPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Globe className="w-5 h-5 text-[#F7941D]" />
-                  <a href={`https://${company.website}`} target="_blank" rel="noopener noreferrer" className="hover:text-[#F7941D] transition-colors">
+                  <a href={/^https?:\/\//.test(company.website || '') ? company.website : `https://${company.website}`} target="_blank" rel="noopener noreferrer" className="hover:text-[#F7941D] transition-colors">
                     {company.website}
                   </a>
                 </div>

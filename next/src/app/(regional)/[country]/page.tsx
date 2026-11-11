@@ -1,3 +1,4 @@
+import { publicJobCompanyPath, type PublicJobCompanyData } from '@/lib/public-company-url'
 import { publicJobPath, type PublicJobUrlData } from '@/lib/public-job-url'
 import { pageMetadata } from '@/lib/regional-seo.server'
 import type { Metadata } from 'next'
@@ -71,7 +72,7 @@ const colorMap: Record<string, string> = {
   gray: 'bg-slate-600',
 }
 
-type Job = PublicJobUrlData & {
+type Job = PublicJobUrlData & PublicJobCompanyData & {
   id: number
   title?: string
   company_name?: string
@@ -137,11 +138,11 @@ export default async function HomePage() {
               {featuredJobs.length > 0 ? featuredJobs.map((job) => {
                 const location = job.location || [job.city, job.state].filter(Boolean).join(', ') || 'Local a definir'
                 return (
-                  <Link key={job.id} href={publicJobPath(job, site)} className="block rounded-2xl border border-white/5 bg-white/[0.06] p-5 transition hover:border-portal-orange/50 hover:bg-white/10">
-                    <h2 className="font-display text-xl font-bold text-white">{job.title || 'Oportunidade no mercado de software'}</h2>
-                    <p className="mt-2 text-sm text-white/65">{job.company_name || 'Empresa do ecossistema'}</p>
+                  <div key={job.id} className="block rounded-2xl border border-white/5 bg-white/[0.06] p-5 transition hover:border-portal-orange/50 hover:bg-white/10">
+                    <h2 className="font-display text-xl font-bold text-white"><Link href={publicJobPath(job, site)}>{job.title || 'Oportunidade no mercado de software'}</Link></h2>
+                    <p className="mt-2 text-sm text-white/65">{job.is_company_hidden ? 'Empresa Confidencial' : publicJobCompanyPath(job, site) ? <Link href={publicJobCompanyPath(job, site)!}>{job.company_name || 'Empresa do ecossistema'}</Link> : job.company_name || 'Empresa do ecossistema'}</p>
                     <p className="mt-3 flex items-center gap-2 text-sm font-semibold text-teal-300"><MapPin className="h-4 w-4" />{location}</p>
-                  </Link>
+                  </div>
                 )
               }) : (
                 <div className="rounded-2xl border border-white/5 bg-white/[0.06] p-6 text-white/70">Novas oportunidades serão publicadas aqui.</div>

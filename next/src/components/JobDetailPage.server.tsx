@@ -1,3 +1,5 @@
+import { publicJobCompanyPath } from '@/lib/public-company-url'
+import { requireCanonicalOrigin } from '@/lib/site'
 import { Metadata } from 'next'
 import Link from '@/components/RegionalLink'
 import { notFound } from 'next/navigation'
@@ -47,6 +49,8 @@ export default async function JobDetailPage({ params }: Props) {
   const { job, site } = data
   const canonical = publicJobCanonical(job, site)
   const jobPath = publicJobPath(job, site)
+  const companyPath = publicJobCompanyPath(job, site)
+  const companyCanonical = companyPath ? `${requireCanonicalOrigin(site)}${companyPath}` : null
   const modalityLabel: Record<string, string> = {
     remote: 'Remoto',
     hybrid: 'Híbrido',
@@ -89,6 +93,7 @@ export default async function JobDetailPage({ params }: Props) {
     employmentType: employmentType[String(job.contract_type || '').toLocaleLowerCase()] || job.contract_type,
     hiringOrganization: {
       '@type': 'Organization',
+      ...(companyCanonical ? { '@id': `${companyCanonical}#organization`, url: companyCanonical } : {}),
       name: job.company_name || organization.company_name,
       ...(organization.website ? { sameAs: organization.website } : {}),
       ...(organization.logo_url ? { logo: organization.logo_url } : {}),
@@ -135,7 +140,7 @@ export default async function JobDetailPage({ params }: Props) {
             {job.company_name && (
               <span className="flex items-center gap-1.5">
                 <Building2 className="w-4 h-4" />
-                {job.company_name}
+                {companyPath ? <Link href={companyPath}>{job.company_name}</Link> : job.company_name}
               </span>
             )}
             {job.location && (
@@ -255,7 +260,7 @@ export default async function JobDetailPage({ params }: Props) {
             {!job.is_company_hidden && job.company_name && (
               <div className="bg-white rounded-xl p-6 shadow-sm">
                 <h3 className="font-bold text-portal-dark mb-4">Sobre a Empresa</h3>
-                <p className="font-medium text-lg mb-2">{job.company_name}</p>
+                <p className="font-medium text-lg mb-2">{companyPath ? <Link href={companyPath} className="hover:text-portal-orange">{job.company_name}</Link> : job.company_name}</p>
                 {job.company_description && (
                   <p className="text-gray-600 text-sm">{job.company_description}</p>
                 )}

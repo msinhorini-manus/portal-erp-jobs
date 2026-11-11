@@ -1,84 +1,40 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { appFetch, getRegionalRuntime } from '@/lib/regional-runtime.js'
+import { assertPublicRegionalCompany } from '@/lib/public-company-url.js'
+import { publicCompanyLink } from '@/lib/public-company-link.js'
 import { Link } from 'react-router-dom'
 import { Building2, MapPin, Users, Briefcase, Search, Filter } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
 
-// Dados de exemplo de empresas
-const companies = [
-  {
-    id: 1,
-    name: 'TechSolutions Brasil',
-    logo: 'https://via.placeholder.com/80',
-    sector: 'Tecnologia',
-    size: '51-200',
-    location: 'São Paulo, SP',
-    description: 'Empresa de desenvolvimento de software especializada em soluções empresariais',
-    openJobs: 12,
-    technologies: ['React', 'Node.js', 'Python', 'AWS']
-  },
-  {
-    id: 2,
-    name: 'DataCorp Analytics',
-    logo: 'https://via.placeholder.com/80',
-    sector: 'Dados & Analytics',
-    size: '201-500',
-    location: 'Rio de Janeiro, RJ',
-    description: 'Especialistas em Big Data e Business Intelligence',
-    openJobs: 8,
-    technologies: ['Python', 'SQL', 'Tableau', 'Power BI']
-  },
-  {
-    id: 3,
-    name: 'CloudFirst Consulting',
-    logo: 'https://via.placeholder.com/80',
-    sector: 'Consultoria',
-    size: '501-1000',
-    location: 'Belo Horizonte, MG',
-    description: 'Consultoria em transformação digital e cloud computing',
-    openJobs: 15,
-    technologies: ['AWS', 'Azure', 'Kubernetes', 'Docker']
-  },
-  {
-    id: 4,
-    name: 'SAP Brasil Ltda',
-    logo: 'https://via.placeholder.com/80',
-    sector: 'ERP',
-    size: '1000+',
-    location: 'São Paulo, SP',
-    description: 'Líder mundial em software empresarial',
-    openJobs: 25,
-    technologies: ['SAP', 'ABAP', 'Fiori', 'HANA']
-  },
-  {
-    id: 5,
-    name: 'DevOps Masters',
-    logo: 'https://via.placeholder.com/80',
-    sector: 'DevOps',
-    size: '11-50',
-    location: 'Florianópolis, SC',
-    description: 'Especialistas em automação e infraestrutura como código',
-    openJobs: 6,
-    technologies: ['Jenkins', 'Terraform', 'Ansible', 'GitLab']
-  },
-  {
-    id: 6,
-    name: 'Security First',
-    logo: 'https://via.placeholder.com/80',
-    sector: 'Segurança',
-    size: '51-200',
-    location: 'Brasília, DF',
-    description: 'Cybersecurity e proteção de dados',
-    openJobs: 4,
-    technologies: ['Firewall', 'SIEM', 'Penetration Testing', 'ISO 27001']
-  }
-]
-
 const sectors = ['Todos', 'Tecnologia', 'Consultoria', 'ERP', 'DevOps', 'Segurança', 'Dados & Analytics']
 const sizes = ['Todos', '1-10', '11-50', '51-200', '201-500', '501-1000', '1000+']
 
 export default function CompaniesPage() {
+  const [companies, setCompanies] = useState([])
+  const [error, setError] = useState('')
+  useEffect(() => {
+    let active = true
+    const load = async () => {
+      const items = []
+      let pages = 1
+      for (let page = 1; page <= pages; page += 1) {
+        const response = await appFetch(`/api/companies/search?page=${page}&per_page=100`, { credentials: 'omit', cache: 'no-store', redirect: 'error' })
+        if (!response.ok) throw new Error('Serviço de empresas indisponível')
+        const data = await response.json()
+        pages = Number(data.pages || 1)
+        if (!Number.isInteger(pages) || pages < 1 || pages > 1000 || !Array.isArray(data.companies)) throw new Error('Inventário de empresas inválido')
+        for (const item of data.companies) {
+          assertPublicRegionalCompany(item, getRegionalRuntime().site, String(item.id))
+          items.push({ ...item, name: item.company_name || item.trade_name || item.name || 'Empresa', description: item.description || '', size: item.company_size || item.size, location: [item.city, item.state].filter(Boolean).join(', '), openJobs: item.active_jobs_count || 0, technologies: item.technologies || [] })
+        }
+      }
+      if (active) setCompanies(items)
+    }
+    load().catch(err => { if (active) setError(err.message) })
+    return () => { active = false }
+  }, [])
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedSector, setSelectedSector] = useState('Todos')
   const [selectedSize, setSelectedSize] = useState('Todos')
@@ -193,6 +149,7 @@ export default function CompaniesPage() {
         </div>
       </div>
 
+      {error && <div role="alert" className="container mx-auto p-6">{error}</div>}
       {/* Companies List */}
       <div className="container mx-auto px-6 py-12">
         <div className="mb-6">
@@ -244,7 +201,7 @@ export default function CompaniesPage() {
                   )}
                 </div>
 
-                <Link to={`/empresas/${company.id}`}>
+                <Link to={publicCompanyLink(company)}>
                   <Button className="w-full bg-[#F7941D] hover:bg-[#E67E22] text-white">
                     Ver Perfil e Vagas
                   </Button>

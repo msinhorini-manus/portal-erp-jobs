@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { countryPrefix, defaultCountry } from './lib/regional-routes'
 import { internalApiOrigin, normalizeRequestHost, trustedRegionalHeaders } from './lib/regional-transport'
 import { canonicalJobProxy } from './lib/job-proxy'
+import { canonicalCompanyProxy } from './lib/company-proxy'
+import { internalReadFetch } from './lib/internal-read-fetch'
 
 export async function proxy(request: NextRequest) {
   const h = new Headers(request.headers)
@@ -20,13 +22,15 @@ export async function proxy(request: NextRequest) {
     // Resolution is always live: inactive/unknown countries fail before pages,
     // APIs and BFFs. Backend validates the active mapping, not a BR allowlist.
     try {
-      const response = await fetch(`${internalApiOrigin()}/api/context`, { headers: trustedRegionalHeaders(host, prefix), cache: 'no-store' })
+      const response = await internalReadFetch(`${internalApiOrigin()}/api/context`, { headers: trustedRegionalHeaders(host, prefix), cache: 'no-store' })
       if ([400, 404].includes(response.status)) return new NextResponse('Not found', { status: 404, headers: { 'X-Robots-Tag': 'noindex' } })
       if (!response.ok) return new NextResponse('Regional service unavailable', { status: 503 })
       const context = await response.json()
       if (!context?.site?.is_active || context.site.url_prefix !== prefix || context.site.country_code?.toLowerCase() !== country || context.locale !== context.site.locale) return new NextResponse('Not found', { status: 404 })
       const jobResponse = await canonicalJobProxy(request.nextUrl.pathname, request.nextUrl.search, request.method, host, context)
       if (jobResponse) return jobResponse
+      const companyResponse = await canonicalCompanyProxy(request.nextUrl.pathname, request.method, host, context)
+      if (companyResponse) return companyResponse
       h.set('x-next-regional-country', country)
       h.set('x-next-regional-prefix', prefix)
       h.set('x-next-regional-path', request.nextUrl.pathname)
