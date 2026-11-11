@@ -160,6 +160,9 @@ def get_public_company(company_id):
             company_id=company.id,
             site_id=site.id,
             is_active=True,
+        ).filter(
+            # The named company page must not identify a confidential employer.
+            db.or_(Job.is_company_hidden.is_(False), Job.is_company_hidden.is_(None)),
         ).order_by(Job.created_at.desc()).all()
         payload = company.to_public_dict(membership)
         payload["jobs"] = [job.to_dict() for job in jobs]

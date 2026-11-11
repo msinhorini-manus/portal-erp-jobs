@@ -1,3 +1,6 @@
+import { getRegionalRuntime } from '@/lib/regional-runtime.js'
+import { publicJobLink } from '@/lib/public-job-link.js'
+import { canonicalJobId, jobCollection } from '@/lib/public-job-url.js'
 import { appFetch } from '@/lib/regional-runtime.js'
 import { useState, useEffect } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
@@ -11,7 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useAuth } from '@/contexts/AuthContext'
-import { jobAPI, applicationAPI } from '@/services/api'
+import { jobAPI } from '@/services/api'
 
 // Mapeamento de modalidades de trabalho
 const modalityLabels = {
@@ -56,7 +59,7 @@ const getModalityIcon = (modality) => {
   }
 }
 
-export default function JobDetailPage() {
+export default function JobDetailPage({ collection = 'vagas' }) {
   const { id } = useParams()
   const navigate = useNavigate()
   const { user, isAuthenticated } = useAuth()
@@ -80,7 +83,15 @@ export default function JobDetailPage() {
       setLoading(true)
       setError(null)
 
-      const data = await jobAPI.getById(id)
+      const runtime = getRegionalRuntime()
+      if (collection !== jobCollection(runtime.site?.locale)) throw new Error('Vaga não encontrada')
+      const data = await jobAPI.getById(canonicalJobId(id))
+      if (data.is_active === false || data.status && !['active', 'approved'].includes(data.status) || data.expires_at && !(new Date(data.expires_at).getTime() > Date.now())) throw new Error('Vaga não encontrada')
+      const target = publicJobLink(data)
+      // HTTP301 belongs to Next/edge. Legacy client fallback replaces history only,
+      // after an anonymous regional detail succeeds; never redirects an inaccessible ID.
+      const current = globalThis.location.pathname.replace(runtime.basename || '', '')
+      if (current !== target) navigate(`${target}${globalThis.location.search}`, { replace: true })
       setJob(data)
     } catch (err) {
       console.error('Erro ao carregar vaga:', err)

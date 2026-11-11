@@ -2,7 +2,9 @@
 Job model for Portal ERP Jobs
 """
 from datetime import datetime
+from sqlalchemy import event, select
 from src.config import db
+from src.job_slugs import HIDDEN_COMPANY_SLUG, public_company_slug, public_slug
 
 class Job(db.Model):
     """Job posting model"""
@@ -32,6 +34,10 @@ class Job(db.Model):
 
     # Job Info
     title = db.Column(db.String(100), nullable=False)
+    # Nullable for code-only rollback: legacy writers may still insert jobs.
+    # New ORM inserts snapshot these once; edits never regenerate them.
+    public_company_slug = db.Column(db.String(140), nullable=True)
+    public_title_slug = db.Column(db.String(140), nullable=True)
     description = db.Column(db.Text, nullable=False)
     requirements = db.Column(db.Text)
     responsibilities = db.Column(db.Text)
@@ -76,13 +82,30 @@ class Job(db.Model):
     job_area = db.relationship('JobArea', backref='jobs')
     site = db.relationship('Site', back_populates='jobs')
 
+    def public_identity_dict(self):
+        """Safe shared URL identity; legacy null fallback is read-only."""
+        membership = next(
+            (item for item in self.company.site_memberships if item.site_id == self.site_id),
+            None,
+        ) if self.company else None
+        regional_name = membership.display_name if membership else None
+        company_name = (
+            regional_name if regional_name and regional_name.strip()
+            else self.company.company_name if self.company else None
+        )
+        return {
+            'site_code': self.site.code if self.site else None,
+            'is_company_hidden': bool(self.is_company_hidden),
+            'company_name': None if self.is_company_hidden else company_name,
+            # Confidentiality is authoritative even after a public->hidden edit.
+            'public_company_slug': HIDDEN_COMPANY_SLUG if self.is_company_hidden else (
+                self.public_company_slug or public_company_slug(regional_name, company_name)
+            ),
+            'public_title_slug': self.public_title_slug or public_slug(self.title, 'vaga'),
+        }
+
     def to_dict(self, include_details=False):
         """Convert to dictionary"""
-        # Buscar nome da empresa
-        company_name = None
-        if self.company and not self.is_company_hidden:
-            company_name = self.company.company_name
-
         # Contar candidaturas
         applications_count = len(self.applications) if self.applications else 0
 
@@ -130,8 +153,7 @@ class Job(db.Model):
         data = {
             'id': self.id,
             'company_id': self.company_id,
-            'site_code': self.site.code if self.site else None,
-            'company_name': company_name,
+            **self.public_identity_dict(),
             'title': self.title,
             'area': area_name,
             'area_id': self.area_id,
@@ -153,6 +175,7 @@ class Job(db.Model):
             'is_company_hidden': self.is_company_hidden,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'expires_at': self.expires_at.isoformat() if self.expires_at else None,
             'applications_count': applications_count,
             'skills': skills_array,
             # Alias kept for the legacy SPA/Next consumers.
@@ -181,6 +204,30 @@ class Job(db.Model):
             data['company_name'] = data['company']['company_name'] if data['company'] else None
 
         return data
+
+
+@event.listens_for(Job, 'before_insert')
+def snapshot_public_job_slugs(mapper, connection, job):
+    """Cover route/Admin/fixture ORM inserts using the transaction connection."""
+    if not job.public_title_slug:
+        job.public_title_slug = public_slug(job.title, 'vaga')
+    if not job.public_company_slug:
+        from src.models.company import Company, CompanySite
+        company = Company.__table__
+        membership = CompanySite.__table__
+        row = connection.execute(
+            select(company.c.company_name, membership.c.display_name)
+            .select_from(company.outerjoin(membership, (
+                (membership.c.company_id == company.c.id)
+                & (membership.c.site_id == job.site_id)
+            )))
+            .where(company.c.id == job.company_id)
+        ).first()
+        job.public_company_slug = public_company_slug(
+            row.display_name if row else None,
+            row.company_name if row else None,
+            hidden=bool(job.is_company_hidden),
+        )
 
 
 class JobSkill(db.Model):

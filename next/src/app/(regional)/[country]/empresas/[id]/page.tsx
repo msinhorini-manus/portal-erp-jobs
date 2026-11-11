@@ -1,3 +1,5 @@
+import { publicJobPath } from '@/lib/public-job-url'
+import type { RegionalSite } from '@/lib/site'
 import { publicJob } from '@/lib/regional-sitemap'
 import { Metadata } from 'next'
 import Link from '@/components/RegionalLink'
@@ -38,11 +40,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function CompanyDetailPage({ params }: Props) {
   let company: any
   let origin = ''
+  let site: RegionalSite
 
   try {
     const { id, country } = await params
     const context = await getSiteContext(country)
     origin = requireRegionalBaseUrl(context.site)
+    site = context.site
     company = await getCompanyById(id)
   } catch (e) {
     notFound()
@@ -123,7 +127,7 @@ export default async function CompanyDetailPage({ params }: Props) {
                   {company.jobs.map((job: any) => (
                     <Link
                       key={job.id}
-                      href={`/vagas/${job.id}`}
+                      href={publicJobPath(job, site)}
                       className="block p-4 border border-gray-100 rounded-lg hover:border-portal-orange/30 hover:bg-gray-50 transition-all"
                     >
                       <h3 className="font-semibold text-portal-dark hover:text-portal-orange">

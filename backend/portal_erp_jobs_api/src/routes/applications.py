@@ -37,7 +37,7 @@ def _application_payload(application, *, include_candidate=False, include_histor
     data["job"] = {
         "id": application.job.id,
         "title": application.job.title,
-        "company_name": application.job.company.company_name if application.job.company else None,
+        **application.job.public_identity_dict(),
         "city": application.job.city,
         "state": application.job.state,
         "work_modality": application.job.work_modality,

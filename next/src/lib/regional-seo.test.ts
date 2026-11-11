@@ -25,7 +25,7 @@ describe('page-specific published alternates', () => {
     expect(getPublishedAlternates('about', publications)).toEqual(expected)
     expect(getPublishedAlternates('about', [...publications].reverse())).toEqual(expected)
     expect(getPublishedAlternates('about', publications)).not.toHaveProperty('x-default')
-    expect(regionalCanonical(br, 'jobs.detail', { id: 1 })).toBe('https://jobs.portalerp.com/br/vagas/1')
+    expect(regionalCanonical(br, 'jobs.detail', { id: 1 })).toBe('https://jobs.portalerp.com/br/vagas/empresa/vaga/1')
   })
   it.each(['MX', 'es_MX', 'mx', ''])('rejects invalid hreflang locale %s rather than publishing it', locale => {
     expect(() => getPublishedAlternates('about', [pub(br, '/br/sobre'), pub({ ...zz, locale }, '/zz/acerca')])).toThrow('Invalid publication alternate')

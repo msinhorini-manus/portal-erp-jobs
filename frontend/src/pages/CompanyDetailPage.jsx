@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { publicJobLink } from '@/lib/public-job-link.js'
 import { Link, useParams } from 'react-router-dom'
 import { MapPin, Users, Globe, Building, Briefcase, ArrowLeft, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -198,7 +198,7 @@ export default function CompanyDetailPage() {
                           <span className="text-sm text-gray-500">
                             Publicada em {new Date(job.postedAt).toLocaleDateString('pt-BR')}
                           </span>
-                          <Link to={`/vagas/${job.id}`}>
+                          <Link to={publicJobLink(job)}>
                             <Button className="bg-[#F7941D] hover:bg-[#E67E22] text-white">
                               Ver Detalhes
                             </Button>

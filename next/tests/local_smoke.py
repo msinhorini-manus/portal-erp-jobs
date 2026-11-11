@@ -12,7 +12,7 @@ import urllib.request
 import urllib.error
 import uuid
 import xml.etree.ElementTree as ET
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, quote
 from playwright.sync_api import sync_playwright, expect
 
 BASE = 'http://localhost:3001'
@@ -50,12 +50,20 @@ def check(condition, label):
     print('PASS', label, flush=True)
 
 
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, request, fp, code, msg, headers, newurl):
+        return None
+
+
+LOCAL_HTTP = urllib.request.build_opener(NoRedirect)
+
+
 def http(path, headers=None, method='GET', body=None):
     request = urllib.request.Request(BASE + path, headers=headers or {}, method=method, data=json.dumps(body).encode() if body is not None else None)
     if body is not None:
         request.add_header('Content-Type', 'application/json')
     try:
-        with urllib.request.urlopen(request) as response:
+        with LOCAL_HTTP.open(request) as response:
             return response.status, dict(response.headers), response.read().decode()
     except urllib.error.HTTPError as response:
         return response.code, dict(response.headers), response.read().decode()
@@ -87,7 +95,15 @@ def regional_cookies(context, prefix):
     return cookies
 
 
-for path in ['/br', '/br/vagas', '/br/vagas/1', '/br/empresas', '/br/empresas/1', '/br/areas', '/br/tecnologias', '/br/salarios', '/br/conteudo', '/br/sobre', '/br/contato', '/br/termos', '/br/privacidade']:
+status, _, raw = http('/br/api/jobs/1')
+check(status == 200, 'public fixture job data')
+job_one = json.loads(raw)
+JOB1_PATH = '/br/vagas/' + job_one['public_company_slug'] + '/' + job_one['public_title_slug'] + '/1'
+for method in ['GET', 'HEAD']:
+    status, headers, _ = http('/br/vagas/1', method=method)
+    check(status == 301 and (headers.get('Location') or headers.get('location')) == 'https://jobs.portalerp.com' + JOB1_PATH, 'numeric ' + method + ': exact one-hop canonical 301')
+
+for path in ['/br', '/br/vagas', JOB1_PATH, '/br/empresas', '/br/empresas/1', '/br/areas', '/br/tecnologias', '/br/salarios', '/br/conteudo', '/br/sobre', '/br/contato', '/br/termos', '/br/privacidade']:
     status, headers, html = http(path, {'User-Agent': 'Googlebot'})
     check(status == 200, f'public {path}: 200')
     check('<html lang="pt-BR"' in html, f'{path}: regional HTML locale')
@@ -115,7 +131,7 @@ check(status == 200 and 'https://jobs.portalerp.com/br/sitemap.xml' in index and
 status, _, sitemap = http('/br/sitemap.xml')
 check(status == 200, 'regional sitemap runtime 200')
 urls = [node.text for node in ET.fromstring(sitemap).iter('{http://www.sitemaps.org/schemas/sitemap/0.9}loc')]
-check(len(urls) == 115 and 'https://jobs.portalerp.com/br/vagas/103' in urls and 'https://jobs.portalerp.com/br/vagas/105' not in urls, 'regional sitemap complete across >100 jobs, no expired job')
+check(len(urls) == 115 and any(url.endswith('/consultor-erp-local-103/103') for url in urls) and not any(url.endswith('/105') for url in urls) and not any(re.search(r'/vagas/[0-9]+$', url) for url in urls), 'regional sitemap complete across >100 jobs, no expired job')
 for url in urls:
     check(http(url.replace('https://jobs.portalerp.com', ''))[0] == 200, f'sitemap URL {url}: 200')
 status, _, robots = http('/robots.txt')
@@ -150,14 +166,14 @@ with sync_playwright() as p:
     page.wait_for_url('**/br/vagas?**')
     check('/br/vagas?' in page.url, 'browser hero router navigation preserves /br')
     step = 'candidate login'
-    page.goto(BASE + '/br/candidato/login?redirect=%2Fbr%2Fvagas%2F1', wait_until='networkidle')
+    page.goto(BASE + '/br/candidato/login?redirect=' + quote(JOB1_PATH, safe=''), wait_until='networkidle')
     page.locator('input[name="email"]').fill('candidate@example.invalid')
     page.locator('input[name="password"]').fill('LocalTest123!')
     with page.expect_response(lambda response: urlsplit(response.url).path == '/br/bff/auth/login') as login_info:
         page.locator('form button').click()
     check(login_info.value.status == 200 and 'domain=' not in login_info.value.header_value('set-cookie').lower(), 'candidate login Set-Cookie has no Domain')
-    page.wait_for_url('**/br/vagas/1')
-    check('/br/vagas/1' in page.url, 'candidate login regional return path')
+    page.wait_for_url('**' + JOB1_PATH)
+    check(urlsplit(page.url).path == JOB1_PATH, 'candidate login friendly regional return path')
     cookies = regional_cookies(context, 'pej_')
     check(not any(cookie['name'].startswith('pej_') for cookie in context.cookies(BASE + '/zz')), 'BR cookies not sent to synthetic ZZ')
     csrf = next(cookie['value'] for cookie in cookies if cookie['name'] == 'pej_csrf')

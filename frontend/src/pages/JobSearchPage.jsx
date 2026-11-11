@@ -1,4 +1,5 @@
 import { configuredApiBase } from '@/lib/regional-runtime.js'
+import { publicJobLink } from '@/lib/public-job-link.js'
 import { appFetch } from '@/lib/regional-runtime.js'
 import { useState, useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
@@ -89,9 +90,10 @@ export default function JobSearchPage() {
       // Transformar dados da API para o formato esperado
       const jobsArray = data.jobs || data
       const transformedJobs = jobsArray.map(job => ({
+        ...job,
         id: job.id,
         title: job.title,
-        company: job.company_name || 'Empresa não informada',
+        company: job.is_company_hidden ? 'Empresa Confidencial' : job.company_name || 'Empresa não informada',
         companyId: job.company_id,
         location: job.location || `${job.city || ''}, ${job.state || ''}`.trim() || 'Não informado',
         match: 85,
@@ -539,7 +541,7 @@ export default function JobSearchPage() {
             ) : (
               <div className="space-y-4">
                 {sortedJobs.map(job => (
-                  <Link key={job.id} to={`/vagas/${job.id}`}>
+                  <Link key={job.id} to={publicJobLink(job)}>
                     <Card className="border-2 hover:border-[#F7941D] hover:shadow-lg transition-all cursor-pointer">
                       <CardContent className="p-6">
                         <div className="flex justify-between items-start">

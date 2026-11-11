@@ -620,6 +620,7 @@ def get_company_details(company_id):
             jobs_data.append({
                 'id': job.id,
                 'title': job.title,
+                **job.public_identity_dict(),
                 'is_active': job.is_active,
                 'created_at': job.created_at.isoformat() if job.created_at else None,
                 'applications_count': applications_count
@@ -1077,7 +1078,7 @@ def get_candidate_details(candidate_id):
                     'id': app.id,
                     'job_id': job.id,
                     'job_title': job.title,
-                    'company_name': job.company.name if job.company else 'N/A',
+                    **job.public_identity_dict(),
                     'applied_at': app.applied_at.isoformat() if app.applied_at else None,
                     'status': app.status
                 })
@@ -1205,7 +1206,7 @@ def get_job_details(job_id):
             'is_featured': job.is_featured,
             'status': job.status,
             'company_id': job.company_id,
-            'company_name': (company_site.display_name or company.company_name) if company else 'N/A',
+            **job.public_identity_dict(),
             'created_at': job.created_at.isoformat() if job.created_at else None,
             'applications': applications_data,
             'applications_count': len(applications_data)
@@ -1783,6 +1784,7 @@ def create_job():
             title=values.pop('title'),
             description=values.pop('description'),
             salary_currency=site.currency_code,
+            is_company_hidden=values.pop('is_company_hidden', False),
             country=site.name,
             is_active=False,
             status='inactive',

@@ -129,6 +129,9 @@ function App() {
             <Route path="/conteudo" element={<ContentPage />} />
             <Route path="/conteudo/:id" element={<ArticlePage />} />
             <Route path="/vagas/:id" element={<JobDetailPage />} />
+            <Route path="/vagas/:companySlug/:titleSlug/:id" element={<JobDetailPage collection="vagas" />} />
+            <Route path="/vacantes/:companySlug/:titleSlug/:id" element={<JobDetailPage collection="vacantes" />} />
+            <Route path="/jobs/:companySlug/:titleSlug/:id" element={<JobDetailPage collection="jobs" />} />
             <Route path="/candidato/:id" element={<CandidateProfilePage />} />
             <Route path="/candidato/perfil/:id" element={<CandidatePublicProfilePage />} />
             <Route path="/buscar-candidatos" element={<CompanySearchPage />} />

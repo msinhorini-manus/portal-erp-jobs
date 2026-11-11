@@ -1,5 +1,6 @@
-import { requireRegionalBaseUrl, type RegionalSite } from './site'
-export type SitemapEntity = { id: number | string; updated_at?: string; created_at?: string; is_active?: boolean; status?: string; expires_at?: string }
+import { requireCanonicalOrigin, requireRegionalBaseUrl, type RegionalSite } from './site'
+import { canonicalJobId, publicJobPath, type PublicJobUrlData } from './public-job-url-core.js'
+export type SitemapEntity = PublicJobUrlData & { updated_at?: string; created_at?: string; is_active?: boolean; status?: string; expires_at?: string }
 export type ApiPage<T> = { total?: number; pages?: number; current_page?: number; jobs?: T[]; companies?: T[] }
 export function publicJob(job: SitemapEntity): boolean {
   return job.is_active !== false && (!job.status || ['active', 'approved'].includes(job.status)) && (!job.expires_at || new Date(job.expires_at).getTime() > Date.now())
@@ -24,14 +25,17 @@ export async function collectAll<T>(fetchPage: (page: number) => Promise<ApiPage
 export const xmlEscape = (value: string) => value.replace(/[<>&"']/g, char => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' }[char]!))
 export function regionalSitemapXml(site: RegionalSite, jobs: SitemapEntity[], companies: SitemapEntity[]) {
   const base = requireRegionalBaseUrl(site)
+  // Detail collections alone do not homologate future ES/EN static/index routes.
+  if (site.locale !== 'pt-BR') throw new Error('Localized sitemap routes are not homologated')
   const routes = ['', '/vagas', '/empresas', '/areas', '/tecnologias', '/salarios', '/conteudo', '/sobre', '/contato', '/privacidade', '/termos']
   const urls = routes.map(route => ({ url: `${base}${route}`, date: undefined as string | undefined }))
   for (const [entities, slug, filter] of [[jobs, '/vagas', publicJob], [companies, '/empresas', publicCompany]] as const) {
     for (const entity of entities.filter(filter)) {
-      if (!/^\d+$/.test(String(entity.id))) throw new Error('Invalid sitemap entity ID')
+      try { canonicalJobId(entity.id) } catch { throw new Error('Invalid sitemap entity ID') }
       const date = entity.updated_at || entity.created_at
       if (date && Number.isNaN(new Date(date).getTime())) throw new Error('Invalid sitemap lastmod')
-      urls.push({ url: `${base}${slug}/${entity.id}`, date: date ? new Date(date).toISOString() : undefined })
+      const url = slug === '/vagas' ? `${requireCanonicalOrigin(site)}${publicJobPath(entity, site)}` : `${base}${slug}/${canonicalJobId(entity.id)}`
+      urls.push({ url, date: date ? new Date(date).toISOString() : undefined })
     }
   }
   const unique = [...new Map(urls.map(entry => [entry.url, entry])).values()]

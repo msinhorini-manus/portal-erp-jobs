@@ -115,6 +115,10 @@ class Application(db.Model):
             "applied_at": self.applied_at.isoformat() if self.applied_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
+        if self.job:
+            identity = self.job.public_identity_dict()
+            data["public_company_slug"] = identity["public_company_slug"]
+            data["public_title_slug"] = identity["public_title_slug"]
         if include_history:
             data["history"] = [event.to_dict() for event in self.status_events]
         return data
