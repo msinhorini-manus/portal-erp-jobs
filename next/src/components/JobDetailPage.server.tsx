@@ -13,12 +13,14 @@ type Props = {
 }
 
 async function loadPublicJob(params: Props['params']) {
-  const { country, id, collection } = await params
+  const { country, id, collection, companySlug, titleSlug } = await params
   const jobId = canonicalJobId(id)
   const context = await getSiteContext(country)
   if (collection !== jobCollection(context.site.locale)) notFound()
   const raw = await getJobById(jobId, { country, context, cache: 'no-store' })
   assertPublicRegionalJob(raw, context.site, jobId)
+  const requestedPath = `${context.site.url_prefix}/${collection}/${companySlug}/${titleSlug}/${id}`
+  if (requestedPath !== publicJobPath(raw, context.site)) notFound()
   // Do not serialize the real organization to metadata/UI/client props when hidden.
   const job = raw.is_company_hidden ? { ...raw, company_name: 'Empresa Confidencial', company: null, company_description: null } : raw
   return { job, site: context.site }

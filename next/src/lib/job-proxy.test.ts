@@ -7,13 +7,13 @@ const job = { id: 1, site_id: 1, site_code: 'BR', title: 'Updated title', compan
 const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
 const path = '/br/vagas/empresa-original/titulo-original/1'
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs() })
-describe('public friendly job proxy validates before SSR/redirect', () => {
-  it.each(['GET', 'HEAD'])('validates anonymous detail then returns direct 301 for wrong slugs on %s', async method => {
+describe('public friendly job proxy validates exact identity before SSR without redirects', () => {
+  it.each(['GET', 'HEAD'])('validates anonymous detail then returns 404 without Location for wrong slugs on %s', async method => {
     const fetcher = vi.fn().mockResolvedValueOnce(json(br)).mockResolvedValueOnce(json(job))
     vi.stubGlobal('fetch', fetcher)
     const response = await proxy(new NextRequest('https://jobs.portalerp.com/br/vagas/wrong-company/wrong-title/1?utm=a&next=https%3A%2F%2Fevil.test', { method, headers: { host: 'jobs.portalerp.com', Cookie: 'private=secret', Authorization: 'Bearer secret', 'X-Regional-Prefix': '/mx', 'X-Next-Regional-Country': 'mx', 'X-Regional-Host': 'evil.test' } }))
-    expect(response.status).toBe(301)
-    expect(response.headers.get('location')).toBe(`https://jobs.portalerp.com${path}?utm=a&next=https%3A%2F%2Fevil.test`)
+    expect(response.status).toBe(404)
+    expect(response.headers.get('location')).toBeNull()
     expect(response.headers.get('cache-control')).toBe('no-store')
     expect(await response.text()).toBe('')
     const [url, init] = fetcher.mock.calls[1]
@@ -24,9 +24,9 @@ describe('public friendly job proxy validates before SSR/redirect', () => {
     expect(headers.get('X-Regional-Prefix')).toBe('/br')
     for (const name of ['Cookie', 'Authorization', 'X-Next-Regional-Country', 'X-Forwarded-Host']) expect(headers.get(name)).toBeNull()
   })
-  it('passes only exact authoritative friendly URL to SSR with sanitized regional headers', async () => {
+  it.each(['GET', 'HEAD'])('passes exact authoritative friendly URL on %s to SSR with sanitized regional headers', async method => {
     const fetcher = vi.fn().mockResolvedValueOnce(json(br)).mockResolvedValueOnce(json(job)); vi.stubGlobal('fetch', fetcher)
-    const result = await proxy(new NextRequest(`https://jobs.portalerp.com${path}`, { headers: { 'X-Regional-Prefix': '/mx', 'X-Next-Regional-Country': 'mx' } }))
+    const result = await proxy(new NextRequest(`https://jobs.portalerp.com${path}?utm=local`, { method, headers: { 'X-Regional-Prefix': '/mx', 'X-Next-Regional-Country': 'mx' } }))
     expect(result.status).toBe(200)
     expect(result.headers.get('location')).toBeNull()
     expect(result.headers.get('x-middleware-next')).toBe('1')
@@ -48,11 +48,12 @@ describe('public friendly job proxy validates before SSR/redirect', () => {
     expect((await proxy(new NextRequest(`https://jobs.portalerp.com/br/vagas/a/b/${id}`))).status).toBe(404)
     expect(fetcher).toHaveBeenCalledTimes(1)
   })
-  it('does not leak hidden organization, normalizes leading zero ID, and keeps encoded query', async () => {
+  it('rejects hidden organization mismatch and leading zero ID without exposing canonical data or query', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(json(br)).mockResolvedValueOnce(json({ ...job, is_company_hidden: true })))
     const response = await proxy(new NextRequest('https://jobs.portalerp.com/br/vagas/real-company/title/01?x=%26%3C'))
-    expect(response.status).toBe(301)
-    expect(response.headers.get('location')).toBe('https://jobs.portalerp.com/br/vagas/empresa-confidencial/titulo-original/1?x=%26%3C')
+    expect(response.status).toBe(404)
+    expect(response.headers.get('location')).toBeNull()
+    expect(await response.text()).toBe('')
   })
   it.each([401, 403, 404, 500, 503])('upstream detail %s fails without redirect data', async status => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(json(br)).mockResolvedValueOnce(json({}, status)))
@@ -64,10 +65,36 @@ describe('public friendly job proxy validates before SSR/redirect', () => {
       const context = { ...br, site: { ...br.site, code: country.toUpperCase(), country_code: country.toUpperCase(), locale, url_prefix: `/${country}` }, locale }
       vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(json(context)).mockResolvedValueOnce(json({ ...job, site_code: context.site.code })))
       const response = await proxy(new NextRequest(`https://jobs.portalerp.com/${country}/${collection}/wrong/wrong/1`))
-      expect(response.status).toBe(301)
-      expect(response.headers.get('location')).toBe(`https://jobs.portalerp.com/${country}/${collection}/empresa-original/titulo-original/1`)
+      expect(response.status).toBe(404)
+      expect(response.headers.get('location')).toBeNull()
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(json(context)).mockResolvedValueOnce(json({ ...job, site_code: context.site.code })))
+      const exact = await proxy(new NextRequest(`https://jobs.portalerp.com/${country}/${collection}/empresa-original/titulo-original/1`))
+      expect(exact.status).toBe(200); expect(exact.headers.get('location')).toBeNull()
       const fetcher = vi.fn().mockResolvedValueOnce(json(context)); vi.stubGlobal('fetch', fetcher)
       expect((await proxy(new NextRequest(`https://jobs.portalerp.com/${country}/vagas/a/b/1`))).status).toBe(404)
+      expect(fetcher).toHaveBeenCalledTimes(1)
+    }
+  })
+  it.each([
+    '/br/vagas/wrong/titulo-original/1',
+    '/br/vagas/empresa-original/wrong/1',
+    '/br/vagas/Empresa-original/titulo-original/1',
+    `${path}/`,
+    '/br/vagas/empresa-original/titulo-original/01',
+  ])('rejects non-exact variant %s on GET and HEAD without redirect or metadata', async variant => {
+    for (const method of ['GET', 'HEAD']) {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(json(br)).mockResolvedValueOnce(json(job)))
+      const response = await proxy(new NextRequest(`https://jobs.portalerp.com${variant}?q=%26%3C`, { method }))
+      expect(response.status).toBe(404); expect(response.headers.get('location')).toBeNull()
+      expect(response.headers.get('x-robots-tag')).toBe('noindex'); expect(await response.text()).toBe('')
+    }
+  })
+  it.each(['POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'])('preserves %s 405 on exact and incorrect slugs without querying job data', async method => {
+    for (const candidatePath of [path, `${path}/`, '/br/vagas/wrong/wrong/1']) {
+      const fetcher = vi.fn().mockResolvedValueOnce(json(br)); vi.stubGlobal('fetch', fetcher)
+      const response = await proxy(new NextRequest(`https://jobs.portalerp.com${candidatePath}`, { method }))
+      expect(response.status).toBe(405); expect(response.headers.get('allow')).toBe('GET, HEAD')
+      expect(response.headers.get('location')).toBeNull(); expect(await response.text()).toBe('')
       expect(fetcher).toHaveBeenCalledTimes(1)
     }
   })

@@ -1,5 +1,5 @@
 import { internalApiOrigin, trustedRegionalHeaders } from './regional-transport'
-import { assertPublicRegionalJob, canonicalJobId, jobCollection, publicJobPath, publicJobCanonical } from './public-job-url'
+import { assertPublicRegionalJob, canonicalJobId, jobCollection, publicJobPath } from './public-job-url'
 import type { RegionalContext } from './site'
 /** Runs only AFTER the proxy sanitized incoming regional headers and resolved context.
  * No browser Cookie/Authorization/X-Regional-* enters this anonymous detail fetch.
@@ -20,7 +20,7 @@ export async function canonicalJobProxy(pathname: string, search: string, method
     const job = await response.json()
     try { assertPublicRegionalJob(job, context.site, id) } catch { return new Response(null, { status: 404, headers: safeHeaders }) }
     const target = publicJobPath(job, context.site)
-    if (pathname !== target) return new Response(null, { status: 301, headers: { ...safeHeaders, Location: `${publicJobCanonical(job, context.site)}${search}` } })
+    if (pathname !== target) return new Response(null, { status: 404, headers: safeHeaders })
     return null
   } catch { return new Response(null, { status: 503, headers: safeHeaders }) }
 }

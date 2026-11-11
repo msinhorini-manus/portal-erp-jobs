@@ -100,8 +100,21 @@ check(status == 200, 'public fixture job data')
 job_one = json.loads(raw)
 JOB1_PATH = '/br/vagas/' + job_one['public_company_slug'] + '/' + job_one['public_title_slug'] + '/1'
 for method in ['GET', 'HEAD']:
-    status, headers, _ = http('/br/vagas/1', method=method)
-    check(status == 301 and (headers.get('Location') or headers.get('location')) == 'https://jobs.portalerp.com' + JOB1_PATH, 'numeric ' + method + ': exact one-hop canonical 301')
+    for rejected_path in ['/br/vagas/1', '/br/vagas/1/', '/br/vagas/01',
+                          '/br/vagas/wrong-company/wrong-title/1',
+                          '/br/vagas/wrong-company/wrong-title/1/',
+                          JOB1_PATH + '/', JOB1_PATH[:-1] + '01']:
+        status, headers, _ = http(rejected_path + '?utm_source=local', method=method)
+        check(status == 404 and not (headers.get('Location') or headers.get('location')),
+              rejected_path + ' ' + method + ': exact 404 without Location')
+    status, headers, _ = http(JOB1_PATH, method=method)
+    check(status == 200 and not (headers.get('Location') or headers.get('location')),
+          'friendly ' + method + ': exact 200 without Location')
+for method in ['POST', 'PUT', 'PATCH', 'DELETE']:
+    for path in ['/br/vagas/1', '/br/vagas/wrong-company/wrong-title/1', JOB1_PATH]:
+        status, headers, _ = http(path, method=method)
+        check(status == 405 and not (headers.get('Location') or headers.get('location')),
+              path + ' ' + method + ': exact 405 without Location')
 
 for path in ['/br', '/br/vagas', JOB1_PATH, '/br/empresas', '/br/empresas/1', '/br/areas', '/br/tecnologias', '/br/salarios', '/br/conteudo', '/br/sobre', '/br/contato', '/br/termos', '/br/privacidade']:
     status, headers, html = http(path, {'User-Agent': 'Googlebot'})
