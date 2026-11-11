@@ -119,6 +119,7 @@ class Application(db.Model):
             identity = self.job.public_identity_dict()
             data["public_company_slug"] = identity["public_company_slug"]
             data["public_title_slug"] = identity["public_title_slug"]
+            data["company_profile_slug"] = identity["company_profile_slug"]
         if include_history:
             data["history"] = [event.to_dict() for event in self.status_events]
         return data

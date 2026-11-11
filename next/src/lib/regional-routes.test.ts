@@ -26,7 +26,7 @@ describe('regional routing and sitemap contract', () => {
     const seen: number[] = []
     const jobs = await collectAll<{ id: number }>(async page => { seen.push(page); return { pages: 3, total: 3, jobs: [{ id: page }] } }, 'jobs')
     expect(seen).toEqual([1, 2, 3])
-    const xml = regionalSitemapXml(site, [...jobs, { id: 5, is_active: false }, { id: 6, expires_at: '2001-01-01' }, { id: 7, created_at: '2026-10-01' }], [{ id: 1, status: 'approved' }, { id: 2, status: 'pending' }])
+    const xml = regionalSitemapXml(site, [...jobs, { id: 5, is_active: false }, { id: 6, expires_at: '2001-01-01' }, { id: 7, created_at: '2026-10-01' }], [{ id: 1, status: 'approved', site_code: 'BR' }, { id: 2, status: 'pending' }])
     expect(xml).toContain('https://jobs.portalerp.com/br/vagas/empresa/vaga/3')
     expect(xml).toContain('<lastmod>2026-10-01T00:00:00.000Z</lastmod>')
     expect(xml).not.toContain('/vaga/5')

@@ -1,6 +1,7 @@
+import { assertPublicRegionalCompany, canonicalCompanyId, publicCompanyPath, type PublicCompanyUrlData } from './public-company-url-core.js'
 import { requireCanonicalOrigin, requireRegionalBaseUrl, type RegionalSite } from './site'
 import { canonicalJobId, publicJobPath, type PublicJobUrlData } from './public-job-url-core.js'
-export type SitemapEntity = PublicJobUrlData & { updated_at?: string; created_at?: string; is_active?: boolean; status?: string; expires_at?: string }
+export type SitemapEntity = PublicJobUrlData & PublicCompanyUrlData & { updated_at?: string; created_at?: string; is_active?: boolean; status?: string; expires_at?: string }
 export type ApiPage<T> = { total?: number; pages?: number; current_page?: number; jobs?: T[]; companies?: T[] }
 export function publicJob(job: SitemapEntity): boolean {
   return job.is_active !== false && (!job.status || ['active', 'approved'].includes(job.status)) && (!job.expires_at || new Date(job.expires_at).getTime() > Date.now())
@@ -31,10 +32,11 @@ export function regionalSitemapXml(site: RegionalSite, jobs: SitemapEntity[], co
   const urls = routes.map(route => ({ url: `${base}${route}`, date: undefined as string | undefined }))
   for (const [entities, slug, filter] of [[jobs, '/vagas', publicJob], [companies, '/empresas', publicCompany]] as const) {
     for (const entity of entities.filter(filter)) {
-      try { canonicalJobId(entity.id) } catch { throw new Error('Invalid sitemap entity ID') }
+      try { slug === '/vagas' ? canonicalJobId(entity.id) : canonicalCompanyId(entity.id) } catch { throw new Error('Invalid sitemap entity ID') }
+      if (slug === '/empresas') assertPublicRegionalCompany(entity, site, String(entity.id))
       const date = entity.updated_at || entity.created_at
       if (date && Number.isNaN(new Date(date).getTime())) throw new Error('Invalid sitemap lastmod')
-      const url = slug === '/vagas' ? `${requireCanonicalOrigin(site)}${publicJobPath(entity, site)}` : `${base}${slug}/${canonicalJobId(entity.id)}`
+      const url = slug === '/vagas' ? `${requireCanonicalOrigin(site)}${publicJobPath(entity, site)}` : `${requireCanonicalOrigin(site)}${publicCompanyPath(entity, site)}`
       urls.push({ url, date: date ? new Date(date).toISOString() : undefined })
     }
   }

@@ -1,3 +1,4 @@
+import { publicJobCompanyLink } from '@/lib/public-company-link.js'
 import { getRegionalRuntime } from '@/lib/regional-runtime.js'
 import { publicJobLink } from '@/lib/public-job-link.js'
 import { canonicalJobId, jobCollection } from '@/lib/public-job-url.js'
@@ -282,7 +283,7 @@ export default function JobDetailPage({ collection = 'vagas' }) {
                   <div className="flex items-center gap-6 text-muted-foreground mb-4 flex-wrap">
                     <span className="flex items-center gap-2">
                       <Building2 className="w-5 h-5" />
-                      {job.is_company_hidden ? 'Empresa Confidencial' : (job.company_name || 'Empresa Confidencial')}
+                      {publicJobCompanyLink(job) ? <Link to={publicJobCompanyLink(job)}>{job.company_name}</Link> : job.is_company_hidden ? 'Empresa Confidencial' : (job.company_name || 'Empresa Confidencial')}
                     </span>
                     {job.location && (
                       <span className="flex items-center gap-2">
@@ -452,7 +453,7 @@ export default function JobDetailPage({ collection = 'vagas' }) {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <span className="text-sm text-muted-foreground">Nome:</span>
-                      <p className="font-medium">{job.company.company_name}</p>
+                      <p className="font-medium">{publicJobCompanyLink(job) ? <Link to={publicJobCompanyLink(job)}>{job.company.company_name}</Link> : job.company.company_name}</p>
                     </div>
                     {job.company.sector && (
                       <div>

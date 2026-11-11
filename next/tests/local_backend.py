@@ -50,6 +50,13 @@ with app.app_context():
     db.session.add_all([CompanySite(company_id=company.id, site_id=site.id, status=CompanyStatus.APPROVED, display_name='Local Runtime ERP', max_active_jobs=250) for site in [br, zz]])
     for name, role in [('owner', CompanyUserRole.OWNER), ('viewer', CompanyUserRole.VIEWER)]:
         db.session.add(CompanyUser(company_id=company.id, user_id=users[name].id, name=name, role=role, is_active=True, invitation_accepted=True))
+    # Company ID 4 is a synthetic public MegaSoft; IDs 2/3 stay pending.
+    for index, name in [(2, 'Pending Synthetic Two'), (3, 'Pending Synthetic Three'), (4, 'MegaSoft')]:
+        user = User(email=f'company-{index}@example.invalid', user_type='company', is_active=True)
+        db.session.add(user); db.session.flush()
+        fixture_company = Company(user_id=user.id, company_name=name, cnpj=f'NEXT-TEST-{index}')
+        db.session.add(fixture_company); db.session.flush()
+        db.session.add(CompanySite(company_id=fixture_company.id, site_id=br.id, status=CompanyStatus.APPROVED if index == 4 else CompanyStatus.PENDING, display_name=name))
     area = JobArea(name='Desenvolvimento', description='Local test', icon='Code2', color='blue', is_active=True)
     db.session.add(area); db.session.flush()
     for i in range(1, 104):

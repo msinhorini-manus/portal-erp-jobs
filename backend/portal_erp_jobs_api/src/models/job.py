@@ -97,6 +97,10 @@ class Job(db.Model):
             'site_code': self.site.code if self.site else None,
             'is_company_hidden': bool(self.is_company_hidden),
             'company_name': None if self.is_company_hidden else company_name,
+            'company_profile_slug': (
+                membership.resolved_public_profile_slug
+                if membership and not self.is_company_hidden else None
+            ),
             # Confidentiality is authoritative even after a public->hidden edit.
             'public_company_slug': HIDDEN_COMPANY_SLUG if self.is_company_hidden else (
                 self.public_company_slug or public_company_slug(regional_name, company_name)

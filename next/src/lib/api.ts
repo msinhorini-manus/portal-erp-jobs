@@ -30,7 +30,7 @@ export async function getJobById(id: string, options: SiteFetchOptions = {}) {
   return job
 }
 export async function getCompanies(params?: Record<string, string>, options?: SiteFetchOptions) { return fetchAPI(`/companies/search${params ? `?${new URLSearchParams(params)}` : ''}`, options) }
-export async function getCompanyById(id: string) { return fetchAPI(`/companies/${encodeURIComponent(id)}`) }
+export async function getCompanyById(id: string, options: SiteFetchOptions = {}) { return fetchAPI(`/companies/${encodeURIComponent(id)}`, { ...options, cache: 'no-store', redirect: 'error' }) }
 export async function getLevels() { return fetchAPI('/config/levels') }
 export async function getModalities() { return fetchAPI('/config/modalities') }
 export async function getDashboardStats() { return fetchAPI('/stats/dashboard') }

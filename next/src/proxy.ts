@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { countryPrefix, defaultCountry } from './lib/regional-routes'
 import { internalApiOrigin, normalizeRequestHost, trustedRegionalHeaders } from './lib/regional-transport'
 import { canonicalJobProxy } from './lib/job-proxy'
+import { canonicalCompanyProxy } from './lib/company-proxy'
 
 export async function proxy(request: NextRequest) {
   const h = new Headers(request.headers)
@@ -27,6 +28,8 @@ export async function proxy(request: NextRequest) {
       if (!context?.site?.is_active || context.site.url_prefix !== prefix || context.site.country_code?.toLowerCase() !== country || context.locale !== context.site.locale) return new NextResponse('Not found', { status: 404 })
       const jobResponse = await canonicalJobProxy(request.nextUrl.pathname, request.nextUrl.search, request.method, host, context)
       if (jobResponse) return jobResponse
+      const companyResponse = await canonicalCompanyProxy(request.nextUrl.pathname, request.method, host, context)
+      if (companyResponse) return companyResponse
       h.set('x-next-regional-country', country)
       h.set('x-next-regional-prefix', prefix)
       h.set('x-next-regional-path', request.nextUrl.pathname)

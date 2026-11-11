@@ -1,67 +1,60 @@
 import { publicJobPath } from '@/lib/public-job-url'
-import type { RegionalSite } from '@/lib/site'
 import { publicJob } from '@/lib/regional-sitemap'
 import { Metadata } from 'next'
 import Link from '@/components/RegionalLink'
 import { notFound } from 'next/navigation'
-import { getCompanyById } from '@/lib/api'
+import { ApiError, getCompanyById } from '@/lib/api'
 import { Building2, MapPin, Users, Globe, Mail, Phone, ArrowLeft, Briefcase } from 'lucide-react'
 import { getSiteContext } from '@/lib/site-resolver.server'
-import { requireRegionalBaseUrl, openGraphLocale } from '@/lib/site'
+import { openGraphLocale } from '@/lib/site'
+import { assertPublicRegionalCompany, canonicalCompanyId, companyCollection, publicCompanyCanonical, publicCompanyPath } from '@/lib/public-company-url'
 
-type Props = {
-  params: Promise<{ country: string; id: string }>
+type Props = { params: Promise<{ country: string; collection: string; companySlug: string; id: string }> }
+async function loadPublicCompany(params: Props['params']) {
+  const { country, collection, companySlug, id } = await params
+  let companyId: string
+  try { companyId = canonicalCompanyId(id) } catch { notFound() }
+  const context = await getSiteContext(country)
+  if (context.site.url_prefix !== `/${country}` || collection !== companyCollection(context.site.locale)) notFound()
+  let company: any
+  try { company = await getCompanyById(companyId, { country, context, cache: 'no-store' }) } catch (error) {
+    if (error instanceof ApiError && [400, 401, 403, 404].includes(error.status)) notFound()
+    throw error // Upstream 5xx/transport outages must not become successful 404s.
+  }
+  try { assertPublicRegionalCompany(company, context.site, companyId) } catch { notFound() }
+  const requested = `${context.site.url_prefix}/${collection}/${companySlug}/${id}`
+  if (requested !== publicCompanyPath(company, context.site)) notFound()
+  return { company: { ...company, jobs: company.jobs?.filter((job: any) => publicJob(job) && !job.is_company_hidden && (job.site_id == null || job.site_id === context.site.id) && (job.site_code == null || job.site_code === context.site.code)) }, site: context.site }
 }
-
+const missingMetadata: Metadata = { title: 'Empresa não encontrada', robots: { index: false, follow: false } }
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  try {
-    const { id, country } = await params
-    const [company, { site }] = await Promise.all([getCompanyById(id), getSiteContext(country)])
-    const companyName = company.company_name || company.trade_name || company.name || 'Empresa'
-    const canonical = `${requireRegionalBaseUrl(site)}/empresas/${id}`
-    return {
+  let data: Awaited<ReturnType<typeof loadPublicCompany>>
+  try { data = await loadPublicCompany(params) } catch (error) {
+    if ((error as { digest?: string }).digest === 'NEXT_HTTP_ERROR_FALLBACK;404') return missingMetadata
+    throw error
+  }
+  const { company, site } = data
+  const companyName = company.company_name || company.trade_name || company.name || 'Empresa'
+  const canonical = publicCompanyCanonical(company, site)
+  return {
+    title: `${companyName} - Empresa`,
+    description: company.description?.substring(0, 160) || `Perfil da empresa ${companyName} no Jobs by Portal ERP`,
+    alternates: { canonical },
+    openGraph: {
       title: `${companyName} - Empresa`,
       description: company.description?.substring(0, 160) || `Perfil da empresa ${companyName} no Jobs by Portal ERP`,
-      alternates: { canonical },
-      openGraph: {
-        title: `${companyName} - Empresa`,
-        description: company.description?.substring(0, 160) || `Perfil da empresa ${companyName} no Jobs by Portal ERP`,
-        type: 'website',
-        url: canonical,
-        locale: openGraphLocale(site),
-        ...(company.logo_url ? { images: [{ url: company.logo_url }] } : {}),
-      },
-    }
-  } catch {
-    return { title: 'Empresa não encontrada' }
+      type: 'website', url: canonical, locale: openGraphLocale(site),
+      ...(company.logo_url ? { images: [{ url: company.logo_url }] } : {}),
+    },
   }
 }
-
 export default async function CompanyDetailPage({ params }: Props) {
-  let company: any
-  let origin = ''
-  let site: RegionalSite
-
-  try {
-    const { id, country } = await params
-    const context = await getSiteContext(country)
-    origin = requireRegionalBaseUrl(context.site)
-    site = context.site
-    company = await getCompanyById(id)
-  } catch (e) {
-    notFound()
-  }
-
-  if (!company) notFound()
-
-  company.jobs = company.jobs?.filter(publicJob)
+  const { company, site } = await loadPublicCompany(params)
+  const canonical = publicCompanyCanonical(company, site)
   const companyName = company.company_name || company.trade_name || company.name || 'Empresa'
   const organization = {
-    '@context': 'https://schema.org',
-    '@type': 'Organization',
-    '@id': `${origin}/empresas/${company.id}#organization`,
-    name: companyName,
-    url: `${origin}/empresas/${company.id}`,
+    '@context': 'https://schema.org', '@type': 'Organization',
+    '@id': `${canonical}#organization`, name: companyName, url: canonical,
     ...(company.website ? { sameAs: company.website } : {}),
     ...(company.logo_url ? { logo: company.logo_url } : {}),
     ...(company.description ? { description: company.description } : {}),
@@ -74,7 +67,7 @@ export default async function CompanyDetailPage({ params }: Props) {
       {/* Header */}
       <section className="bg-portal-dark text-white py-8">
         <div className="container mx-auto px-6">
-          <Link href="/empresas" className="inline-flex items-center gap-2 text-white/70 hover:text-white mb-4 text-sm">
+          <Link href={`${site.url_prefix}/${companyCollection(site.locale)}`} className="inline-flex items-center gap-2 text-white/70 hover:text-white mb-4 text-sm">
             <ArrowLeft className="w-4 h-4" />
             Voltar para empresas
           </Link>

@@ -1,4 +1,4 @@
-import { ApiError, getCompanies, getJobs, getJobById } from '@/lib/api'
+import { ApiError, getCompanies, getJobs, getJobById, getCompanyById } from '@/lib/api'
 import { getSiteContext } from '@/lib/site-resolver.server'
 import { collectAll, regionalSitemapXml, type SitemapEntity } from '@/lib/regional-sitemap'
 export const dynamic = 'force-dynamic'
@@ -23,7 +23,17 @@ export async function GET(_request: Request, { params }: { params: Promise<{ cou
       }))
       publicJobs.push(...batch.filter((job): job is SitemapEntity => job !== null))
     }
-    return new Response(regionalSitemapXml(context.site, publicJobs, companies), { headers: { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'no-store' } })
+    const publicCompanies: SitemapEntity[] = []
+    for (let offset = 0; offset < companies.length; offset += 8) {
+      const batch = await Promise.all(companies.slice(offset, offset + 8).map(async company => {
+        try { return await getCompanyById(String(company.id), options) as SitemapEntity } catch (error) {
+          if (error instanceof ApiError && error.status === 404) return null
+          throw error
+        }
+      }))
+      publicCompanies.push(...batch.filter((company): company is SitemapEntity => company !== null))
+    }
+    return new Response(regionalSitemapXml(context.site, publicJobs, publicCompanies), { headers: { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'no-store' } })
   } catch {
     return new Response('Sitemap inventory unavailable', { status: 503, headers: { 'Cache-Control': 'no-store', 'Retry-After': '60' } })
   }

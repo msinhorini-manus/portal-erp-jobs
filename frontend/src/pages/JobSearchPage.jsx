@@ -1,3 +1,4 @@
+import { publicJobCompanyLink } from '@/lib/public-company-link.js'
 import { configuredApiBase } from '@/lib/regional-runtime.js'
 import { publicJobLink } from '@/lib/public-job-link.js'
 import { appFetch } from '@/lib/regional-runtime.js'
@@ -541,14 +542,14 @@ export default function JobSearchPage() {
             ) : (
               <div className="space-y-4">
                 {sortedJobs.map(job => (
-                  <Link key={job.id} to={publicJobLink(job)}>
+                  <div key={job.id}>
                     <Card className="border-2 hover:border-[#F7941D] hover:shadow-lg transition-all cursor-pointer">
                       <CardContent className="p-6">
                         <div className="flex justify-between items-start">
                           <div className="flex-1">
                             <div className="flex items-center gap-3 mb-2">
                               <h3 className="text-xl font-bold text-[#1F3B47] hover:text-[#F7941D] transition-colors">
-                                {job.title}
+                                <Link to={publicJobLink(job)}>{job.title}</Link>
                               </h3>
                               <Badge className="bg-[#F7941D]/10 text-[#F7941D] border-0">
                                 {job.level}
@@ -557,7 +558,7 @@ export default function JobSearchPage() {
                             <div className="flex flex-wrap items-center gap-4 text-gray-600 mb-3">
                               <span className="flex items-center gap-1">
                                 <Building2 className="w-4 h-4" />
-                                {job.company}
+                                {publicJobCompanyLink(job) ? <Link to={publicJobCompanyLink(job)}>{job.company}</Link> : job.company}
                               </span>
                               <span className="flex items-center gap-1">
                                 <MapPin className="w-4 h-4" />
@@ -598,7 +599,7 @@ export default function JobSearchPage() {
                         </div>
                       </CardContent>
                     </Card>
-                  </Link>
+                  </div>
                 ))}
 
                 {/* Paginação */}

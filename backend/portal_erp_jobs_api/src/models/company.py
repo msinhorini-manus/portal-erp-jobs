@@ -1,7 +1,9 @@
 """Company and regional company-presence models for Portal ERP Jobs."""
 from datetime import datetime
+from sqlalchemy import event, select
 
 from src.config import db
+from src.job_slugs import public_company_slug
 
 
 class CompanyStatus:
@@ -103,6 +105,8 @@ class Company(db.Model):
         data.pop("max_active_jobs", None)
         data.pop("is_member", None)
         data["description"] = site_membership.description or self.description
+        data["site_id"] = site_membership.site_id
+        data["public_profile_slug"] = site_membership.resolved_public_profile_slug
         return data
 
 
@@ -141,6 +145,9 @@ class CompanySite(db.Model):
     max_active_jobs = db.Column(db.Integer, nullable=False, default=3)
 
     display_name = db.Column(db.String(100), nullable=True)
+    # Nullable for legacy writers/code rollback; snapshot only on ORM insert.
+    # Regional/global name edits must never regenerate this URL identity.
+    public_profile_slug = db.Column(db.String(140), nullable=True)
     description = db.Column(db.Text, nullable=True)
     website = db.Column(db.String(500), nullable=True)
     logo_url = db.Column(db.String(500), nullable=True)
@@ -158,6 +165,13 @@ class CompanySite(db.Model):
     company = db.relationship("Company", back_populates="site_memberships")
     site = db.relationship("Site")
     approver = db.relationship("Admin", foreign_keys=[approved_by])
+
+    @property
+    def resolved_public_profile_slug(self):
+        """Read-only fallback for legacy null snapshots; never persist on GET."""
+        return self.public_profile_slug or public_company_slug(
+            self.display_name, self.company.company_name if self.company else None,
+        )
 
     @property
     def is_approved(self):
@@ -194,3 +208,16 @@ class CompanySite(db.Model):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
+
+
+@event.listens_for(CompanySite, "before_insert")
+def snapshot_public_company_profile_slug(mapper, connection, membership):
+    """Cover registration/Admin/ORM graphs using this transaction's connection."""
+    if not membership.public_profile_slug:
+        company_name = connection.execute(
+            select(Company.__table__.c.company_name)
+            .where(Company.__table__.c.id == membership.company_id)
+        ).scalar_one_or_none()
+        membership.public_profile_slug = public_company_slug(
+            membership.display_name, company_name,
+        )

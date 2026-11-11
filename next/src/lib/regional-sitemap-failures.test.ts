@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RegionalSite } from './site'
-const mocks = vi.hoisted(() => ({ headers: vi.fn(), getSiteContext: vi.fn(), resolveSiteFor: vi.fn(), activeSitesFor: vi.fn(), getJobs: vi.fn(), getCompanies: vi.fn(), getJobById: vi.fn() }))
+const mocks = vi.hoisted(() => ({ headers: vi.fn(), getSiteContext: vi.fn(), resolveSiteFor: vi.fn(), activeSitesFor: vi.fn(), getJobs: vi.fn(), getCompanies: vi.fn(), getJobById: vi.fn(), getCompanyById: vi.fn() }))
 vi.mock('next/headers', () => ({ headers: mocks.headers }))
 vi.mock('./site-resolver.server', () => ({ getSiteContext: mocks.getSiteContext, resolveSiteFor: mocks.resolveSiteFor, activeSitesFor: mocks.activeSitesFor }))
-vi.mock('./api', () => ({ ApiError: class ApiError extends Error { constructor(public status: number) { super(`API ${status}`) } }, getJobs: mocks.getJobs, getCompanies: mocks.getCompanies, getJobById: mocks.getJobById }))
+vi.mock('./api', () => ({ ApiError: class ApiError extends Error { constructor(public status: number) { super(`API ${status}`) } }, getJobs: mocks.getJobs, getCompanies: mocks.getCompanies, getJobById: mocks.getJobById, getCompanyById: mocks.getCompanyById }))
 import { ApiError } from './api'
 import { GET as regionalGET } from '../app/(regional)/[country]/sitemap.xml/route'
 import { GET as globalGET } from '../app/sitemap.xml/route'
@@ -23,6 +23,7 @@ beforeEach(() => {
   mocks.getJobs.mockResolvedValue({ total: 2, pages: 1, jobs: [{ id: 1 }, { id: 2 }] })
   mocks.getCompanies.mockResolvedValue({ total: 1, pages: 1, companies: [{ id: 1, status: 'approved' }] })
   mocks.getJobById.mockImplementation(async (id: string) => ({ id, status: 'active' }))
+  mocks.getCompanyById.mockImplementation(async (id: string) => ({ id, status: 'approved', site_code: 'BR', public_profile_slug: 'local-company' }))
 })
 afterEach(() => vi.unstubAllEnvs())
 async function unavailable(response: Response, body: string) {
@@ -53,8 +54,20 @@ describe('regional sitemap failure handling', () => {
     const xml = await response.text()
     expect(xml).not.toContain('/vaga/1</loc>')
     expect(xml).toContain('/br/vagas/empresa/vaga/2</loc>')
-    expect(xml).toContain('/br/empresas/1</loc>')
+    expect(xml).toContain('/br/empresas/local-company/1</loc>')
     expect(response.headers.get('Cache-Control')).toBe('no-store')
+  })
+  it.each([401, 403, 429, 500, 503])('fails company detail status %s as inventory 503, never partial 200', async status => {
+    mocks.getCompanyById.mockRejectedValueOnce(new ApiError(status))
+    await unavailable(await regional(), 'Sitemap inventory unavailable')
+  })
+  it('skips only definitive company 404 and rejects cross-regional inventory', async () => {
+    mocks.getCompanyById.mockRejectedValueOnce(new ApiError(404))
+    const response = await regional()
+    expect(response.status).toBe(200)
+    expect(await response.text()).not.toContain('/empresas/local-company/1')
+    mocks.getCompanyById.mockResolvedValue({ id: 1, status: 'approved', site_code: 'MX', public_profile_slug: 'local-company' })
+    await unavailable(await regional(), 'Sitemap inventory unavailable')
   })
   it('rejects malformed IDs/dates rather than publishing a corrupt XML inventory', () => {
     expect(() => regionalSitemapXml(br, [{ id: '../admin' }], [])).toThrow('Invalid sitemap entity ID')
