@@ -1,6 +1,7 @@
 import { internalApiOrigin, trustedRegionalHeaders } from './regional-transport'
 import { assertPublicRegionalJob, canonicalJobId, jobCollection, publicJobPath } from './public-job-url'
 import type { RegionalContext } from './site'
+import { internalReadFetch } from './internal-read-fetch'
 /** Runs only AFTER the proxy sanitized incoming regional headers and resolved context.
  * No browser Cookie/Authorization/X-Regional-* enters this anonymous detail fetch.
  */
@@ -13,7 +14,7 @@ export async function canonicalJobProxy(pathname: string, search: string, method
   let id: string
   try { id = canonicalJobId(match[4]) } catch { return new Response(null, { status: 404, headers: safeHeaders }) }
   try {
-    const response = await fetch(`${internalApiOrigin()}/api/jobs/${id}`, {
+    const response = await internalReadFetch(`${internalApiOrigin()}/api/jobs/${id}`, {
       headers: trustedRegionalHeaders(host, context.site.url_prefix), cache: 'no-store', redirect: 'error',
     })
     if (!response.ok) return new Response(null, { status: [400, 401, 403, 404].includes(response.status) ? 404 : 503, headers: safeHeaders })

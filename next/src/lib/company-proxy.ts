@@ -1,6 +1,7 @@
 import { internalApiOrigin, trustedRegionalHeaders } from './regional-transport'
 import { assertPublicRegionalCompany, canonicalCompanyId, companyCollection, publicCompanyPath } from './public-company-url'
 import type { RegionalContext } from './site'
+import { internalReadFetch } from './internal-read-fetch'
 /** Called after live region resolution and sanitization; never forwards browser auth. */
 export async function canonicalCompanyProxy(pathname: string, method: string, host: string, context: RegionalContext): Promise<Response | null> {
   const match = pathname.match(/^\/[a-z]{2}\/(empresas|companies)\/([^/]+)(?:\/([^/]+))?\/?$/)
@@ -12,7 +13,7 @@ export async function canonicalCompanyProxy(pathname: string, method: string, ho
   let id: string
   try { id = canonicalCompanyId(match[3]) } catch { return new Response(null, { status: 404, headers: safeHeaders }) }
   try {
-    const response = await fetch(`${internalApiOrigin()}/api/companies/${id}`, {
+    const response = await internalReadFetch(`${internalApiOrigin()}/api/companies/${id}`, {
       headers: trustedRegionalHeaders(host, context.site.url_prefix), cache: 'no-store', redirect: 'error',
     })
     if (!response.ok) return new Response(null, { status: [400, 401, 403, 404].includes(response.status) ? 404 : 503, headers: safeHeaders })
