@@ -35,9 +35,9 @@ describe('job SSR exact friendly identity without permanent redirects', () => {
   it('links visible employer using profile snapshot in header/sidebar/schema, never job brand snapshot', async () => {
     mocks.getJobById.mockResolvedValue({ ...job, company_id: 4, company_profile_slug: 'megasoft', company: { id: 4, public_profile_slug: 'megasoft', website: 'https://example.invalid' } })
     const html = renderToStaticMarkup(await JobDetailPage({ params: params() }))
-    expect(html).toContain('href="/br/empresas/megasoft/4"')
-    expect(html).toContain('"@id":"https://jobs.portalerp.com/br/empresas/megasoft/4#organization"')
-    expect(html).toContain('"url":"https://jobs.portalerp.com/br/empresas/megasoft/4"')
+    expect(html).toContain('href="/br/empresas/megasoft"')
+    expect(html).toContain('"@id":"https://jobs.portalerp.com/br/empresas/megasoft#organization"')
+    expect(html).toContain('"url":"https://jobs.portalerp.com/br/empresas/megasoft"')
     expect(html).not.toContain('/empresas/empresa-original/4')
   })
   it('keeps hidden-company canonical while preventing real company data in metadata and SSR', async () => {

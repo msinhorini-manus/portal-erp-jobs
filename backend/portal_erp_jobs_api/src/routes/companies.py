@@ -5,6 +5,8 @@ from flask_jwt_extended import jwt_required
 from src.config import db
 from src.models.company import Company, CompanySite, CompanyStatus
 from src.models.job import Job
+from src.models.user import User
+from src.company_slug_policy_v12 import valid_slug
 from src.regional_access import get_company_access
 from src.regional_context import get_current_site
 from src.services.jobs import pagination_args, text_contains
@@ -16,9 +18,12 @@ def _approved_company_query(site):
     return (
         db.session.query(Company, CompanySite)
         .join(CompanySite, CompanySite.company_id == Company.id)
+        .join(User, User.id == Company.user_id)
         .filter(
             CompanySite.site_id == site.id,
             CompanySite.status == CompanyStatus.APPROVED,
+            User.is_active.is_(True),
+            CompanySite.public_profile_slug.is_not(None),
         )
     )
 
@@ -147,6 +152,32 @@ def search_companies():
         return jsonify({"error": str(exc)}), 500
 
 
+def _public_company_payload(company, membership, site):
+    jobs = Job.query.filter_by(company_id=company.id, site_id=site.id, is_active=True).filter(
+        db.or_(Job.is_company_hidden.is_(False), Job.is_company_hidden.is_(None)),
+    ).order_by(Job.created_at.desc()).all()
+    payload = company.to_public_dict(membership)
+    payload["jobs"] = [job.to_dict() for job in jobs]
+    payload["active_jobs_count"] = len(jobs)
+    return payload
+
+
+@companies_bp.route("/by-slug/<slug>", methods=["GET"])
+def get_public_company_by_slug(slug):
+    """Exact server-owned country slug, current trusted active regional site only."""
+    not_found = ({"error": "Empresa não encontrada"}, 404)
+    if not valid_slug(slug):
+        return jsonify(not_found[0]), not_found[1]
+    site = get_current_site()
+    result = _approved_company_query(site).filter(CompanySite.public_profile_slug == slug).first()
+    if not result:
+        return jsonify(not_found[0]), not_found[1]
+    company, membership = result
+    if membership.resolved_public_profile_slug != slug:
+        return jsonify(not_found[0]), not_found[1]
+    return jsonify(_public_company_payload(company, membership, site)), 200
+
+
 @companies_bp.route("/<int:company_id>", methods=["GET"])
 def get_public_company(company_id):
     """Return one approved company presence and its active jobs in this site."""
@@ -156,17 +187,6 @@ def get_public_company(company_id):
         if not result:
             return jsonify({"error": "Empresa não encontrada"}), 404
         company, membership = result
-        jobs = Job.query.filter_by(
-            company_id=company.id,
-            site_id=site.id,
-            is_active=True,
-        ).filter(
-            # The named company page must not identify a confidential employer.
-            db.or_(Job.is_company_hidden.is_(False), Job.is_company_hidden.is_(None)),
-        ).order_by(Job.created_at.desc()).all()
-        payload = company.to_public_dict(membership)
-        payload["jobs"] = [job.to_dict() for job in jobs]
-        payload["active_jobs_count"] = len(jobs)
-        return jsonify(payload), 200
+        return jsonify(_public_company_payload(company, membership, site)), 200
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500

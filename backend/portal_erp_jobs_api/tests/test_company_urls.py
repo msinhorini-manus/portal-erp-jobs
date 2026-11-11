@@ -2,6 +2,7 @@
 import unittest
 
 import test_jobs_wave4 as fixtures
+from sqlalchemy.exc import IntegrityError
 from src.config import db
 from src.main import app
 from src.job_slugs import public_company_slug
@@ -91,7 +92,7 @@ class CompanyUrlTests(unittest.TestCase):
         self.assertEqual(payload["site_id"], self.site_id)
         self.assertEqual(payload["site_code"], "BR")
 
-    def test_duplicate_profile_slugs_need_no_uniqueness_because_company_id_is_identity(self):
+    def test_duplicate_profile_slugs_are_disambiguated_without_changing_numeric_identity(self):
         with app.app_context():
             other = CompanySite.query.filter_by(company_id=self.other_company_id, site_id=self.site_id).one()
             # Simulate an independently created identically named public profile.
@@ -101,12 +102,12 @@ class CompanyUrlTests(unittest.TestCase):
                                 display_name="Wave 4 Company BR", status=CompanyStatus.APPROVED)
             db.session.add(other)
             db.session.commit()
-            self.assertEqual(other.public_profile_slug, self._membership().public_profile_slug)
+            self.assertEqual(other.public_profile_slug, "wave-4-company-br-a")
         for company_id in (self.company_id, self.other_company_id):
             response = self.client.get(f"/api/companies/{company_id}", headers=self.HOST)
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.get_json()["id"], company_id)
-            self.assertEqual(response.get_json()["public_profile_slug"], "wave-4-company-br")
+            self.assertEqual(response.get_json()["public_profile_slug"], "wave-4-company-br" if company_id == self.company_id else "wave-4-company-br-a")
 
     def test_owner_and_admin_name_edits_cannot_set_or_clear_snapshot(self):
         with app.app_context():
@@ -126,12 +127,11 @@ class CompanyUrlTests(unittest.TestCase):
         with app.app_context():
             membership = self._membership()
             self.assertEqual(membership.public_profile_slug, "wave-4-company-br")
-            db.session.execute(db.text("UPDATE company_sites SET public_profile_slug=NULL WHERE id=:id"), {"id": membership.id})
-            db.session.commit()
+            with self.assertRaises(IntegrityError):
+                db.session.execute(db.text("UPDATE company_sites SET public_profile_slug=NULL WHERE id=:id"), {"id": membership.id})
+            db.session.rollback()
         self.client.put("/api/companies/", headers=self._headers(self.owner_token), json={"name": "Legacy name edit"})
-        self.assertEqual(self.public_company()["public_profile_slug"], "legacy-name-edit")
-        with app.app_context():
-            self.assertIsNone(self._membership().public_profile_slug)
+        self.assertEqual(self.public_company()["public_profile_slug"], "wave-4-company-br")
 
     def test_registration_ignores_forged_snapshot_and_preserves_pending_access_guards(self):
         response = self.client.post("/api/auth/register/company", headers=self.HOST, json={
@@ -158,37 +158,29 @@ class CompanyUrlTests(unittest.TestCase):
         self.assertEqual(self.client.post("/api/jobs/", headers=token_headers,
                                         json={"title": "Blocked", "description": "Blocked"}).status_code, 403)
 
-    def test_null_legacy_fallback_is_readonly_across_company_job_application_dtos(self):
-        job_id = self._job(title="Consultor ERP Sênior")
-        application_id = self._application_with_event(job_id)
+    def test_null_legacy_snapshot_fails_closed_without_get_writes(self):
         with app.app_context():
-            membership = self._membership()
-            membership.display_name = "  "
-            company = db.session.get(Company, self.company_id)
-            company.company_name = "Global_Áção"
+            company = Company(company_name="Legacy_Áção", user=User(email="legacy@example.invalid", user_type="company"))
+            db.session.add(company)
+            db.session.flush()
+            company_id = company.id
+            db.session.execute(db.text("INSERT INTO company_sites(company_id,site_id,status,is_member,max_active_jobs,created_at,updated_at) VALUES(:company,:site,'approved',0,3,'2026-10-01','2026-10-02')"),
+                               {"company": company_id, "site": self.site_id})
             db.session.commit()
-            db.session.execute(db.text("UPDATE company_sites SET public_profile_slug=NULL WHERE id=:id"), {"id": membership.id})
-            db.session.commit()
-            before = (membership.updated_at, company.updated_at, db.session.get(Job, job_id).updated_at)
-            self.assertEqual(company.to_public_dict(membership)["public_profile_slug"], "global-acao")
-            self.assertFalse(db.session.is_modified(membership))
-            self.assertEqual(db.session.get(Application, application_id).to_dict()["company_profile_slug"], "global-acao")
-        self.assertEqual(self.public_company()["public_profile_slug"], "global-acao")
-        search = self.client.get("/api/companies/search", headers=self.HOST)
-        self.assertEqual(search.status_code, 200)
-        self.assertEqual(next(c for c in search.get_json()["companies"] if c["id"] == self.company_id)["public_profile_slug"], "global-acao")
-        detail = self.client.get(f"/api/jobs/{job_id}", headers=self.HOST).get_json()
-        self.assertEqual(detail["company_profile_slug"], "global-acao")
-        self.assertEqual(detail["public_company_slug"], "wave-4-company-br")
-        self.assertEqual(detail["company"]["public_profile_slug"], "global-acao")
-        application = self.client.get(f"/api/applications/{application_id}", headers=self._headers(self.candidate_token))
-        self.assertEqual(application.status_code, 200)
-        self.assertEqual(application.get_json()["job"]["company_profile_slug"], "global-acao")
-        with app.app_context():
-            membership = self._membership()
+            membership = CompanySite.query.filter_by(company_id=company_id).one()
+            before = membership.updated_at
             self.assertIsNone(membership.public_profile_slug)
-            self.assertEqual((membership.updated_at, db.session.get(Company, self.company_id).updated_at,
-                              db.session.get(Job, job_id).updated_at), before)
+            self.assertIsNone(company.to_public_dict(membership)["public_profile_slug"])
+        response = self.client.get(f"/api/companies/{company_id}", headers=self.HOST)
+        self.assertEqual(response.status_code, 404)
+        self.assertNotIn("Location", response.headers)
+        self.assertEqual(self.client.get("/api/companies/by-slug/legacy-acao", headers=self.HOST).status_code, 404)
+        search = self.client.get("/api/companies/search", headers=self.HOST).get_json()["companies"]
+        self.assertNotIn(company_id, [c["id"] for c in search])
+        with app.app_context():
+            membership = CompanySite.query.filter_by(company_id=company_id).one()
+            self.assertIsNone(membership.public_profile_slug)
+            self.assertEqual(membership.updated_at, before)
 
     def test_same_host_regions_have_independent_profiles_and_foreign_ids_fail_closed(self):
         with app.app_context():
@@ -274,7 +266,7 @@ class CompanyUrlTests(unittest.TestCase):
             job = db.session.get(Job, job_id)
             job.is_company_hidden = True
             membership = self._membership()
-            membership.public_profile_slug = "sensitive-profile-snapshot"
+            snapshot = membership.public_profile_slug
             admin = Admin.query.first()
             admin.permissions = {**admin.permissions, "manage_companies": True, "manage_candidates": True}
             db.session.commit()
@@ -282,7 +274,7 @@ class CompanyUrlTests(unittest.TestCase):
             for payload in (job.public_identity_dict(), job.to_dict(), job.to_dict(include_details=True),
                             db.session.get(Application, application_id).to_dict()):
                 self.assertIsNone(payload["company_profile_slug"])
-                self.assertNotIn("sensitive-profile-snapshot", str(payload))
+                self.assertNotIn(snapshot, str(payload))
                 self.assertEqual(payload["public_company_slug"], "empresa-confidencial")
         endpoints = [
             (f"/api/jobs/{job_id}", None, lambda d: d),
@@ -303,22 +295,17 @@ class CompanyUrlTests(unittest.TestCase):
                 payload = extract(response.get_json())
                 self.assertIsNone(payload["company_profile_slug"])
                 self.assertIsNone(payload["company_name"])
-                self.assertNotIn("sensitive-profile-snapshot", str(payload))
+                self.assertNotIn(snapshot, str(payload))
                 self.assertEqual(payload["public_company_slug"], "empresa-confidencial")
         self.assertEqual(self.public_company()["jobs"], [])
-        # Null fallback is masked too; returning to visible restores only the
-        # profile identity, never regenerating the existing job URL snapshot.
+        # Restoring visibility preserves both original profile and job snapshots.
         with app.app_context():
-            membership = self._membership()
-            membership.public_profile_slug = None
-            db.session.commit()
             job = db.session.get(Job, job_id)
             self.assertIsNone(job.public_identity_dict()["company_profile_slug"])
             job.is_company_hidden = False
             db.session.commit()
             self.assertEqual(job.public_identity_dict()["company_profile_slug"], "wave-4-company-br")
             self.assertEqual(job.public_company_slug, "wave-4-company-br")
-            self.assertIsNone(membership.public_profile_slug)
         for path, token in (("/api/jobs/", self.owner_token), ("/api/admin/jobs", self.admin_token)):
             response = self.client.post(path, headers=self._headers(token), json={
                 "company_id": self.company_id, "title": "Hidden on insert", "description": "Fixture",

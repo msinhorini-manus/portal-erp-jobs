@@ -73,7 +73,7 @@ class JobUrlMigrationTests(unittest.TestCase):
         self.sql("INSERT INTO candidate_skills(id,candidate_id,skill_id) VALUES(903,501,901)")
 
     def snapshot(self):
-        tables = self.sql("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name != 'alembic_version' ORDER BY name")
+        tables = self.sql("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT IN ('alembic_version','company_slug_reservations') ORDER BY name")
         result = {}
         for (name,) in tables:
             columns = [row[1] for row in self.sql(f'PRAGMA table_info("{name}")')
@@ -119,7 +119,7 @@ class JobUrlMigrationTests(unittest.TestCase):
         self.alembic("upgrade", "20261111_10")
         self.assertEqual(self.sql("SELECT version_num FROM alembic_version"), [("20261111_10",)])
         self.alembic("upgrade", "head")
-        self.assertEqual(self.sql("SELECT version_num FROM alembic_version"), [("20261111_11",)])
+        self.assertEqual(self.sql("SELECT version_num FROM alembic_version"), [("20261111_12",)])
         self.assertEqual(self.snapshot(), before)
         self.assertEqual(self.constraints(), constraints)
         self.assertEqual(self.sql("PRAGMA foreign_key_check"), [])

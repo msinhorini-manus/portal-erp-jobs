@@ -1,5 +1,5 @@
 export type PublicCompanyUrlData = {
-  id: number | string
+  id?: number | string
   company_name?: string | null
   trade_name?: string | null
   name?: string | null
@@ -20,7 +20,7 @@ export type PublicJobCompanyData = {
 export function companyCollection(locale: string): 'empresas' | 'companies'
 export function canonicalCompanyId(value: unknown): string
 export function validPublicCompanySlug(value: unknown): boolean
-export function fallbackCompanySlug(value: unknown): string
+export const RESERVED_COMPANY_SLUGS: readonly string[]
 export function publicCompanyRelativePath(company: PublicCompanyUrlData, locale: string): string
 export function publicCompanyPath(company: PublicCompanyUrlData, site: PublicCompanyUrlSite): string
 export function assertPublicRegionalCompany(company: PublicCompanyUrlData, site: PublicCompanyUrlSite, id: string): void

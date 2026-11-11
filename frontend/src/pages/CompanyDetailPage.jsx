@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { appFetch, getRegionalRuntime } from '@/lib/regional-runtime.js'
-import { assertPublicRegionalCompany, canonicalCompanyId, companyCollection } from '@/lib/public-company-url.js'
+import { assertPublicRegionalCompany, canonicalCompanyId, companyCollection, validPublicCompanySlug } from '@/lib/public-company-url.js'
 import { publicCompanyLink } from '@/lib/public-company-link.js'
 import { publicJobLink } from '@/lib/public-job-link.js'
 import { Link, useParams } from 'react-router-dom'
@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 
 export default function CompanyDetailPage({ collection = 'empresas' }) {
-  const { id, companySlug } = useParams()
+  const { companySlug } = useParams()
   const [company, setCompany] = useState(null)
   const [error, setError] = useState('')
   useEffect(() => {
@@ -18,26 +18,26 @@ export default function CompanyDetailPage({ collection = 'empresas' }) {
     setError('')
     const load = async () => {
       const runtime = getRegionalRuntime()
-      if (collection !== companyCollection(runtime.site?.locale)) throw new Error('Empresa não encontrada')
-      const companyId = canonicalCompanyId(id)
-      const response = await appFetch(`/api/companies/${companyId}`, { credentials: 'omit', cache: 'no-store', redirect: 'error' })
+      if (!runtime.site?.is_active || collection !== companyCollection(runtime.site.locale) || !validPublicCompanySlug(companySlug)) throw new Error('Empresa não encontrada')
+      const response = await appFetch(`/api/companies/by-slug/${companySlug}`, { credentials: 'omit', cache: 'no-store', redirect: 'error' })
       if (!response.ok) throw new Error(response.status >= 500 ? 'Serviço de empresas indisponível' : 'Empresa não encontrada')
       const data = await response.json()
-      assertPublicRegionalCompany(data, runtime.site, companyId)
+      assertPublicRegionalCompany(data, runtime.site, canonicalCompanyId(data?.id))
       const target = publicCompanyLink(data)
-      const current = globalThis.location.pathname.replace(runtime.basename || '', '')
-      if (current !== target) throw new Error('Empresa não encontrada')
+      const pathname = globalThis.location.pathname
+      const current = runtime.basename && pathname.startsWith(`${runtime.basename}/`) ? pathname.slice(runtime.basename.length) : pathname
+      if (data.public_profile_slug !== companySlug || current !== target) throw new Error('Empresa não encontrada')
       if (active) setCompany({
         ...data, name: data.company_name || data.trade_name || data.name,
         logo: data.logo_url, size: data.company_size || data.size,
         location: data.location || [data.city, data.state].filter(Boolean).join(', '),
         about: data.about || data.description, benefits: data.benefits || [], culture: data.culture || [],
-        openJobs: (data.jobs || []).filter(job => !job.is_company_hidden && job.is_active !== false && (!job.status || ['active', 'approved'].includes(job.status)) && (!job.expires_at || new Date(job.expires_at).getTime() > Date.now())),
+        openJobs: (data.jobs || []).filter(job => !job.is_company_hidden && job.is_active !== false && (job.site_id == null || job.site_id === data.site_id) && (job.site_code == null || job.site_code === runtime.site.code) && (!job.status || ['active', 'approved'].includes(job.status)) && (!job.expires_at || new Date(job.expires_at).getTime() > Date.now())),
       })
     }
     load().catch(err => { if (active) setError(err.message) })
     return () => { active = false }
-  }, [id, companySlug, collection])
+  }, [companySlug, collection])
   if (error) return <div role="alert" className="p-8">{error}</div>
   if (!company) return <div role="status" className="p-8">Carregando empresa...</div>
 

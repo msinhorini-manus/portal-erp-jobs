@@ -3,6 +3,7 @@ import { getSiteContext, serverRegion } from './site-resolver.server'
 import { contextCacheTag, internalApiOrigin, trustedRegionalHeaders } from './regional-transport'
 import type { RegionalContext } from './site'
 import { internalReadFetch } from './internal-read-fetch'
+import { validPublicCompanySlug } from './public-company-url-core.js'
 export class ApiError extends Error {
   constructor(public status: number) { super(`API request failed (${status})`) }
 }
@@ -33,6 +34,13 @@ export async function getJobById(id: string, options: SiteFetchOptions = {}) {
 }
 export async function getCompanies(params?: Record<string, string>, options?: SiteFetchOptions) { return fetchAPI(`/companies/search${params ? `?${new URLSearchParams(params)}` : ''}`, options) }
 export async function getCompanyById(id: string, options: SiteFetchOptions = {}) { return fetchAPI(`/companies/${encodeURIComponent(id)}`, { ...options, cache: 'no-store', redirect: 'error' }) }
+export async function getCompanyBySlug(slug: string, options: SiteFetchOptions = {}) {
+  if (!validPublicCompanySlug(slug)) throw new ApiError(404)
+  // Public reads must never inherit explicitly supplied credentials either.
+  const headers = new Headers(options.headers)
+  headers.delete('Cookie'); headers.delete('Authorization')
+  return fetchAPI(`/companies/by-slug/${slug}`, { ...options, headers, credentials: 'omit', cache: 'no-store', redirect: 'error' })
+}
 export async function getLevels() { return fetchAPI('/config/levels') }
 export async function getModalities() { return fetchAPI('/config/modalities') }
 export async function getDashboardStats() { return fetchAPI('/stats/dashboard') }

@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server'
 const mocks = vi.hoisted(() => ({ headers: vi.fn() }))
 vi.mock('next/headers', () => ({ headers: mocks.headers }))
 import { resolveSiteFor, activeSitesFor, RegionalApiError } from './site-resolver.server'
-import { fetchAPI, ApiError, getCompanyById } from './api'
+import { fetchAPI, ApiError, getCompanyById, getCompanyBySlug } from './api'
 import { proxy } from '../proxy'
 import type { RegionalContext } from './site'
 import type { InternalReadInit } from './internal-read-fetch'
@@ -61,7 +61,7 @@ describe('server context/sites read integration', () => {
 
 describe('proxy read integration preserves definitive HTTP/503 behavior', () => {
   const routes = [
-    { path: '/br/empresas/megasoft/4', endpoint: 'companies/4', data: company },
+    { path: '/br/empresas/megasoft', endpoint: 'companies/by-slug/megasoft', data: company },
     { path: '/br/vagas/company/title/1', endpoint: 'jobs/1', data: job },
   ]
   it.each(routes)('recovers $endpoint using anonymous same-region detail and redirect error', async ({ path, endpoint, data }) => {
@@ -132,6 +132,19 @@ describe('fetchAPI selects bounded transport ONLY for GET', () => {
     expect(await getCompanyById('4', { context: br })).toEqual(company)
     expect(fetcher).toHaveBeenCalledTimes(2)
     for (const [, init] of fetcher.mock.calls) { expect(init?.cache).toBe('no-store'); expect(init?.redirect).toBe('error'); expect((init as InternalReadInit).next).toBeUndefined() }
+  })
+  it('public by-slug GET strips credentials on both bounded transport attempts', async () => {
+    fetcher.mockRejectedValueOnce(close()).mockResolvedValueOnce(json(company))
+    expect(await getCompanyBySlug('megasoft', { context: br, headers: { Cookie: 'explicit-private', Authorization: 'Bearer explicit-private' } })).toEqual(company)
+    expect(fetcher).toHaveBeenCalledTimes(2)
+    for (const [url, init] of fetcher.mock.calls) {
+      expect(url).toBe('http://127.0.0.1:5000/api/companies/by-slug/megasoft')
+      anonymous(init); expect(init?.credentials).toBe('omit'); expect(init?.redirect).toBe('error'); expect(init?.cache).toBe('no-store')
+    }
+  })
+  it.each(['search', 'by-slug', '123', 'BAD', 'a%2Fb'])('public by-slug rejects %s without transport', async slug => {
+    await expect(getCompanyBySlug(slug, { context: br })).rejects.toMatchObject({ status: 404 })
+    expect(fetcher).not.toHaveBeenCalled()
   })
   it.each(['POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'])('keeps original single fetch for %s, including original mutation options', async method => {
     const error = close()
