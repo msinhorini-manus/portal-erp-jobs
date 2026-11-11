@@ -1,3 +1,4 @@
+import { getSiteContext } from '@/lib/site-resolver.server'
 import { pageMetadata } from '@/lib/regional-seo.server'
 import { Metadata } from 'next'
 import { getAreas, getCompanies, getJobs, getLevels, getModalities, getSkills } from '@/lib/api'
@@ -13,6 +14,7 @@ const baseMetadata: Metadata = {
 const fallbackPage = { jobs: [], total: 0, pages: 0, current_page: 1, per_page: 20 }
 
 export default async function VagasPage({ searchParams }: { searchParams: Promise<JobSearchParams> }) {
+  const { site } = await getSiteContext()
   const resolvedSearchParams = await searchParams
   const apiParams = buildJobApiParams(resolvedSearchParams)
 
@@ -39,6 +41,7 @@ export default async function VagasPage({ searchParams }: { searchParams: Promis
         </div>
       </section>
       <JobSearchClient
+        locale={site.locale}
         initialJobs={pageData.jobs}
         pagination={{ total: pageData.total, pages: pageData.pages, currentPage: pageData.current_page, perPage: pageData.per_page }}
         areas={areas}

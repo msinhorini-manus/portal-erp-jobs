@@ -1,3 +1,4 @@
+import { publicJobPath, type PublicJobUrlData } from '@/lib/public-job-url'
 import { pageMetadata } from '@/lib/regional-seo.server'
 import type { Metadata } from 'next'
 import Link from '@/components/RegionalLink'
@@ -70,7 +71,7 @@ const colorMap: Record<string, string> = {
   gray: 'bg-slate-600',
 }
 
-type Job = {
+type Job = PublicJobUrlData & {
   id: number
   title?: string
   company_name?: string
@@ -136,7 +137,7 @@ export default async function HomePage() {
               {featuredJobs.length > 0 ? featuredJobs.map((job) => {
                 const location = job.location || [job.city, job.state].filter(Boolean).join(', ') || 'Local a definir'
                 return (
-                  <Link key={job.id} href={`/vagas/${job.id}`} className="block rounded-2xl border border-white/5 bg-white/[0.06] p-5 transition hover:border-portal-orange/50 hover:bg-white/10">
+                  <Link key={job.id} href={publicJobPath(job, site)} className="block rounded-2xl border border-white/5 bg-white/[0.06] p-5 transition hover:border-portal-orange/50 hover:bg-white/10">
                     <h2 className="font-display text-xl font-bold text-white">{job.title || 'Oportunidade no mercado de software'}</h2>
                     <p className="mt-2 text-sm text-white/65">{job.company_name || 'Empresa do ecossistema'}</p>
                     <p className="mt-3 flex items-center gap-2 text-sm font-semibold text-teal-300"><MapPin className="h-4 w-4" />{location}</p>

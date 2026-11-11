@@ -1,4 +1,5 @@
 'use client'
+import { publicJobRelativePath, type PublicJobUrlData } from '@/lib/public-job-url'
 
 import Link from '@/components/RegionalLink'
 import { useRouter } from '@/lib/regional-navigation'
@@ -9,12 +10,13 @@ import { jobSearchUrl, JobSearchParams, readJobSearchParam } from '@/lib/job-sea
 
 type CatalogItem = { id: number; name: string; label?: string }
 type Company = { id: number; company_name?: string; trade_name?: string; name?: string }
-type Job = {
+type Job = PublicJobUrlData & {
   id: number; title: string; company_name?: string; location?: string; work_modality?: string
   seniority_level?: string; min_salary?: number; max_salary?: number; contract_type?: string
   area?: string; created_at?: string; technologies?: string[]
 }
 type Props = {
+  locale: string
   initialJobs: Job[]
   pagination: { total: number; pages: number; currentPage: number; perPage: number }
   areas: CatalogItem[]; skills: CatalogItem[]; levels: CatalogItem[]; modalities: CatalogItem[]; companies: Company[]
@@ -27,7 +29,7 @@ const SALARIES = [
   ['18000-25000', 'R$ 18.000 – R$ 25.000'], ['25000-999999', 'Acima de R$ 25.000'],
 ]
 
-export function JobSearchClient({ initialJobs, pagination, areas, skills, levels, modalities, companies, searchParams }: Props) {
+export function JobSearchClient({ locale, initialJobs, pagination, areas, skills, levels, modalities, companies, searchParams }: Props) {
   const router = useRouter()
   const [query, setQuery] = useState(readJobSearchParam(searchParams, 'q'))
   const [location, setLocation] = useState(readJobSearchParam(searchParams, 'location'))
@@ -74,7 +76,7 @@ export function JobSearchClient({ initialJobs, pagination, areas, skills, levels
       </div>}
     </form>
 
-    {initialJobs.length === 0 ? <div className="py-16 text-center"><p className="text-lg text-gray-500">Nenhuma vaga encontrada com os filtros selecionados.</p><Link href="/vagas" className="mt-2 inline-block text-portal-orange hover:underline">Limpar filtros</Link></div> : <div className="space-y-4">{initialJobs.map(job => <Link key={job.id} href={`/vagas/${job.id}`} className="group block rounded-lg border border-gray-100 bg-white p-6 shadow-sm transition-all hover:border-portal-orange/30 hover:shadow-md"><div className="flex flex-col justify-between gap-4 md:flex-row md:items-center"><div className="flex-1"><h3 className="text-lg font-bold text-portal-dark transition-colors group-hover:text-portal-orange">{job.title}</h3><div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-gray-600">{job.company_name && <span className="flex items-center gap-1"><Building2 className="h-4 w-4" />{job.company_name}</span>}{job.location && <span className="flex items-center gap-1"><MapPin className="h-4 w-4" />{job.location}</span>}{job.work_modality && <span className="rounded bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">{modalityLabel[job.work_modality] || job.work_modality}</span>}{job.seniority_level && <span className="rounded bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">{levelLabel[job.seniority_level] || job.seniority_level}</span>}{job.contract_type && <span className="rounded bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">{job.contract_type.toUpperCase()}</span>}</div>{job.technologies && job.technologies.length > 0 && <div className="mt-3 flex flex-wrap gap-1.5">{job.technologies.slice(0, 5).map(technology => <span key={technology} className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-700">{technology}</span>)}</div>}</div><div className="text-right">{(job.min_salary || job.max_salary) && <div className="font-bold text-portal-orange">{formatSalary(job.min_salary)} - {formatSalary(job.max_salary)}</div>}{job.created_at && <div className="mt-1 flex items-center justify-end gap-1 text-xs text-gray-400"><Clock className="h-3 w-3" />{formatDate(job.created_at)}</div>}</div></div></Link>)}</div>}
+    {initialJobs.length === 0 ? <div className="py-16 text-center"><p className="text-lg text-gray-500">Nenhuma vaga encontrada com os filtros selecionados.</p><Link href="/vagas" className="mt-2 inline-block text-portal-orange hover:underline">Limpar filtros</Link></div> : <div className="space-y-4">{initialJobs.map(job => <Link key={job.id} href={publicJobRelativePath(job, locale)} className="group block rounded-lg border border-gray-100 bg-white p-6 shadow-sm transition-all hover:border-portal-orange/30 hover:shadow-md"><div className="flex flex-col justify-between gap-4 md:flex-row md:items-center"><div className="flex-1"><h3 className="text-lg font-bold text-portal-dark transition-colors group-hover:text-portal-orange">{job.title}</h3><div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-gray-600">{job.company_name && <span className="flex items-center gap-1"><Building2 className="h-4 w-4" />{job.company_name}</span>}{job.location && <span className="flex items-center gap-1"><MapPin className="h-4 w-4" />{job.location}</span>}{job.work_modality && <span className="rounded bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">{modalityLabel[job.work_modality] || job.work_modality}</span>}{job.seniority_level && <span className="rounded bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">{levelLabel[job.seniority_level] || job.seniority_level}</span>}{job.contract_type && <span className="rounded bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">{job.contract_type.toUpperCase()}</span>}</div>{job.technologies && job.technologies.length > 0 && <div className="mt-3 flex flex-wrap gap-1.5">{job.technologies.slice(0, 5).map(technology => <span key={technology} className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-700">{technology}</span>)}</div>}</div><div className="text-right">{(job.min_salary || job.max_salary) && <div className="font-bold text-portal-orange">{formatSalary(job.min_salary)} - {formatSalary(job.max_salary)}</div>}{job.created_at && <div className="mt-1 flex items-center justify-end gap-1 text-xs text-gray-400"><Clock className="h-3 w-3" />{formatDate(job.created_at)}</div>}</div></div></Link>)}</div>}
 
     {pagination.pages > 1 && <nav aria-label="Paginação das vagas" className="mt-8 flex items-center justify-center gap-3"><Link aria-disabled={pagination.currentPage <= 1} href={jobSearchUrl(searchParams, { page: Math.max(1, pagination.currentPage - 1) })} className={`rounded-lg border px-4 py-2 text-sm font-semibold ${pagination.currentPage <= 1 ? 'pointer-events-none opacity-40' : 'hover:bg-gray-50'}`}>Anterior</Link><span className="text-sm text-gray-600">Página {pagination.currentPage} de {pagination.pages}</span><Link aria-disabled={pagination.currentPage >= pagination.pages} href={jobSearchUrl(searchParams, { page: Math.min(pagination.pages, pagination.currentPage + 1) })} className={`rounded-lg border px-4 py-2 text-sm font-semibold ${pagination.currentPage >= pagination.pages ? 'pointer-events-none opacity-40' : 'hover:bg-gray-50'}`}>Próxima</Link></nav>}
   </section>

@@ -1,3 +1,4 @@
+import { publicJobLink } from '@/lib/public-job-link.js'
 import { appFetch } from '@/lib/regional-runtime.js'
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
@@ -464,9 +465,9 @@ export default function CandidateDashboardPage() {
                     <div key={job.id} className="bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition">
                       <div className="flex justify-between items-start">
                         <div className="flex-1">
-                          <h3 className="text-xl font-semibold text-gray-900 mb-2">{job.title}</h3>
+                          <h3 className="text-xl font-semibold text-gray-900 mb-2"><Link to={publicJobLink(job)}>{job.title}</Link></h3>
                           <div className="flex items-center space-x-4 text-sm text-gray-600 mb-3">
-                            <span>🏢 {job.company_name || 'Empresa'}</span>
+                            <span>🏢 {job.is_company_hidden ? 'Empresa Confidencial' : job.company_name || 'Empresa'}</span>
                             <span>📍 {job.location}</span>
                             <span>💰 {job.salary}</span>
                             <span>🕒 {job.contract_type || job.work_modality}</span>
@@ -598,9 +599,9 @@ export default function CandidateDashboardPage() {
                     <div key={application.id} className="bg-white rounded-lg shadow-sm p-6">
                       <div className="flex justify-between items-start">
                         <div className="flex-1">
-                          <h3 className="text-xl font-semibold text-gray-900 mb-2">{job.title}</h3>
+                          <h3 className="text-xl font-semibold text-gray-900 mb-2"><Link to={publicJobLink(job)}>{job.title}</Link></h3>
                           <div className="flex items-center space-x-4 text-sm text-gray-600 mb-3">
-                            <span>🏢 {job.company_name || job.company?.company_name || 'Empresa'}</span>
+                            <span>🏢 {job.is_company_hidden ? 'Empresa Confidencial' : job.company_name || job.company?.company_name || 'Empresa'}</span>
                             <span>📍 {job.location}</span>
                             <span>💰 {job.salary}</span>
                           </div>

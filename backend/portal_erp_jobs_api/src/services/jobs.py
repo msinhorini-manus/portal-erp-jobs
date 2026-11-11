@@ -138,6 +138,8 @@ def validate_job_payload(data, *, partial=False, admin=False):
     """Normalize legacy aliases while validating fields used by current clients."""
     if not isinstance(data, dict):
         raise ValueError("O corpo da requisição deve ser um objeto JSON")
+    if {"public_company_slug", "public_title_slug"}.intersection(data):
+        raise ValueError("Slugs públicos são gerados pelo servidor e não podem ser editados")
 
     normalized = {}
     if not partial or "title" in data:
@@ -211,6 +213,9 @@ def validate_job_payload(data, *, partial=False, admin=False):
     effective_max = normalized.get("max_salary")
     if effective_min is not None and effective_max is not None and effective_min > effective_max:
         raise ValueError("Salário mínimo não pode exceder o salário máximo")
+
+    if "is_company_hidden" in data:
+        normalized["is_company_hidden"] = _boolean(data["is_company_hidden"], "is_company_hidden")
 
     if "is_featured" in data:
         if not admin:

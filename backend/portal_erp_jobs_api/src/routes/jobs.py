@@ -83,6 +83,7 @@ def get_all_jobs():
                 Job.is_active.is_(True),
                 Job.status.in_(ACTIVE_JOB_STATUSES),
                 CompanySite.status == CompanyStatus.APPROVED,
+                or_(Job.expires_at.is_(None), Job.expires_at > db.func.current_timestamp()),
             )
         )
 
@@ -249,6 +250,7 @@ def get_job_by_id(job_id):
                 Job.is_active.is_(True),
                 Job.status.in_(ACTIVE_JOB_STATUSES),
                 CompanySite.status == CompanyStatus.APPROVED,
+                or_(Job.expires_at.is_(None), Job.expires_at > db.func.current_timestamp()),
             )
             .first()
         )
@@ -292,6 +294,7 @@ def create_job():
             title=values.pop('title'),
             description=values.pop('description'),
             salary_currency=site.currency_code,
+            is_company_hidden=values.pop('is_company_hidden', False),
             country=site.name,
             is_active=False,
             status='inactive',

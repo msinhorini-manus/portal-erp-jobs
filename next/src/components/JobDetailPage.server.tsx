@@ -5,17 +5,30 @@ import { getJobById } from '@/lib/api'
 import { MapPin, Building2, Clock, DollarSign, Briefcase, Globe, Users, ArrowLeft } from 'lucide-react'
 import { ApplyButton } from '@/components/ApplyButton'
 import { getSiteContext } from '@/lib/site-resolver.server'
-import { requireRegionalBaseUrl, openGraphLocale } from '@/lib/site'
+import { openGraphLocale } from '@/lib/site'
+import { assertPublicRegionalJob, canonicalJobId, jobCollection, publicJobCanonical, publicJobPath } from '@/lib/public-job-url'
 
 type Props = {
-  params: Promise<{ country: string; id: string }>
+  params: Promise<{ country: string; id: string; collection: string; companySlug: string; titleSlug: string }>
 }
 
+async function loadPublicJob(params: Props['params']) {
+  const { country, id, collection, companySlug, titleSlug } = await params
+  const jobId = canonicalJobId(id)
+  const context = await getSiteContext(country)
+  if (collection !== jobCollection(context.site.locale)) notFound()
+  const raw = await getJobById(jobId, { country, context, cache: 'no-store' })
+  assertPublicRegionalJob(raw, context.site, jobId)
+  const requestedPath = `${context.site.url_prefix}/${collection}/${companySlug}/${titleSlug}/${id}`
+  if (requestedPath !== publicJobPath(raw, context.site)) notFound()
+  // Do not serialize the real organization to metadata/UI/client props when hidden.
+  const job = raw.is_company_hidden ? { ...raw, company_name: 'Empresa Confidencial', company: null, company_description: null } : raw
+  return { job, site: context.site }
+}
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   try {
-    const { id, country } = await params
-    const [job, { site }] = await Promise.all([getJobById(id), getSiteContext(country)])
-    const canonical = `${requireRegionalBaseUrl(site)}/vagas/${id}`
+    const { job, site } = await loadPublicJob(params)
+    const canonical = publicJobCanonical(job, site)
     return {
       title: `${job.title} - ${job.company_name || 'Jobs by Portal ERP'}`,
       description: job.description?.substring(0, 160) || `Vaga de ${job.title} no Jobs by Portal ERP`,
@@ -23,31 +36,17 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       openGraph: {
         title: `${job.title} - ${job.company_name || ''}`,
         description: job.description?.substring(0, 160),
-        type: 'article',
-        url: canonical,
-        locale: openGraphLocale(site),
+        type: 'article', url: canonical, locale: openGraphLocale(site),
       },
     }
-  } catch {
-    return { title: 'Vaga não encontrada' }
-  }
+  } catch { return { title: 'Vaga não encontrada', robots: { index: false, follow: false } } }
 }
-
 export default async function JobDetailPage({ params }: Props) {
-  let job: any
-  let origin = ''
-
-  try {
-    const { id, country } = await params
-    const context = await getSiteContext(country)
-    origin = requireRegionalBaseUrl(context.site)
-    job = await getJobById(id)
-  } catch (e) {
-    notFound()
-  }
-
-  if (!job) notFound()
-
+  let data: Awaited<ReturnType<typeof loadPublicJob>>
+  try { data = await loadPublicJob(params) } catch { notFound() }
+  const { job, site } = data
+  const canonical = publicJobCanonical(job, site)
+  const jobPath = publicJobPath(job, site)
   const modalityLabel: Record<string, string> = {
     remote: 'Remoto',
     hybrid: 'Híbrido',
@@ -95,7 +94,7 @@ export default async function JobDetailPage({ params }: Props) {
       ...(organization.logo_url ? { logo: organization.logo_url } : {}),
     },
     directApply: true,
-    url: `${origin}/vagas/${job.id}`,
+    url: canonical,
     ...(job.work_modality === 'remote' ? {
       jobLocationType: 'TELECOMMUTE',
       applicantLocationRequirements: { '@type': 'Country', name: job.country || 'Brasil' },
@@ -215,7 +214,7 @@ export default async function JobDetailPage({ params }: Props) {
                   </p>
                 </div>
               )}
-              <ApplyButton jobId={job.id} />
+              <ApplyButton jobId={job.id} jobPath={jobPath} />
               <p className="text-xs text-gray-400 mt-3 text-center">
                 Publicada em {formatDate(job.created_at)}
               </p>
@@ -253,7 +252,7 @@ export default async function JobDetailPage({ params }: Props) {
             </div>
 
             {/* Company Info */}
-            {job.company_name && (
+            {!job.is_company_hidden && job.company_name && (
               <div className="bg-white rounded-xl p-6 shadow-sm">
                 <h3 className="font-bold text-portal-dark mb-4">Sobre a Empresa</h3>
                 <p className="font-medium text-lg mb-2">{job.company_name}</p>

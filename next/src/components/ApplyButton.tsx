@@ -5,7 +5,7 @@ import { useState } from 'react'
 
 import { candidateFetch, candidatePath } from '@/lib/candidate-client'
 
-export function ApplyButton({ jobId }: { jobId: number }) {
+export function ApplyButton({ jobId, jobPath }: { jobId: number; jobPath: string }) {
   const [applied, setApplied] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -22,7 +22,7 @@ export function ApplyButton({ jobId }: { jobId: number }) {
     } catch (reason) {
       const status = (reason as { status?: number }).status
       if (status === 401 || status === 403) {
-        window.location.href = browserRegionalPath(`/candidato/login?redirect=${encodeURIComponent(browserRegionalPath(`/vagas/${jobId}`))}`)
+        window.location.href = browserRegionalPath(`/candidato/login?redirect=${encodeURIComponent(browserRegionalPath(jobPath))}`)
         return
       }
       if (status === 409) {
