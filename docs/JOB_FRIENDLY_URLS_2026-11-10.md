@@ -1,65 +1,74 @@
-# Portal ERP Jobs — URLs amigáveis de vagas
+# Portal ERP Jobs — URLs amigáveis de vagas em produção
 
-Data local: 10/11/2026. Escopo exclusivo da plataforma Jobs, mantendo DigitalOcean, Flask, Next, a SPA residual e o banco existente.
+Data local: 10/11/2026. Escopo exclusivo do Jobs, no servidor DigitalOcean existente, mantendo Flask, Next, a SPA residual e o mesmo banco.
 
-## Estrutura
+## Resultado e contrato atual
 
-Formato brasileiro: `/br/vagas/{empresa}/{titulo-da-vaga}/{id}`. Exemplo ilustrativo: `https://jobs.portalerp.com/br/vagas/nome-da-empresa/descricao-da-vaga/1`.
+**Implantação e validação produtiva aprovadas.** Commit de runtime: `74c1172cede3e04d563ee7474fcc8efbe05c2b13`. Schema Alembic: `20261111_10`.
 
-O país continua sendo o primeiro segmento. O builder suporta a coleção `vacantes` para idiomas espanhóis e `jobs` para inglês, sem ativar México, Colômbia ou outros sites. Isso prepara URLs de detalhe; não equivale à homologação integral das demais telas internacionais.
+Formato brasileiro: `/br/vagas/{empresa}/{titulo-da-vaga}/{id}`. Exemplo real validado:
 
-O ID continua sendo a identidade e a chave de consulta. Slugs descritivos não mudam relacionamentos de candidaturas, favoritos, histórico, empresa ou usuário. A migration `20261111_10` acrescenta snapshots de empresa e título às vagas existentes, sem recriá-las. Novas vagas recebem snapshots automaticamente. Alterações posteriores de título ou nome empresarial não mudam esses snapshots.
+`https://jobs.portalerp.com/br/vagas/ix-tec/analista-de-materiais-protheus-pl/1`
 
-Empregadores confidenciais usam `empresa-confidencial`; nome real, website, logo e perfil empresarial não são expostos no detalhe público nem no JobPosting. A decisão de confidencialidade prevalece mesmo após mudança de uma vaga anteriormente pública.
+O usuário alterou a diretriz às 22:29 locais: como a plataforma ainda não foi lançada, não criar redirects de vagas. A versão final atende essa orientação:
 
-## Compatibilidade e SEO
+- URL descritiva exata: HTTP 200, sem Location.
+- URL numérica antiga, slug incorreto, trailing slash no detalhe ou ID não canônico: HTTP 404, sem Location.
+- URLs numéricas do domínio `.com.br`, com ou sem `/br`: HTTP 404, sem redirects.
+- Métodos não suportados no detalhe continuam bloqueados. POSTs antigos não são redirecionados nem convertidos em GET.
+- Os redirects de domínio, raiz global e outras jornadas já existentes não foram removidos; a mudança sem redirects é específica das páginas de vagas.
 
-- Diretriz atualizada pelo usuário em 10/11/2026 às 22:29 locais: como a plataforma ainda não foi lançada, **não criar redirects de vagas**.
-- As URLs descritivas exatas são servidas diretamente com HTTP **200**.
-- URLs numéricas antigas, slugs incorretos e IDs não canônicos retornam **404 sem Location**, em vez de gerar páginas duplicadas ou redirects.
-- URLs numéricas no domínio `.com.br`, com ou sem `/br`, também são retiradas com 404. Os redirects de domínio e de outras jornadas já existentes não são modificados por esta diretriz de vagas.
-- POSTs nas antigas URLs de página não são convertidos em GET nem redirecionados.
-- Canonical, Open Graph, `JobPosting.url`, sitemap, cards e retorno de login/candidatura utilizam o builder único.
-- Vagas indisponíveis, expiradas ou de outra região devolvem 404 sem revelar slugs. Países inativos não recebem fallback de vagas brasileiras.
-- A consulta pública exclui vagas expiradas e o DTO básico informa `expires_at`, evitando cards/prefetches para páginas já indisponíveis. Os registros, status históricos e acesso por CRUD privado permanecem preservados; isso não instala uma rotina automática de encerramento ou notificação ao Google.
-- Não são emitidos hreflang de países que ainda não tenham conteúdo equivalente e homologado.
+O país permanece como primeiro segmento. A coleção preparada para espanhol é `vacantes` e para inglês é `jobs`. Somente BR permanece ativo. México, Colômbia e demais países não foram ativados nem considerados integralmente homologados por esta release.
 
-## Organização do código
+## Identidade, segurança e SEO
 
-O builder puro fica em `next/src/lib/public-job-url-core.js`, com tipagem associada. A SPA o incorpora durante o build, sem duplicar a implementação. O runtime Next não depende de uma pasta irmã de frontend no servidor.
+O ID continua sendo a chave estável. A migration acrescenta dois snapshots públicos de empresa e título, sem recriar vagas, candidaturas, favoritos, currículos ou vínculos. Novas vagas recebem snapshots automaticamente; alterações normais posteriores de nome/título não modificam os snapshots.
 
-O App Router exige o mesmo nome de segmento dinâmico no mesmo nível. O handler curto `[companySlug]` rejeita caminhos obsoletos; a rota longa mantém `[companySlug]/[titleSlug]/[id]`. Os nomes internos não alteram as URLs externas.
+A confidencialidade prevalece: empregadores ocultos usam `empresa-confidencial`, sem expor nome real, website, logo ou perfil no detalhe público e no JobPosting. URLs que deixem de corresponder à apresentação pública são rejeitadas.
 
-## Gates de implantação
+Canonical, Open Graph, `JobPosting.url`, sitemap, cards e retorno de candidatura/login utilizam o mesmo builder. O núcleo está em `next/src/lib/public-job-url-core.js`; a SPA o incorpora no build e o Next permanece autocontido no servidor.
 
-A homologação abrange suítes backend em processos isolados, migration upgrade/backfill/downgrade/check, Vitest, TypeScript, build e início efetivo do Next, lint/build/testes da SPA, Nginx real em loopback e browser Chromium. O E2E integrado verifica sitemap com mais de 100 vagas, metadados, retorno de login, cookies regionais, CSRF, convites, viewer e revogação de sessões. Todas as fixtures são locais e sintéticas.
+Apenas vagas públicas, regionais e não expiradas entram na consulta pública e no sitemap. `expires_at` está no DTO básico. Os registros antigos e o CRUD privado continuam preservados; não foi instalada uma rotina de encerramento ou de notificação ao Google.
 
-Gates adicionais obrigatórios em produção: backup consistente recente com restore isolado; preflight do runtime/schema; staging remoto; validação da migration; comparação de hashes; integridade/FK/contagens de negócio; HTTPS, ausência de redirects de vagas, SEO e browser; logs novos; rollback de código sem restaurar dados de negócio antigos.
+O HTML brasileiro mantém `pt-BR`. Não foram emitidas equivalências hreflang para países ainda sem conteúdo equivalente homologado. Admin, login e demais jornadas privadas continuam com noindex e controle de acesso.
 
-## Status produtivo
+## Backup, implantação e reconciliação
 
-**Publicação ainda em andamento; não declarar release concluída.** O SSH foi restabelecido e foram feitos backups consistentes, com restore isolado e cópia privada fora do servidor. A migration aditiva `20261111_10` foi aplicada e validada, com integridade ok, FK zero e preservação dos dados anteriores.
+O backup consistente anterior à migration foi criado em `/var/backups/portal-erp-jobs/job-urls-prechange-20261111T011142Z`, validando integridade, FKs, leitura dos arquivos e restauração isolada. Uma cópia privada fora do servidor teve todos os hashes conferidos. Novos backups completos foram feitos antes de cada troca de runtime.
 
-As duas primeiras trocas de código voltaram à versão anterior por gates do script: retorno de readiness interpretando HTTP 200 como erro e logs 502 durante a parada planejada. O primeiro retorno foi reconciliado manualmente, preservando seu flag e evidências; o segundo rollback voltou online automaticamente. O banco não foi restaurado a uma cópia antiga. A próxima passagem reutiliza o schema 10 já verificado e separa a janela de manutenção dos períodos saudáveis, sem aceitar erros após a volta dos serviços.
+A primeira troca aplicou e validou a migration 10, mas o script interpretou seu próprio retorno de readiness HTTP 200 como falha. O rollback de código manteve o schema aditivo 10 e foi reconciliado, restabelecendo os processos antigos online. O flag manual e suas evidências permaneceram preservados.
 
-A publicação não requer alterar DNS, domínio principal `portalerp.com`, outros subdomínios, regras gerais Cloudflare ou ativar outros países.
+A segunda troca passou nos smokes de origem, mas o gate capturou duas respostas Nginx 502 durante a parada planejada. O rollback de código voltou online automaticamente. Nenhuma cópia antiga de banco foi restaurada.
 
-## Homologação local da versão inicial, anterior à orientação sem redirects
+O script foi corrigido para retornar sucesso explícito em readiness e persistir o schema inicial da retomada. A auditoria de logs agora separa períodos saudáveis e manutenção: somente 502 exatamente pareados com conexão recusada aos listeners locais são aceitos na janela de parada. Qualquer 5xx ou erro inesperado fora dela permanece bloqueador. Os testes dessa classificação incluem rejeição de 502 saudável, 503 na manutenção, 502 sem pareamento e traceback de runtime.
+
+Após a nova diretriz sem redirects, houve nova implementação, novo commit e staging remoto completo. A passagem final reutilizou a migration já aplicada, sem reaplicá-la, e terminou com DEPLOY_OK. Backup transacional final: `/var/backups/portal-erp-jobs/friendly-cutover-20261111T014400Z`.
+
+## Gates finais
 
 | Gate | Resultado |
 |---|---|
-| Backend, 11 suítes executadas em processos isolados | 153 testes aprovados |
-| Migration 10, backfill, roundtrip, integridade/FKs e Alembic check | Aprovados na suíte isolada |
-| Next Vitest | 134 testes em 13 arquivos aprovados |
-| TypeScript antes/depois do build | Aprovado |
-| Next build e início real do runtime | Aprovados |
-| SPA: lint focal, testes regionais e build | Aprovados, 18 testes |
-| Nginx real local: três variantes de URL, GET/HEAD, query e bloqueio de POST | Aprovado |
-| Chromium público pelo Nginx local | 9 checks aprovados |
-| E2E integrado com Next/Flask e fixtures sintéticas | 310 assertions aprovadas; zero erros de browser e respostas inesperadas |
-| Serviços locais temporários | Encerrados |
-| SSH para produção no preflight final | Recusado; publicação ainda não executada |
+| Backend, suítes isoladas | 153 testes aprovados |
+| Migration em cópia produtiva, backfill, downgrade 09, reupgrade 10, Alembic e preservação de estrutura/dados | Aprovados |
+| Next Vitest, versão sem redirects | 158 testes em 15 arquivos aprovados |
+| TypeScript antes/depois do build e build Next | Aprovados localmente e staging remoto |
+| SPA: lint focal, testes regionais, audit e build | Aprovados; 18 testes regionais |
+| E2E integrado local sem redirects | 336 assertions aprovadas, dados exclusivamente sintéticos |
+| HTTP real do build Next | 31 checks de páginas/SEO/métodos e redirects não relacionados preservados |
+| Nginx candidato isolado e sintaxe instalada | Aprovados |
+| Gates públicos HTTPS externos | 70 checks aprovados; duas vagas públicas elegíveis e 17 URLs no sitemap BR |
+| Chromium produtivo anônimo | 9 checks aprovados: SSR/hidratação, título, empresa, canonical, idioma, voltar, candidatura/login e retorno amigável |
+| Integridade SQLite / FKs | ok / zero violações |
+| Empresas sem owner / memberships ativos conflitantes / slugs ausentes | zero / zero / zero |
+| Paridade de runtime com staging | 87 arquivos backend, 17 arquivos dist SPA e 18.823 arquivos Next/dependências conferidos |
+| PM2 API / Next | online / online; zero restarts observados no gate final |
+| Logs saudáveis pós-readiness e após gates públicos | Sem erro inesperado ou 5xx |
+| Auditorias de dependências | Gates Python e produção Next/SPA aprovados; não afirmar que advisories de menor severidade foram eliminados |
 
-A checagem de runtime detectou e corrigiu, antes de qualquer deploy, a colisão de nomes de segmentos dinâmicos do Next. O E2E também identificou prefetches de uma fixture expirada: corrigimos a listagem pública e a exposição da validade no DTO, sem suprimir os 404 no coletor. O teste de downgrade passou a comparar FKs e índices pela semântica, preservando agrupamentos compostos, colunas e ações em vez de ordinais internos reatribuídos pelo SQLite.
+Na primeira passagem do Chromium, a página SSR já estava visível antes de o handler React do CTA estar hidratado; o roteiro clicou cedo e esgotou a espera. A repetição aguardou o handler real e passou integralmente, sem suprimir assertions de login ou erros.
 
-Nenhuma conta, candidatura ou empresa real foi usada nos testes de escrita desta release. Os números acima são históricos da versão inicial; os gates da versão sem redirects e a validação produtiva final devem ser registrados separadamente após sua execução.
+Nenhuma conta, empresa ou candidatura sintética foi criada na produção nesta release. Os serviços e a fixture locais foram encerrados e limpos. Backups e evidências remotas ficam privados; não anexar banco, configuração, chave SSH, tokens ou credenciais.
+
+## Limites de lançamento
+
+Esta release conclui as URLs públicas descritivas do Jobs e seu SEO técnico associado. Não representa confirmação de indexação pelo Google, operação do Search Console, ativação de outros países, homologação de e-mail transacional ou resolução de todas as pendências gerais de lançamento. Esses itens permanecem separados.
