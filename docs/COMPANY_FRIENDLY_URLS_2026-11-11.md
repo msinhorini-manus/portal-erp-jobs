@@ -42,4 +42,24 @@ A transação preserva `.env`, venv, banco, uploads, processos e ambiente PM2. A
 
 Após a troca devem passar os gates públicos de perfis, links, sitemap, canonical, Organization, URLs anteriores 404 sem Location, regiões inativas, auth privada sem cache, hashes de runtime, Alembic, integridade/FKs e logs novos. Só então o PR pode ser mesclado e a tag criada no commit efetivamente implantado.
 
-**Status deste commit: implementação e homologação locais concluídas; backup/staging/deploy produtivos ainda não finalizados.** As evidências finais serão acrescentadas após os gates de produção.
+**Status histórico do primeiro commit:** implementação e homologação locais concluídas, antes do backup/staging/deploy. O fechamento produtivo e as evidências finais constam abaixo.
+
+## Fechamento produtivo — 11/11/2026
+
+A release foi implantada e homologada. Commit final de runtime: `ed5f0f723f8635b3ce647952eb15024a8b8037a2`; schema `20261111_11`. A API e a SPA permaneceram com o mesmo código depois da primeira troca; seus markers foram promovidos ao commit final apenas após a comprovação de paridade de bytes com a fonte Git.
+
+O backup pré-mudança foi concluído em `/var/backups/portal-erp-jobs/company-urls-prechange-20261111T193829Z`, com restauração isolada, conferência de hashes e cópia privada fora do servidor. Houve também snapshots transacionais frescos. Nenhum banco antigo foi restaurado sobre dados produtivos.
+
+A primeira passagem voltou automaticamente ao código original porque um smoke de POST numérico de vaga esperava 404, embora o proxy corretamente devolvesse 405. O código anterior ficou online, os dados foram preservados e a migration aditiva foi reconciliada por leitura. A segunda passagem concluiu todos os gates sem reaplicar a migration.
+
+Uma falha real de socket `UND_ERR_SOCKET` apareceu nos logs durante as checagens. Foi publicada uma correção Next-only, com rollback próprio, sem interromper a API ou modificar banco/Nginx. A recuperação faz no máximo uma tentativa adicional para GET interno anônimo e apenas para a assinatura exata de conexão encerrada antes da resposta. HTTP 401/403/404/429/5xx, abortos, timeouts, JSON malformado e mutações não são repetidos. A causa de reutilização de conexão é provável; a assinatura real e a recuperação foram reproduzidas em Node nativo. O commit final passou em 399 testes Next, 21 arquivos, além de TypeScript e build remotos; o E2E local preservou 402 verificações.
+
+Gates finais: 119 checagens HTTPS públicas para os quatro perfis publicados, links, canonical/OG/Organization, sitemap, páginas privadas e regiões inativas; três navegações Chromium completas, com 27 verificações e zero JavaScript errors ou 5xx inesperados. Foram classificadas separadamente cinco recusas de prefetch da borda com status 503, header `cf-speculation-refused`, requisição GET com `sec-purpose: prefetch`, tipo `other` e sem navegação principal. Isso é comportamento documentado do Speed Brain [1], não erro da página nem da origem. Nenhuma regra Cloudflare foi alterada nesta release.
+
+A paridade final cobriu 399 arquivos fonte e 17.566 entradas imutáveis de dependências/SPA. Foi excluído apenas o arquivo exato de cache de resultados do Vitest, que mudou com a execução dos testes. Integridade SQLite `ok`, FK 0, slugs empresariais completos, somente BR ativo, API/Next online e 0 reinícios automáticos. Os logs novos pós-correção passaram no gate estrito.
+
+Nenhuma fixture de empresa, candidato, vaga ou candidatura foi criada em produção nesta release. IDs, aprovações e vínculos antigos foram preservados. Search Console/indexação efetiva e ativação de outros países não foram executados por esta alteração.
+
+## Referência de classificação da borda
+
+[1]: https://developers.cloudflare.com/speed/optimization/content/speed-brain/ "Cloudflare Speed Brain: prefetch e recusas 503"
