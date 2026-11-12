@@ -3,7 +3,22 @@ from datetime import datetime
 from sqlalchemy import event, select
 
 from src.config import db
-from src.job_slugs import public_company_slug
+from src.company_slug_policy_v12 import (
+    allocate, base_slug, install_guards, remove_guards, reservation_table, valid_slug,
+)
+
+
+company_slug_reservations = reservation_table(db.metadata)
+
+
+@event.listens_for(db.metadata, "after_create")
+def create_company_slug_guards(metadata, connection, **kwargs):
+    install_guards(connection)
+
+
+@event.listens_for(db.metadata, "before_drop")
+def drop_company_slug_guards(metadata, connection, **kwargs):
+    remove_guards(connection)
 
 
 class CompanyStatus:
@@ -106,7 +121,10 @@ class Company(db.Model):
         data.pop("is_member", None)
         data["description"] = site_membership.description or self.description
         data["site_id"] = site_membership.site_id
-        data["public_profile_slug"] = site_membership.resolved_public_profile_slug
+        data["public_profile_slug"] = (
+            site_membership.resolved_public_profile_slug
+            if site_membership.is_approved and self.user and self.user.is_active else None
+        )
         return data
 
 
@@ -145,8 +163,8 @@ class CompanySite(db.Model):
     max_active_jobs = db.Column(db.Integer, nullable=False, default=3)
 
     display_name = db.Column(db.String(100), nullable=True)
-    # Nullable for legacy writers/code rollback; snapshot only on ORM insert.
-    # Regional/global name edits must never regenerate this URL identity.
+    # Legacy NULL writes remain non-public; new ORM writes atomically reserve.
+    # Database guards prevent regeneration/reassignment of established identity.
     public_profile_slug = db.Column(db.String(140), nullable=True)
     description = db.Column(db.Text, nullable=True)
     website = db.Column(db.String(500), nullable=True)
@@ -168,10 +186,14 @@ class CompanySite(db.Model):
 
     @property
     def resolved_public_profile_slug(self):
-        """Read-only fallback for legacy null snapshots; never persist on GET."""
-        return self.public_profile_slug or public_company_slug(
-            self.display_name, self.company.company_name if self.company else None,
-        )
+        """Fail closed for absent, malformed or unreserved snapshots; no GET writes."""
+        if not valid_slug(self.public_profile_slug) or not self.site:
+            return None
+        owner = db.session.execute(select(company_slug_reservations.c.company_id).where(
+            company_slug_reservations.c.country_code == self.site.country_code,
+            company_slug_reservations.c.slug == self.public_profile_slug,
+        )).scalar_one_or_none()
+        return self.public_profile_slug if owner == self.company_id else None
 
     @property
     def is_approved(self):
@@ -212,12 +234,19 @@ class CompanySite(db.Model):
 
 @event.listens_for(CompanySite, "before_insert")
 def snapshot_public_company_profile_slug(mapper, connection, membership):
-    """Cover registration/Admin/ORM graphs using this transaction's connection."""
-    if not membership.public_profile_slug:
-        company_name = connection.execute(
-            select(Company.__table__.c.company_name)
-            .where(Company.__table__.c.id == membership.company_id)
-        ).scalar_one_or_none()
-        membership.public_profile_slug = public_company_slug(
-            membership.display_name, company_name,
-        )
+    """Reserve using this transaction's connection, including same-flush graphs."""
+    from src.models.site import Site
+    company = connection.execute(select(
+        Company.__table__.c.company_name, Company.__table__.c.sector, Company.__table__.c.city,
+    ).where(Company.__table__.c.id == membership.company_id)).mappings().one()
+    country_query = select(Site.__table__.c.country_code).where(Site.__table__.c.id == membership.site_id)
+    if connection.dialect.name == "postgresql":
+        country_query = country_query.with_for_update(read=True)
+    country_code = connection.execute(country_query).scalar_one()
+    base = membership.public_profile_slug if valid_slug(membership.public_profile_slug) else base_slug(
+        membership.display_name, company["company_name"],
+    )
+    membership.public_profile_slug = allocate(
+        connection, company_slug_reservations, country_code, membership.company_id, base,
+        membership.sector or company["sector"], membership.city or company["city"],
+    )

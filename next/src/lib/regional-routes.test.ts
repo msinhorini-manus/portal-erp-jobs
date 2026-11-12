@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { countryPrefix, regionalHref, regionalizePath, safeRegionalReturn } from './regional-routes'
 import { requireCanonicalOrigin, requireRegionalBaseUrl, type RegionalSite } from './site'
 import { collectAll, regionalSitemapXml } from './regional-sitemap'
-const site: RegionalSite = { code: 'BR', name: 'Brasil', country_code: 'BR', locale: 'pt-BR', currency_code: 'BRL', timezone: 'America/Sao_Paulo', canonical_origin: 'https://jobs.portalerp.com', url_prefix: '/br', regional_base_url: 'https://jobs.portalerp.com/br', is_active: true }
+const site: RegionalSite = { id: 1, code: 'BR', name: 'Brasil', country_code: 'BR', locale: 'pt-BR', currency_code: 'BRL', timezone: 'America/Sao_Paulo', canonical_origin: 'https://jobs.portalerp.com', url_prefix: '/br', regional_base_url: 'https://jobs.portalerp.com/br', is_active: true }
 describe('regional routing and sitemap contract', () => {
   it('separates origins, regional bases, assets and exact entity URLs', () => {
     expect(requireCanonicalOrigin(site)).toBe('https://jobs.portalerp.com')
@@ -26,7 +26,7 @@ describe('regional routing and sitemap contract', () => {
     const seen: number[] = []
     const jobs = await collectAll<{ id: number }>(async page => { seen.push(page); return { pages: 3, total: 3, jobs: [{ id: page }] } }, 'jobs')
     expect(seen).toEqual([1, 2, 3])
-    const xml = regionalSitemapXml(site, [...jobs, { id: 5, is_active: false }, { id: 6, expires_at: '2001-01-01' }, { id: 7, created_at: '2026-10-01' }], [{ id: 1, status: 'approved', site_code: 'BR' }, { id: 2, status: 'pending' }])
+    const xml = regionalSitemapXml(site, [...jobs, { id: 5, is_active: false }, { id: 6, expires_at: '2001-01-01' }, { id: 7, created_at: '2026-10-01' }], [{ id: 1, status: 'approved', site_id: 1, site_code: 'BR', public_profile_slug: 'local-company' }, { id: 2, status: 'pending' }])
     expect(xml).toContain('https://jobs.portalerp.com/br/vagas/empresa/vaga/3')
     expect(xml).toContain('<lastmod>2026-10-01T00:00:00.000Z</lastmod>')
     expect(xml).not.toContain('/vaga/5')

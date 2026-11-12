@@ -9,16 +9,16 @@ import time
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[2]
-REPORT = Path('/home/ubuntu/jobs-company-urls')
+REPORT = Path('/home/ubuntu/jobs-company-slug-only')
 REPORT.mkdir(parents=True, exist_ok=True)
 processes = []
 handles = []
 
 
-def start(command, filename):
+def start(command, filename, environment=None):
     handle = (REPORT / filename).open('w')
     handles.append(handle)
-    process = subprocess.Popen(command, cwd=ROOT, stdout=handle, stderr=subprocess.STDOUT)
+    process = subprocess.Popen(command, cwd=ROOT, stdout=handle, stderr=subprocess.STDOUT, env={**os.environ, **(environment or {})})
     processes.append(process)
     return process
 

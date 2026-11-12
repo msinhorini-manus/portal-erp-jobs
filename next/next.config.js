@@ -5,7 +5,7 @@ const nextConfig = {
   // outside public job/company detail/short paths, which must never emit Location.
   skipTrailingSlashRedirect: true,
   async redirects() {
-    return [{ source: '/:path((?![a-z]{2}/(?:vagas|vacantes|jobs|empresas|companies)/[^/]+).+)/', destination: '/:path', permanent: true }]
+    return [{ source: '/:path((?![a-zA-Z]{2}/(?:vagas|vacantes|jobs|[Ee][Mm][Pp][Rr][Ee][Ss][Aa][Ss]|[Cc][Oo][Mm][Pp][Aa][Nn][Ii][Ee][Ss])/[^/]+).+)/', destination: '/:path', permanent: true }]
   },
   async rewrites() {
     // Proxy overwrites trusted host/prefix before rewriting to stable Flask API.

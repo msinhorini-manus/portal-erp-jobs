@@ -10,7 +10,7 @@ describe('job-specific exclusion from native trailing slash redirects', () => {
     expect(redirects).toHaveLength(1)
     expect(redirects[0]).toMatchObject({ destination: '/:path', permanent: true })
     const rule: RegExp = pathToRegexp(redirects[0].source)
-    for (const path of ['/br/vagas/1/', '/br/vagas/01/', '/br/vagas/company/title/1/', '/br/vagas/wrong/wrong/1/', '/mx/vacantes/1/', '/co/vacantes/company/title/1/', '/us/jobs/company/title/1/', '/br/empresas/4/', '/br/empresas/megasoft/4/', '/mx/empresas/megasoft/4/', '/us/companies/megasoft/4/']) expect(rule.test(path), path).toBe(false)
+    for (const path of ['/br/vagas/1/', '/br/vagas/01/', '/br/vagas/company/title/1/', '/br/vagas/wrong/wrong/1/', '/mx/vacantes/1/', '/co/vacantes/company/title/1/', '/us/jobs/company/title/1/', '/br/empresas/4/', '/br/empresas/megasoft/4/', '/br/Empresas/megasoft/', '/br/EMPRESAS/megasoft/', '/BR/empresas/megasoft/', '/br/Companies/megasoft/', '/br/empresas/megasoft/', '/mx/empresas/megasoft/', '/us/companies/megasoft/']) expect(rule.test(path), path).toBe(false)
     for (const path of ['/br/', '/br/vagas/', '/br/empresas/', '/br/empresa/vagas/1/editar/', '/br/candidato/login/', '/brand/logo.svg/', '/br/api/jobs/']) expect(rule.test(path), path).toBe(true)
     for (const path of ['/', '/br', '/br/vagas/company/title/1']) expect(rule.test(path), path).toBe(false)
   })

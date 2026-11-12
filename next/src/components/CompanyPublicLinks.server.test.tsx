@@ -25,7 +25,7 @@ beforeEach(() => {
 describe('public company links across SSR surfaces', () => {
   it('home uses distinct job/profile snapshots without nested anchors', async () => {
     const html = renderToStaticMarkup(await HomePage())
-    expect(html).toContain('href="/br/empresas/megasoft/4"')
+    expect(html).toContain('href="/br/empresas/megasoft"')
     expect(html).toContain('href="/br/vagas/job-brand/consultant/1"')
     let anchorDepth = 0
     for (const token of html.matchAll(/<a(?:\s[^>]*|)>|<\/a>/g)) {
@@ -39,13 +39,13 @@ describe('public company links across SSR surfaces', () => {
   })
   it('companies directory emits canonical descriptive profile links only', async () => {
     const html = renderToStaticMarkup(await EmpresasPage({ searchParams: Promise.resolve({}) }))
-    expect(html).toContain('href="/br/empresas/megasoft/4"')
+    expect(html).toContain('href="/br/empresas/megasoft"')
     expect(html).not.toContain('href="/empresas/4"')
   })
   it('job search employer links respect hidden flags, independent from job URLs', () => {
     const props = { locale: site.locale, initialJobs: [job], pagination: { total: 1, pages: 1, currentPage: 1, perPage: 20 }, areas: [], skills: [], levels: [], modalities: [], companies: [], searchParams: {} }
     const html = renderToStaticMarkup(<JobSearchClient {...props} />)
-    expect(html).toContain('href="/empresas/megasoft/4"'); expect(html).toContain('href="/vagas/job-brand/consultant/1"')
+    expect(html).toContain('href="/empresas/megasoft"'); expect(html).toContain('href="/vagas/job-brand/consultant/1"')
     const hidden = renderToStaticMarkup(<JobSearchClient {...props} initialJobs={[{ ...job, is_company_hidden: true }]} />)
     expect(hidden).not.toContain('megasoft'); expect(hidden).not.toContain('MegaSoft Renamed'); expect(hidden).toContain('Empresa Confidencial')
   })

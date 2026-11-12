@@ -3,28 +3,27 @@ import { publicJob } from '@/lib/regional-sitemap'
 import { Metadata } from 'next'
 import Link from '@/components/RegionalLink'
 import { notFound } from 'next/navigation'
-import { ApiError, getCompanyById } from '@/lib/api'
+import { ApiError, getCompanyBySlug } from '@/lib/api'
 import { Building2, MapPin, Users, Globe, Mail, Phone, ArrowLeft, Briefcase } from 'lucide-react'
 import { getSiteContext } from '@/lib/site-resolver.server'
 import { openGraphLocale } from '@/lib/site'
-import { assertPublicRegionalCompany, canonicalCompanyId, companyCollection, publicCompanyCanonical, publicCompanyPath } from '@/lib/public-company-url'
+import { assertPublicRegionalCompany, canonicalCompanyId, companyCollection, publicCompanyCanonical, publicCompanyPath, validPublicCompanySlug } from '@/lib/public-company-url'
 
-type Props = { params: Promise<{ country: string; collection: string; companySlug: string; id: string }> }
+type Props = { params: Promise<{ country: string; collection: string; companySlug: string }> }
 async function loadPublicCompany(params: Props['params']) {
-  const { country, collection, companySlug, id } = await params
-  let companyId: string
-  try { companyId = canonicalCompanyId(id) } catch { notFound() }
+  const { country, collection, companySlug } = await params
+  if (!/^[a-z]{2}$/.test(country) || !validPublicCompanySlug(companySlug)) notFound()
   const context = await getSiteContext(country)
-  if (context.site.url_prefix !== `/${country}` || collection !== companyCollection(context.site.locale)) notFound()
+  if (!context.site.is_active || context.locale !== context.site.locale || context.site.country_code.toLowerCase() !== country || context.site.url_prefix !== `/${country}` || collection !== companyCollection(context.site.locale)) notFound()
   let company: any
-  try { company = await getCompanyById(companyId, { country, context, cache: 'no-store' }) } catch (error) {
+  try { company = await getCompanyBySlug(companySlug, { country, context, cache: 'no-store' }) } catch (error) {
     if (error instanceof ApiError && [400, 401, 403, 404].includes(error.status)) notFound()
     throw error // Upstream 5xx/transport outages must not become successful 404s.
   }
-  try { assertPublicRegionalCompany(company, context.site, companyId) } catch { notFound() }
-  const requested = `${context.site.url_prefix}/${collection}/${companySlug}/${id}`
-  if (requested !== publicCompanyPath(company, context.site)) notFound()
-  return { company: { ...company, jobs: company.jobs?.filter((job: any) => publicJob(job) && !job.is_company_hidden && (job.site_id == null || job.site_id === context.site.id) && (job.site_code == null || job.site_code === context.site.code)) }, site: context.site }
+  try { assertPublicRegionalCompany(company, context.site, canonicalCompanyId(company?.id)) } catch { notFound() }
+  const requested = `${context.site.url_prefix}/${collection}/${companySlug}`
+  if (company.public_profile_slug !== companySlug || requested !== publicCompanyPath(company, context.site)) notFound()
+  return { company: { ...company, jobs: company.jobs?.filter((job: any) => publicJob(job) && !job.is_company_hidden && (job.site_id == null || job.site_id === company.site_id) && (job.site_code == null || job.site_code === context.site.code)) }, site: context.site }
 }
 const missingMetadata: Metadata = { title: 'Empresa não encontrada', robots: { index: false, follow: false } }
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -58,7 +57,7 @@ export default async function CompanyDetailPage({ params }: Props) {
     ...(company.website ? { sameAs: company.website } : {}),
     ...(company.logo_url ? { logo: company.logo_url } : {}),
     ...(company.description ? { description: company.description } : {}),
-    ...(company.city || company.state ? { address: { '@type': 'PostalAddress', addressLocality: company.city, addressRegion: company.state, addressCountry: company.country || 'BR' } } : {}),
+    ...(company.city || company.state ? { address: { '@type': 'PostalAddress', addressLocality: company.city, addressRegion: company.state, addressCountry: site.country_code } } : {}),
   }
 
   return (

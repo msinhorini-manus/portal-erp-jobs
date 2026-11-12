@@ -99,7 +99,8 @@ class Job(db.Model):
             'company_name': None if self.is_company_hidden else company_name,
             'company_profile_slug': (
                 membership.resolved_public_profile_slug
-                if membership and not self.is_company_hidden else None
+                if membership and membership.is_approved and not self.is_company_hidden
+                and self.company.user and self.company.user.is_active else None
             ),
             # Confidentiality is authoritative even after a public->hidden edit.
             'public_company_slug': HIDDEN_COMPANY_SLUG if self.is_company_hidden else (

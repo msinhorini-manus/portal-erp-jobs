@@ -38,6 +38,13 @@ class CompanyUrlMigrationTests(unittest.TestCase):
         # Existing job snapshots must remain byte-for-byte independent of profiles.
         self.sql("UPDATE jobs SET public_company_slug='historic-job-brand', public_title_slug='historic-job-title' WHERE id=601")
 
+    def check_current_head(self):
+        """Keep revision11 assertions frozen; metadata parity is checked at head12."""
+        self.alembic("upgrade", "head")
+        result = self.alembic("check")
+        self.alembic("downgrade", "20261111_11")
+        return result
+
     def migration(self):
         spec = importlib.util.spec_from_file_location(
             "company_profile_slug_migration", ROOT / "migrations/versions/20261111_11_add_public_company_profile_slugs.py",
@@ -103,7 +110,7 @@ class CompanyUrlMigrationTests(unittest.TestCase):
         module = self.migration()
         self.assertEqual(module.revision, "20261111_11")
         self.assertEqual(module.down_revision, "20261111_10")
-        self.alembic("upgrade", "head")
+        self.alembic("upgrade", "20261111_11")
         self.assertEqual(self.sql("SELECT version_num FROM alembic_version"), [("20261111_11",)])
         self.assertEqual(self.snapshot(), before)
         self.assertEqual(self.constraints(), constraints)
@@ -123,21 +130,21 @@ class CompanyUrlMigrationTests(unittest.TestCase):
         self.assertEqual({(company_id, site_id): slug for company_id, site_id, slug in self.profile_snapshot()}, expected)
         self.assertEqual(self.sql("SELECT public_company_slug,public_title_slug FROM jobs WHERE id=601"),
                          [("historic-job-brand", "historic-job-title")])
-        self.assertIn("No new upgrade operations detected", self.alembic("check").stdout)
+        self.assertIn("No new upgrade operations detected", self.check_current_head().stdout)
         self.alembic("downgrade", "20261111_10")
         self.assertEqual(self.sql("SELECT version_num FROM alembic_version"), [("20261111_10",)])
         self.assertEqual(self.snapshot(), before)
         self.assertEqual(self.constraints(), constraints)
         self.assertNotIn(PROFILE_COLUMN, [row[1] for row in self.sql("PRAGMA table_info(company_sites)")])
         self.assertEqual(self.sql("PRAGMA foreign_key_check"), [])
-        self.alembic("upgrade", "head")
+        self.alembic("upgrade", "20261111_11")
         self.assertEqual(self.snapshot(), before)
         self.assertEqual(self.constraints(), constraints)
         self.assertEqual({(company_id, site_id): slug for company_id, site_id, slug in self.profile_snapshot()}, expected)
-        self.alembic("check")
+        self.check_current_head()
 
     def test_idempotent_backfill_preserves_nonnull_empty_snapshots_and_timestamps(self):
-        self.alembic("upgrade", "head")
+        self.alembic("upgrade", "20261111_11")
         snapshots = self.profile_snapshot()
         self.sql("UPDATE company_sites SET display_name='Rename after snapshot' WHERE company_id=401")
         self.sql("UPDATE companies SET company_name='Global rename after snapshot' WHERE id=405")
@@ -164,7 +171,7 @@ class CompanyUrlMigrationTests(unittest.TestCase):
                                       ("a-" * 200, "Global"), (None, "Global_Áção")):
             with self.subTest(regional=regional, global_name=global_name):
                 self.assertEqual(module._public_company_slug_v1(regional, global_name), public_company_slug(regional, global_name))
-        self.alembic("upgrade", "head")
+        self.alembic("upgrade", "20261111_11")
         self.sql("UPDATE company_sites SET public_profile_slug=NULL WHERE company_id=401")
         with patch("src.job_slugs.public_company_slug", return_value="future-runtime-behavior"):
             self.backfill()
@@ -172,7 +179,7 @@ class CompanyUrlMigrationTests(unittest.TestCase):
                          [("regional-sao-paulo",), ("regional-mexico",)])
 
     def test_legacy_writer_remains_nullable_and_safe_downgrade_keeps_inserted_membership_and_job(self):
-        self.alembic("upgrade", "head")
+        self.alembic("upgrade", "20261111_11")
         self.sql("INSERT INTO company_sites(company_id,site_id,status,display_name) VALUES(401,?,'approved','Legacy_Marca')",
                  (self.site_ids["US"],))
         self.assertEqual(self.sql("SELECT public_profile_slug FROM company_sites WHERE company_id=401 AND site_id=?",
@@ -185,11 +192,11 @@ class CompanyUrlMigrationTests(unittest.TestCase):
         self.alembic("downgrade", "20261111_10")
         self.assertEqual(self.snapshot(), before)
         self.assertEqual(self.sql("PRAGMA foreign_key_check"), [])
-        self.alembic("upgrade", "head")
+        self.alembic("upgrade", "20261111_11")
         self.assertEqual(self.snapshot(), before)
         self.assertEqual(self.sql("SELECT public_profile_slug FROM company_sites WHERE company_id=401 AND site_id=?",
                                  (self.site_ids["US"],)), [("legacy-marca",)])
-        self.alembic("check")
+        self.check_current_head()
 
     def assert_constraints_enforced(self):
         with self.assertRaises(sqlite3.IntegrityError):
@@ -212,7 +219,7 @@ class CompanyUrlMigrationTests(unittest.TestCase):
 
     def test_upgrade_and_downgrade_retain_real_fk_unique_check_and_composite_enforcement(self):
         self.assert_constraints_enforced()
-        self.alembic("upgrade", "head")
+        self.alembic("upgrade", "20261111_11")
         self.assert_constraints_enforced()
         self.alembic("downgrade", "20261111_10")
         self.assert_constraints_enforced()
@@ -228,7 +235,7 @@ class CompanyUrlMigrationTests(unittest.TestCase):
                 connection.execute("INSERT INTO company_sites(company_id,site_id,status,display_name) VALUES(?,?,'pending','Chunk_Marca Áção')",
                                    (company_id, self.site_ids["BR"]))
         before = self.snapshot()
-        self.alembic("upgrade", "head")
+        self.alembic("upgrade", "20261111_11")
         self.assertEqual(self.snapshot(), before)
         self.assertEqual(self.sql("SELECT count(*) FROM company_sites WHERE public_profile_slug IS NULL"), [(0,)])
         self.assertEqual(self.sql("SELECT count(*) FROM company_sites WHERE public_profile_slug='chunk-marca-acao'"), [(507,)])
@@ -239,14 +246,14 @@ class CompanyUrlMigrationTests(unittest.TestCase):
         # reconstruction on re-upgrade is separate from the company snapshot.
         self.sql("UPDATE jobs SET public_company_slug='regional-sao-paulo',public_title_slug='consultor-erp-senior' WHERE id=601")
         before = self.snapshot()
-        self.alembic("upgrade", "head")
+        self.alembic("upgrade", "20261111_11")
         self.alembic("downgrade", "20261110_09")
         self.assertEqual(self.sql("SELECT version_num FROM alembic_version"), [("20261110_09",)])
         self.assertEqual(self.sql("PRAGMA foreign_key_check"), [])
         self.assertNotIn(PROFILE_COLUMN, [row[1] for row in self.sql("PRAGMA table_info(company_sites)")])
-        self.alembic("upgrade", "head")
+        self.alembic("upgrade", "20261111_11")
         self.assertEqual(self.snapshot(), before)
-        self.alembic("check")
+        self.check_current_head()
 
 
 if __name__ == "__main__":

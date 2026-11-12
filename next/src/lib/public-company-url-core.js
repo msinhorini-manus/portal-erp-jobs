@@ -1,6 +1,6 @@
-/** Pure shared company URL contract. Regional persisted snapshots are authoritative.
- * Missing snapshots alone permit deterministic transitional fallbacks. Construction
- * is not authorization: public detail callers must validate the live regional DTO.
+/** Pure shared public company URL contract. Persisted country-unique slugs are
+ * authoritative; numeric IDs remain internal identity, never public URL segments.
+ * Construction is not authorization: public callers must validate the live DTO.
  */
 export function companyCollection(locale) {
   const language = typeof locale === 'string' ? locale.split('-')[0].toLowerCase() : ''
@@ -10,23 +10,24 @@ export function companyCollection(locale) {
 }
 export function canonicalCompanyId(value) {
   const text = String(value ?? '')
-  if (!/^[1-9]\d*$/.test(text) || !Number.isSafeInteger(Number(text))) throw new Error('Invalid public company ID')
+  if (!/^[1-9]\d*$/.test(text) || !Number.isSafeInteger(Number(text))) throw new Error('Invalid internal company ID')
   return text
 }
+export const RESERVED_COMPANY_SLUGS = Object.freeze([
+  'admin', 'api', 'by-slug', 'search', 'new', 'edit', 'delete', 'create',
+  'login', 'logout', 'register', 'registration', 'auth', 'account', 'me',
+  'profile', 'settings', 'dashboard', 'empresas', 'companies', 'jobs', 'vagas',
+  'static', 'assets', 'uploads', 'favicon', 'robots', 'sitemap', 'feed',
+  'empresa-confidencial',
+])
 export function validPublicCompanySlug(value) {
   return typeof value === 'string' && value.length <= 140 && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value)
-}
-export function fallbackCompanySlug(value) {
-  return String(value ?? '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 140).replace(/-+$/g, '') || 'empresa'
+    && /[a-z]/.test(value) && !RESERVED_COMPANY_SLUGS.includes(value)
 }
 export function publicCompanyRelativePath(company, locale) {
-  const id = canonicalCompanyId(company.id)
-  const slug = company.public_profile_slug == null
-    ? fallbackCompanySlug(company.company_name || company.trade_name || company.name)
-    : company.public_profile_slug
+  const slug = company?.public_profile_slug
   if (!validPublicCompanySlug(slug)) throw new Error('Invalid public company slug snapshot')
-  return `/${companyCollection(locale)}/${slug}/${id}`
+  return `/${companyCollection(locale)}/${slug}`
 }
 export function publicCompanyPath(company, site) {
   if (!site || !/^\/[a-z]{2}$/.test(site.url_prefix) || site.is_active === false) throw new Error('Invalid public company site')
@@ -35,24 +36,20 @@ export function publicCompanyPath(company, site) {
 export function assertPublicRegionalCompany(company, site, id) {
   if (!company || !site?.is_active || company.is_active === false || company.status !== 'approved' ||
       canonicalCompanyId(company.id) !== canonicalCompanyId(id) ||
+      !Number.isSafeInteger(company.site_id) || company.site_id < 1 ||
       (site.id != null && company.site_id !== site.id) ||
-      (company.site_code != null && company.site_code !== site.code) ||
-      (site.id == null && company.site_code !== site.code)) throw new Error('Public regional company unavailable')
+      typeof site.code !== 'string' || company.site_code !== site.code) throw new Error('Public regional company unavailable')
   publicCompanyRelativePath(company, site.locale)
 }
-/** Never use a job's public_company_slug: it is the job snapshot, not a profile slug.
- * Confidentiality overrides even an accidentally unsanitized nested DTO.
- */
+/** Job brand snapshots are not profile slugs. Hidden or missing identity means no link. */
 export function publicJobCompany(job) {
   if (!job || job.is_company_hidden) return null
   const company = job.company && typeof job.company === 'object' ? job.company : {}
   const id = job.company_id ?? company.id
-  if (id == null) return null
-  return {
-    id,
-    company_name: job.company_name || company.company_name || company.name,
-    public_profile_slug: job.company_profile_slug ?? company.public_profile_slug,
-  }
+  const slug = Object.hasOwn(job, 'company_profile_slug') ? job.company_profile_slug : company.public_profile_slug
+  try { canonicalCompanyId(id) } catch { return null }
+  if (!validPublicCompanySlug(slug)) return null
+  return { id, company_name: job.company_name || company.company_name || company.name, public_profile_slug: slug }
 }
 export function publicJobCompanyPath(job, site) {
   const company = publicJobCompany(job)

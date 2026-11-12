@@ -119,14 +119,18 @@ for method in ['POST', 'PUT', 'PATCH', 'DELETE']:
 status, _, raw = http('/br/api/companies/1')
 check(status == 200, 'public fixture company DTO')
 company_one = json.loads(raw)
-COMPANY1_PATH = '/br/empresas/' + company_one['public_profile_slug'] + '/1'
-COMPANY4_PATH = '/br/empresas/megasoft/4'
+status, _, raw = http('/br/api/companies/by-slug/' + company_one['public_profile_slug'])
+check(status == 200 and json.loads(raw)['id'] == company_one['id'], 'by-slug flat DTO retains numeric internal identity')
+COMPANY1_PATH = '/br/empresas/' + company_one['public_profile_slug']
+COMPANY4_PATH = '/br/empresas/megasoft'
 for method in ['GET', 'HEAD']:
     for rejected_path in ['/br/empresas/1', '/br/empresas/1/', '/br/empresas/4', '/br/empresas/4/',
-                          '/br/empresas/wrong/4', '/br/empresas/MegaSoft/4', COMPANY4_PATH + '/',
+                          '/br/empresas/wrong/4', '/br/empresas/MegaSoft/4', COMPANY4_PATH + '/', COMPANY4_PATH + '/4', COMPANY1_PATH + '/1',
+                          '/br/empresas/wrong', '/br/empresas/MegaSoft', '/br/Empresas/megasoft', '/br/Empresas/megasoft/', '/BR/empresas/megasoft', '/BR/empresas/megasoft/',
+                          '/br/empresas/mega%73oft', '/br/empresas/123-456', '/br/empresas/search', '/br/empresas/by-slug', '/br/empresas/empresa-confidencial',
                           '/br/empresas/megasoft/04', '/br/empresas/megasoft/0', '/br/empresas/megasoft/9007199254740992',
-                          '/br/empresas/pending-synthetic-two/2', '/br/empresas/pending-synthetic-three/3',
-                          '/br/companies/megasoft/4', '/zz/empresas/megasoft/4', '/us/companies/megasoft/4', '/mx/empresas/megasoft/4']:
+                          '/br/empresas/pending-synthetic-two', '/br/empresas/pending-synthetic-three',
+                          '/br/companies/megasoft', '/zz/empresas/megasoft', '/us/companies/megasoft', '/mx/empresas/megasoft']:
         status, headers, _ = http(rejected_path + '?utm_source=local', method=method)
         check(status == 404 and not (headers.get('Location') or headers.get('location')),
               rejected_path + ' ' + method + ': exact company 404 without Location')
@@ -135,7 +139,7 @@ for method in ['GET', 'HEAD']:
         check(status == 200 and not (headers.get('Location') or headers.get('location')),
               path + ' ' + method + ': exact company 200 without Location')
 for method in ['POST', 'PUT', 'PATCH', 'DELETE']:
-    for path in ['/br/empresas/4', '/br/empresas/wrong/4', COMPANY4_PATH]:
+    for path in ['/br/empresas/4', '/br/empresas/wrong/4', COMPANY4_PATH + '/4', COMPANY4_PATH, COMPANY4_PATH + '/']:
         status, headers, _ = http(path, method=method)
         check(status == 405 and not (headers.get('Location') or headers.get('location')),
               path + ' ' + method + ': exact company 405 without Location')
@@ -156,6 +160,7 @@ for path in ['/br', '/br/vagas', JOB1_PATH, '/br/empresas', COMPANY1_PATH, COMPA
     check('property="og:locale" content="pt_BR"' in html, f'{path}: pt_BR')
     check('hrefLang=' not in html and 'hreflang=' not in html, f'{path}: no fabricated hreflang')
     internal = re.findall(r'<a[^>]+href="(/[^"#]*)"', html)
+    check(not any(re.search(r'/(?:empresas|companies)/[^/]+/[0-9]+(?:$|[?])', url) for url in internal), f'{path}: no public company ID links')
     check(all(url.startswith('/br') or url.startswith(('/_next', '/uploads', '/brand', '/assets')) for url in internal), f'{path}: all internal links regional')
 
 status, _, html = http('/br/vagas?page=2&utm_source=local', {'User-Agent': 'Googlebot'})
@@ -176,7 +181,7 @@ status, _, sitemap = http('/br/sitemap.xml')
 check(status == 200, 'regional sitemap runtime 200')
 urls = [node.text for node in ET.fromstring(sitemap).iter('{http://www.sitemaps.org/schemas/sitemap/0.9}loc')]
 check(len(urls) == 116 and any(url.endswith('/consultor-erp-local-103/103') for url in urls) and not any(url.endswith('/105') for url in urls) and not any(re.search(r'/vagas/[0-9]+$', url) for url in urls), 'regional sitemap complete across >100 jobs, no expired job')
-check('https://jobs.portalerp.com' + COMPANY4_PATH in urls and not any(re.search(r'/empresas/[0-9]+$', url) for url in urls), 'sitemap company URLs descriptive only')
+check('https://jobs.portalerp.com' + COMPANY4_PATH in urls and not any(re.search(r'/empresas/(?:[0-9]+|[^/]+/[0-9]+)$', url) for url in urls), 'sitemap company URLs slug-only, no public numeric segment')
 for url in urls:
     check(http(url.replace('https://jobs.portalerp.com', ''))[0] == 200, f'sitemap URL {url}: 200')
 status, _, robots = http('/robots.txt')
@@ -225,8 +230,17 @@ with sync_playwright() as p:
     page.wait_for_url('**' + COMPANY1_PATH)
     expect(page.get_by_role('heading', name='Local Runtime ERP', exact=True)).to_be_visible()
     check(urlsplit(page.url).path == COMPANY1_PATH, 'browser employer opens exact friendly company profile')
-    step = 'candidate login'
-    page.goto(BASE + '/br/candidato/login?redirect=' + quote(JOB1_PATH, safe=''), wait_until='networkidle')
+    step = 'candidate Apply/login continuity'
+    page.goto(BASE + JOB1_PATH, wait_until='networkidle')
+    # This intentional unauthorized UI action is isolated and exact; all other UI failures remain gates.
+    with page.expect_response(lambda response: urlsplit(response.url).path == '/br/bff/candidate/applications' and response.request.method == 'POST') as apply_info:
+        page.get_by_role('button', name='Candidatar-se', exact=True).click()
+    check(apply_info.value.status == 403, 'anonymous Apply denied by missing CSRF and requires candidate login')
+    expected_apply_failure = {'status': 403, 'path': '/br/bff/candidate/applications', 'step': step, 'method': 'POST'}
+    check(bad_browser_responses.count(expected_apply_failure) == 1, 'only exact intentional Apply 403 observed')
+    bad_browser_responses.remove(expected_apply_failure)
+    page.wait_for_url('**/br/candidato/login?**')
+    check(page.url.endswith('redirect=' + quote(JOB1_PATH, safe='')), 'Apply retains unchanged canonical job URL with internal job ID')
     page.locator('input[name="email"]').fill('candidate@example.invalid')
     page.locator('input[name="password"]').fill('LocalTest123!')
     with page.expect_response(lambda response: urlsplit(response.url).path == '/br/bff/auth/login') as login_info:
@@ -238,6 +252,11 @@ with sync_playwright() as p:
     check(not any(cookie['name'].startswith('pej_') for cookie in context.cookies(BASE + '/zz')), 'BR cookies not sent to synthetic ZZ')
     csrf = next(cookie['value'] for cookie in cookies if cookie['name'] == 'pej_csrf')
     old_candidate_cookie = '; '.join(f'{cookie["name"]}={cookie["value"]}' for cookie in cookies)
+    step = 'candidate authenticated Apply'
+    with page.expect_response(lambda response: urlsplit(response.url).path == '/br/bff/candidate/applications' and response.request.method == 'POST') as apply_info:
+        page.get_by_role('button', name='Candidatar-se', exact=True).click()
+    check(apply_info.value.status == 201, 'authenticated Apply persists internal job ID')
+    expect(page.get_by_role('button', name='Candidatado', exact=True)).to_be_visible()
     step = 'candidate dashboard/resume/CSRF'
     page.goto(BASE + '/br/candidato/dashboard', wait_until='networkidle')
     expect(page.get_by_role('heading', name='Local Candidate', exact=True)).to_be_visible()
