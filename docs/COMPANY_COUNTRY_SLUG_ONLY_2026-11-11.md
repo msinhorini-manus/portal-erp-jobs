@@ -4,9 +4,9 @@ Data: 11/11/2026. Escopo exclusivo da plataforma Jobs.
 
 ## Estado verdadeiro
 
-A implementação está concluída e homologada localmente. **Ainda não foi implantada em produção nesta release.** O servidor `root@161.35.228.99` respondeu à tentativa SSH final, mas recusou a chave temporária com `Permission denied (publickey,password)`. A chave pública enviada foi conferida e corresponde à chave privada local, protegida para acesso somente pelo proprietário.
+A implementação está **implantada e validada em produção** no commit exato `ab2e132da71a029f7215d0111dc4765ac0f72159`, em 11/11/2026 BRT, com validações finais de runtime, banco e logs após os testes públicos. O PR #25 foi mesclado e a tag `company-country-slug-only-20261111` aponta ao commit de aplicação efetivamente servido. A main pode receber esta documentação posterior sem alterar o runtime publicado.
 
-O backup produtivo, staging remoto e deploy desta alteração dependem desse acesso. Não foram executados nem devem ser apresentados como concluídos. A release anterior com URLs `/{país}/empresas/{slug}/{id}` permanece a referência produtiva anterior; o estado atual do banco não foi recertificado via SSH neste trabalho.
+Foram verificados backup consistente, restauração isolada, hashes, cópia privada fora da origem e staging do archive completo. A publicação final foi uma retomada **somente de código sobre schema 12 já aplicado**: não executou nova migration, downgrade ou restauração de banco. Backend e Next estão online; schema `20261111_12`, integridade OK, FK=0, zero reservas duplicadas ou inconsistentes e somente BR ativo.
 
 ## URL e unicidade
 
@@ -52,7 +52,8 @@ Diretório, detalhe e links de empregador foram alinhados: perfis sem slug persi
 | Browser integrado de URLs, SEO, autenticação, equipe e revogação | **455 verificações aprovadas** |
 | SPA: URLs e runtime regional | **23 testes aprovados** |
 | Patch Nginx: isolamento e idempotência | **6 testes aprovados** |
-| Scripts operacionais: preservação, rollback e gates | **12 testes aprovados** |
+| Scripts operacionais originais revisados | **23 testes aprovados** |
+| Complementares da retomada | **7 backup, 5 logs, 8 wrapper e 6 cache aprovados** |
 | Next: TypeScript e build | Aprovados |
 | SPA: lint focal e build | Aprovados |
 | Auditoria Python | Nenhuma vulnerabilidade conhecida encontrada |
@@ -64,17 +65,26 @@ A revisão independente não encontrou bloqueadores P0/P1. A inconsistência ini
 
 Os testes PostgreSQL são suplementares, executados em clusters locais descartáveis, não uma migração de infraestrutura. O baseline PostgreSQL histórico completo contém limitação anterior à revisão 12; os testes desta revisão partem de schema 11 equivalente. Nenhuma migração do banco produtivo para PostgreSQL é proposta.
 
-## Sequência de publicação pendente
+## Publicação e validação executadas
 
-1. Restabelecer o SSH pela chave temporária desta release e conferir schema, markers, integridade, FKs, serviços e capacidade, somente por leitura.
-2. Fazer backup consistente do SQLite, runtime e configuração Jobs; verificar restauração isolada e hashes, incluindo cópia privada fora do servidor.
-3. Homologar o commit exato em staging remoto e em cópia atual do banco. O gate falha se encontrar snapshots ausentes/malformados/reservados não cobertos pela autorização seletiva; não permite reparação silenciosa desses casos.
-4. Parar controladamente os processos necessários, aplicar a migration aditiva e trocar API, SPA e Next. Aplicar somente o patch Nginx que retira URLs antigas de empresas no host legado. Preservar dados de negócio, timestamps, IDs, sessões e snapshots de vagas.
-5. Validar perfis, canonical, sitemap, dados estruturados, 404 das rotas retiradas, browser, hashes de runtime, banco e logs novos. Não criar contas de teste permanentes.
-6. Somente depois desses gates: fechar/mesclar o PR, taguear o commit efetivamente implantado e remover a chave temporária.
+O staging aprovou 26 gates: 186 testes backend remotos, suplemento PostgreSQL local não-root com cinco testes, Next/Vitest 477, SPA 23, migrations 11→12→11→12 em cópia, compatibilidade do writer anterior, builds e auditorias. PostgreSQL não foi instalado ou executado na origem.
+
+A produção aprovou 155 verificações HTTP públicas em quatro empresas, 13 verificações no Chromium desktop e 15 no móvel, incluindo ausência de overflow. MegaSoft respondeu GET/HEAD 200 na URL sem ID; rotas numéricas, slug+ID, maiúsculas e barra final responderam 404 sem Location. As vagas reais mantiveram suas URLs. Canonical, Open Graph, Organization, diretório e sitemap utilizam o slug empresarial sem ID. Robots e cinco páginas BR principais foram revalidados; sitemap com 17 URLs, somente Brasil, sem rotas privadas.
+
+A paridade final verificou 103 arquivos backend, 17 artefatos SPA e 18.856 arquivos Next, incluindo hashes e permissões. Foram segregados 84 bytecodes Python derivados apenas quando sua fonte correspondente permaneceu pinada e verificada; fonte, bytecode sem fonte correspondente, symlinks e artefatos Next não receberam exclusão ampla. O banco, reservas, propriedade empresarial, memberships, configuração e processos foram recertificados após a bateria pública. Não foram criadas contas, candidaturas ou fixtures na produção.
+
+## Ocorrências operacionais preservadas
+
+A primeira transação aplicou schema 12 e passou os smokes, mas reverteu código por um único 502 ao IP exato da origem durante a manutenção. O evento foi pareado com recusa do listener loopback parado. O helper operacional irmão permite exclusivamente esse tipo de 502 pareado dentro da manutenção; o original e o READY ficaram intactos.
+
+Um preflight da retomada bloqueou SIGPIPE porque `git get-tar-commit-id` lê apenas o cabeçalho do archive; a correção alimentou os 1024 bytes esperados e preservou o hash integral e a inspeção de todos os membros. Uma retomada adicional reverteu código por comparação de `__pycache__` gerado em caminhos diferentes; a distinção de cache/fonte foi corrigida e testada fora do repositório. Ambos os rollbacks produtivos preservaram schema 12 e os dados; não houve restauração de DB.
+
+Os logs da transação final passaram sem erros ou 5xx inesperados. Na janela pública, o classificador de host estrito também sinalizou dois acessos GET ao IP exato da origem: 307 na raiz e 404 em `/br`. Esses dois registros foram revisados individualmente, com deltas e hashes privados preservados; a revisão de todos os logs confirmou zero erros/5xx, sem tolerância geral a hosts desconhecidos. O READY pré-cutover conserva o hash do Nginx anterior; a conferência pós-cutover usa corretamente o hash do candidato aprovado, sem modificar o READY.
 
 O rollback preferencial é **de código, mantendo schema 12 e reservas**, sem sobrescrever o banco atual com dados antigos. Escritas únicas válidas da versão 11 continuam compatíveis pelos guards; colisões são recusadas com rollback. O downgrade apaga tombstones e não é rollback seguro para continuar servindo URLs sem ID depois de exclusões definitivas.
 
 ## Continuidade
 
-A chave temporária deve permanecer localmente protegida apenas até o deploy autorizado. Não anexar banco, chave privada, credenciais, variáveis de ambiente ou estados de login a relatórios/PRs. A aprovação de empresas, RBAC, IDs internos, regras de candidaturas e operação regional existente são preservados.
+A chave temporária exata desta release foi retirada do root; uma nova conexão com ela foi recusada. A chave privada local, socket SSH, aliases temporários de prova e staging/operacionais remotos foram removidos. Os demais acessos SSH e todos os backups de rollback, incluindo as cópias privadas fora da origem, foram preservados. Evidências operacionais e de staging estão arquivadas de forma privada junto ao backup de recuperação.
+
+Não anexar banco, chave privada, credenciais, variáveis de ambiente ou estados de login a relatórios/PRs. A aprovação de empresas, RBAC, IDs internos, regras de candidaturas e operação regional existente são preservados. Search Console, resultados avançados Google e desempenho de campo continuam pendentes de execução/evidência do operador; não há promessa de indexação.
