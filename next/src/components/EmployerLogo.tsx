@@ -8,7 +8,7 @@ type Props = {
   name?: string | null
   src?: string | null
   hidden?: boolean
-  size?: 'card' | 'hero' | 'sidebar'
+  size?: 'card' | 'hero' | 'sidebar' | 'profile'
   className?: string
 }
 
@@ -16,6 +16,7 @@ const sizeClasses = {
   card: 'h-8 w-8 rounded-lg text-[11px]',
   hero: 'h-20 w-20 rounded-2xl text-2xl sm:h-24 sm:w-24',
   sidebar: 'h-12 w-12 rounded-xl text-sm',
+  profile: 'h-16 w-16 rounded-xl text-xl',
 }
 
 export function EmployerLogo({ name, src, hidden = false, size = 'card', className = '' }: Props) {

@@ -6,6 +6,7 @@ import { formatDate, requireRegionalBaseUrl, type RegionalSite } from './site'
 export const RECENT_JOBS_LIMIT = 20
 
 export type RecentJob = PublicJobUrlData & PublicJobCompanyData & {
+  company_is_member?: boolean
   company_logo_url?: string | null
   location?: string | null
   city?: string | null

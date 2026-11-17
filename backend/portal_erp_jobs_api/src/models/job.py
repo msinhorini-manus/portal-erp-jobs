@@ -98,9 +98,8 @@ class Job(db.Model):
             'is_company_hidden': bool(self.is_company_hidden),
             'company_name': None if self.is_company_hidden else company_name,
             'company_profile_slug': (
-                membership.resolved_public_profile_slug
-                if membership and membership.is_approved and not self.is_company_hidden
-                and self.company.user and self.company.user.is_active else None
+                self.company.public_profile_slug_for(membership, expected_site_id=self.site_id)
+                if self.company and not self.is_company_hidden else None
             ),
             # Confidentiality is authoritative even after a public->hidden edit.
             'public_company_slug': HIDDEN_COMPANY_SLUG if self.is_company_hidden else (
@@ -156,18 +155,22 @@ class Job(db.Model):
             area_name = self.area
 
         public_identity = self.public_identity_dict()
+        membership = next(
+            (item for item in self.company.site_memberships if item.site_id == self.site_id),
+            None,
+        ) if self.company else None
         data = {
             'id': self.id,
             'company_id': self.company_id,
             **public_identity,
             # Reuse the resolved identity and loaded regional membership.
             # Match the public company DTO without an extra eligibility query.
-            'company_logo_url': (
-                next((
-                    membership.logo_url if membership.logo_url is not None else self.company.logo_url
-                    for membership in self.company.site_memberships if membership.site_id == self.site_id
-                ), None) if public_identity['company_profile_slug'] else None
+            'company_is_member': bool(
+                public_identity['company_profile_slug'] and membership and membership.is_member
             ),
+            'company_logo_url': (
+                membership.logo_url if membership.logo_url is not None else self.company.logo_url
+            ) if public_identity['company_profile_slug'] else None,
             'title': self.title,
             'area': area_name,
             'area_id': self.area_id,
@@ -204,12 +207,6 @@ class Job(db.Model):
             data['benefits'] = self.benefits
             data['expires_at'] = self.expires_at.isoformat() if self.expires_at else None
             data['skills_detailed'] = [skill.to_dict() for skill in self.skills]
-            membership = None
-            if self.company:
-                membership = next(
-                    (item for item in self.company.site_memberships if item.site_id == self.site_id),
-                    None,
-                )
             data['company'] = (
                 self.company.to_public_dict(membership)
                 if self.company and membership and not self.is_company_hidden

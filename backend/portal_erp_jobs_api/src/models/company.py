@@ -118,14 +118,29 @@ class Company(db.Model):
         data = self.to_dict(include_details=False, site_membership=site_membership)
         data.pop("user_id", None)
         data.pop("max_active_jobs", None)
-        data.pop("is_member", None)
         data["description"] = site_membership.description or self.description
         data["site_id"] = site_membership.site_id
-        data["public_profile_slug"] = (
-            site_membership.resolved_public_profile_slug
-            if site_membership.is_approved and self.user and self.user.is_active else None
-        )
+        data["public_profile_slug"] = self.public_profile_slug_for(site_membership)
+        # Commercial membership is regional, never the legacy global flag.
+        data["is_member"] = bool(data["public_profile_slug"] and site_membership.is_member)
         return data
+
+    def public_profile_slug_for(self, membership, *, expected_site_id=None):
+        """Reuse public identity policy; reject foreign/malformed read-only objects."""
+        from flask import g, has_request_context
+
+        if not membership or membership.company_id != self.id:
+            return None
+        site = membership.site
+        current_site = getattr(g, "site", None) if has_request_context() else None
+        if (
+            not site or site.id != membership.site_id or not site.is_active
+            or (expected_site_id is not None and membership.site_id != expected_site_id)
+            or (current_site is not None and membership.site_id != current_site.id)
+            or not membership.is_approved or not self.user or not self.user.is_active
+        ):
+            return None
+        return membership.resolved_public_profile_slug
 
 
 class CompanySite(db.Model):

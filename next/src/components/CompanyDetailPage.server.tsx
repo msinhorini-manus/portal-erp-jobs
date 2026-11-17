@@ -3,9 +3,12 @@ import { publicJob } from '@/lib/regional-sitemap'
 import { Metadata } from 'next'
 import Link from '@/components/RegionalLink'
 import { notFound } from 'next/navigation'
+import { EmployerLogo } from '@/components/EmployerLogo'
+import { MemberBadge } from '@/components/MemberBadge'
 import { ApiError, getCompanyBySlug } from '@/lib/api'
 import { Building2, MapPin, Users, Globe, Mail, Phone, ArrowLeft, Briefcase } from 'lucide-react'
 import { getSiteContext } from '@/lib/site-resolver.server'
+import { safeEmployerLogo } from '@/lib/employer-logo'
 import { openGraphLocale } from '@/lib/site'
 import { assertPublicRegionalCompany, canonicalCompanyId, companyCollection, publicCompanyCanonical, publicCompanyPath, validPublicCompanySlug } from '@/lib/public-company-url'
 
@@ -51,6 +54,7 @@ export default async function CompanyDetailPage({ params }: Props) {
   const { company, site } = await loadPublicCompany(params)
   const canonical = publicCompanyCanonical(company, site)
   const companyName = company.company_name || company.trade_name || company.name || 'Empresa'
+  const logo = safeEmployerLogo(company.logo_url)
   const organization = {
     '@context': 'https://schema.org', '@type': 'Organization',
     '@id': `${canonical}#organization`, name: companyName, url: canonical,
@@ -71,11 +75,12 @@ export default async function CompanyDetailPage({ params }: Props) {
             Voltar para empresas
           </Link>
           <div className="flex items-center gap-4">
-            <div className="w-16 h-16 bg-white/10 rounded-xl flex items-center justify-center">
-              <Building2 className="w-8 h-8 text-portal-orange" />
+            <div className="w-16 h-16 shrink-0 bg-white/10 rounded-xl flex items-center justify-center">
+              {company.logo_url ? <EmployerLogo name={companyName} src={logo} size="profile" /> : <Building2 className="w-8 h-8 text-portal-orange" />}
             </div>
-            <div>
-              <h1 className="text-3xl font-bold">{companyName}</h1>
+            <div className="min-w-0">
+              <h1 className="break-words text-3xl font-bold">{companyName}</h1>
+              <MemberBadge isMember={company.is_member} />
               <div className="flex flex-wrap items-center gap-4 mt-1 text-white/80">
                 {company.sector && <span>{company.sector}</span>}
                 {company.city && (
