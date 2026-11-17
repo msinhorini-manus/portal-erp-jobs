@@ -3,7 +3,9 @@
 import { FormEvent, useEffect, useState } from 'react'
 import { Building2, MapPin } from 'lucide-react'
 
-import { companyFetch, companyPath, CompanyProfileResponse, normalizeCompanyProfile, statusLabel } from '@/lib/company-client'
+import { companyAuthPath, companyFetch, companyPath, CompanyProfileResponse, type CompanySession, normalizeCompanyProfile, statusLabel } from '@/lib/company-client'
+import { canManageCompanyLogo, removeCompanyLogo, uploadCompanyLogo } from '@/lib/company-logo'
+import { CompanyLogoUpload } from './CompanyLogoUpload'
 
 const fields = ['company_name', 'cnpj', 'phone', 'website', 'sector', 'company_size', 'street_address', 'city', 'state', 'zip_code', 'description'] as const
 type FormState = Record<(typeof fields)[number], string>
@@ -15,6 +17,11 @@ export function CompanyProfileForm() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const [session, setSession] = useState<CompanySession | null>(null)
+  const [logo, setLogo] = useState<File | null>(null)
+  const [logoBusy, setLogoBusy] = useState(false)
+  const [logoError, setLogoError] = useState('')
+  const [logoMessage, setLogoMessage] = useState('')
 
   async function load() {
     const payload = await companyFetch<Record<string, unknown>>(companyPath('profile'))
@@ -25,13 +32,31 @@ export function CompanyProfileForm() {
 
   useEffect(() => {
     load().catch(reason => setError(reason instanceof Error ? reason.message : 'Não foi possível carregar o perfil.'))
+    companyFetch<CompanySession>(companyAuthPath('me')).then(setSession).catch(() => setLogoError('Não foi possível verificar a permissão para alterar o logo. Atualize a página.'))
   }, [])
 
   const canEdit = data?.companyUser?.role === 'owner' || data?.companyUser?.role === 'admin'
+  const canEditLogo = Boolean(session?.user_type === 'company' && session.permissions?.manage_company && canManageCompanyLogo(session.role, session.permissions))
+
+  async function changeLogo(remove = false) {
+    if (!canEditLogo || logoBusy || busy || (!remove && !logo)) return
+    setLogoBusy(true)
+    setLogoError('')
+    setLogoMessage('')
+    try {
+      const result = remove ? await removeCompanyLogo() : await uploadCompanyLogo(logo!)
+      // Preserve edits, membership and approval banners; do not reload/reset the field form.
+      setData(current => current ? { ...current, company: { ...current.company, logo_url: result.logo_url || undefined } } : current)
+      setLogo(null)
+      setLogoMessage(remove ? 'Logo removido com sucesso.' : 'Logo atualizado com sucesso.')
+    } catch (reason) {
+      setLogoError(reason instanceof Error ? reason.message : 'Não foi possível alterar o logo. Tente novamente.')
+    } finally { setLogoBusy(false) }
+  }
 
   async function save(event: FormEvent) {
     event.preventDefault()
-    if (!canEdit) return
+    if (!canEdit || busy || logoBusy) return
     setBusy(true)
     setError('')
     setMessage('')
@@ -72,11 +97,14 @@ export function CompanyProfileForm() {
               <p>Limite de vagas ativas: {data.membership?.max_active_jobs ?? data.company.max_active_jobs ?? '—'}</p>
               <p>Papel: {data.companyUser?.role || 'não informado'}</p>
             </div>
+            <CompanyLogoUpload name={data.company.company_name} currentUrl={data.company.logo_url} file={logo} canManage={canEditLogo} disabled={busy || logoBusy} onChange={file => { setLogo(file); setLogoMessage('') }} onValidation={setLogoError} onUpload={() => void changeLogo()} onRemove={() => void changeLogo(true)} />
+            {logoError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{logoError}</p>}
+            {logoMessage && <p role="status" className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800">{logoMessage}</p>}
           </aside>
           <form onSubmit={save} className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
             <h3 className="mb-2 text-xl font-bold">Informações empresariais</h3>
             {!canEdit && <p className="mb-5 rounded-lg bg-slate-100 px-4 py-3 text-sm text-slate-700">Seu papel permite consultar o perfil, mas somente owners e administradores podem alterá-lo.</p>}
-            <fieldset disabled={!canEdit || busy}>
+            <fieldset disabled={!canEdit || busy || logoBusy}>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Nome da empresa" name="company_name" value={form.company_name} set={setForm} required />
                 <Field label="CNPJ / identificação fiscal" name="cnpj" value={form.cnpj} set={setForm} />

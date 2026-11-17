@@ -20,6 +20,16 @@ describe('recent jobs selection', () => {
     expect(result[0]).toBe(input[2])
   })
 
+  it('never prioritizes members or changes the established date/ID order and 20-card limit', () => {
+    const input = Array.from({ length: 24 }, (_, index) => job(index + 1, { company_is_member: index % 2 === 0 }))
+    expect(selectRecentJobs(input, site).map(item => item.id)).toEqual(selectRecentJobs(input.map(item => ({ ...item, company_is_member: false })), site).map(item => item.id))
+    expect(selectRecentJobs(input, site)).toHaveLength(20)
+    expect(selectRecentJobs([
+      job(9, { company_is_member: true, created_at: '2026-10-01T12:00:00Z' }),
+      job(1, { company_is_member: false, created_at: '2026-11-01T12:00:00Z' }),
+    ], site).map(item => item.id)).toEqual([1, 9])
+  })
+
   it('puts missing and invalid dates last, with numeric ID tie-breaker', () => {
     const input = [job(2, { created_at: 'invalid' }), job(11, { created_at: undefined }), job(9, { created_at: null }), job(5, { created_at: '' }), job(1)]
     expect(selectRecentJobs(input, site).map(item => item.id)).toEqual([1, 11, 9, 5, 2])

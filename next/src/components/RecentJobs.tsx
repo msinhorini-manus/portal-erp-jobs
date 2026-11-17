@@ -1,5 +1,6 @@
 import Link from '@/components/RegionalLink'
 import { EmployerLogo } from '@/components/EmployerLogo'
+import { MemberBadge } from '@/components/MemberBadge'
 import { publicJobPath } from '@/lib/public-job-url'
 import { recentJobCompanyPath, recentJobPublication, selectRecentJobs, type RecentJob } from '@/lib/recent-jobs'
 import type { RegionalSite } from '@/lib/site'
@@ -29,6 +30,7 @@ export function RecentJobs({ jobs, site }: { jobs: readonly RecentJob[]; site: R
               const jobPath = publicJobPath(job, site)
               const companyPath = recentJobCompanyPath(job, site)
               const hidden = Boolean(job.is_company_hidden)
+              const isMember = job.company_is_member === true && !hidden && Boolean(companyPath)
               const companyName = hidden ? 'Empresa Confidencial' : job.company_name || job.company?.company_name || job.company?.name || 'Empresa'
               const location = job.location || [job.city, job.state].filter(Boolean).join(', ')
               const publication = recentJobPublication(job, site)
@@ -36,7 +38,8 @@ export function RecentJobs({ jobs, site }: { jobs: readonly RecentJob[]; site: R
               const contract = job.contract_type && (contractLabels[job.contract_type.toLowerCase()] || job.contract_type)
 
               return (
-                <article key={job.id} className="flex min-w-0 flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-colors hover:border-portal-orange/40">
+                <article key={job.id} className={`flex min-w-0 flex-col rounded-xl border bg-white p-4 shadow-sm transition-colors ${isMember ? 'border-portal-dark/30 hover:border-portal-dark/50' : 'border-slate-200 hover:border-portal-orange/40'}`}>
+                  {isMember && <div className="-mx-4 -mt-4 mb-3"><MemberBadge isMember={isMember} variant="card" /></div>}
                   <div className="flex items-start gap-2">
                     <EmployerLogo name={hidden ? null : companyName} src={hidden ? null : job.company_logo_url} hidden={hidden} size="card" />
                     <div className="min-w-0 flex-1 break-words pt-1 text-xs leading-5 text-slate-600">

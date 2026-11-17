@@ -1,7 +1,7 @@
 import { withRegionalRoute } from '@/lib/regional-bff'
 import { NextRequest, NextResponse } from 'next/server'
 
-import { allowedQuery, authenticatedCompanyProxy, CompanyRoute, resolveCompanyRoute } from '@/lib/company-bff'
+import { allowedQuery, authenticatedCompanyLogoProxy, authenticatedCompanyProxy, CompanyRoute, resolveCompanyRoute } from '@/lib/company-bff'
 
 const JOB_QUERY = ['page', 'per_page', 'status'] as const
 const APPLICATION_QUERY = ['page', 'per_page', 'status', 'job_id'] as const
@@ -9,6 +9,7 @@ const CANDIDATE_QUERY = ['page', 'per_page', 'q', 'city', 'state', 'tech', 'min_
 
 export const COMPANY_ROUTES: CompanyRoute[] = [
   { pattern: /^profile$/, target: () => '/companies/', methods: ['GET', 'PUT'] },
+  { pattern: /^profile\/logo$/, target: () => '/companies/logo', methods: ['POST', 'DELETE'] },
   { pattern: /^dashboard$/, target: () => '/stats/company', methods: ['GET'] },
   {
     pattern: /^catalog\/(areas|levels|modalities|skills)$/,
@@ -60,6 +61,7 @@ async function proxy(request: NextRequest, context: { params: Promise<{ country:
     const error = resolved.error === 'method' ? 'Método não permitido.' : resolved.error === 'query' ? 'Parâmetro de consulta não permitido.' : 'Rota não permitida.'
     return NextResponse.json({ error }, { status, headers: { 'Cache-Control': 'no-store' } })
   }
+  if (joined === 'profile/logo') return authenticatedCompanyLogoProxy(request)
   let target = joined === 'jobs' && request.method === 'POST' ? '/jobs/' : resolved.target
   if (request.method === 'GET' && /^jobs\/\d+$/.test(joined)) {
     target = `/jobs/my-jobs/${joined.split('/')[1]}`

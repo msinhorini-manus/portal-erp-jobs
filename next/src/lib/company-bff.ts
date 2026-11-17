@@ -1,6 +1,7 @@
 import { internalApiOrigin, requestRegion, trustedRegionalHeaders } from './regional-transport'
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
+import { COMPANY_LOGO_MAX_BYTES, companyLogoFileError } from './company-logo'
 
 export const COMPANY_ACCESS_COOKIE = 'pej_company_access'
 export const COMPANY_REFRESH_COOKIE = 'pej_company_refresh'
@@ -71,7 +72,8 @@ export function setCompanySessionCookies(response: NextResponse, tokens: { acces
 export async function callCompanyBackend(request: NextRequest, path: string, init: RequestInit = {}, token?: string) {
   const headers = regionalHeaders(request, init.headers)
   if (token) headers.set('Authorization', `Bearer ${token}`)
-  if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
+  if (init.body instanceof FormData) headers.delete('Content-Type')
+  else if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
   return fetch(`${backendOrigin(request)}/api${path}`, { ...init, headers, cache: 'no-store' })
 }
 
@@ -145,6 +147,138 @@ async function refreshCompanySession(request: NextRequest) {
   const flight = executeRefresh(request, refreshToken).finally(() => refreshFlights.delete(key))
   refreshFlights.set(key, flight)
   return flight
+}
+
+// Multipart is isolated from the JSON proxy used by jobs, CVs, team and profile fields.
+export const COMPANY_LOGO_BODY_MAX_BYTES = COMPANY_LOGO_MAX_BYTES + 64 * 1024
+
+async function boundedCompanyLogoBody(request: NextRequest): Promise<ArrayBuffer | null> {
+  const reader = request.body?.getReader()
+  if (!reader) return new ArrayBuffer(0)
+  const chunks: Uint8Array[] = []
+  let size = 0
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      size += value.byteLength
+      if (size > COMPANY_LOGO_BODY_MAX_BYTES) {
+        void reader.cancel().catch(() => {})
+        return null
+      }
+      chunks.push(value)
+    }
+  } finally { reader.releaseLock() }
+  const body = new Uint8Array(size)
+  let offset = 0
+  for (const chunk of chunks) { body.set(chunk, offset); offset += chunk.byteLength }
+  return body.buffer
+}
+
+function sameCompanyPublicOrigin(request: NextRequest, origin: string | null) {
+  if (!origin) return true
+  try {
+    // Nginx overwrites Host and X-Forwarded-Proto; Next may see its HTTP listener.
+    // Never use X-Forwarded-Host or browser-supplied regional authority.
+    const protocol = request.headers.get('x-forwarded-proto') || request.nextUrl.protocol.slice(0, -1)
+    if (!['http', 'https'].includes(protocol)) return false
+    const expected = new URL(`${protocol}://${requestRegion(request).host}`).origin
+    return origin === expected
+  } catch { return false }
+}
+
+export async function authenticatedCompanyLogoProxy(request: NextRequest) {
+  let rotated: Tokens | null = null
+  const respond = (body: unknown, status: number, clear = false) => {
+    const response = jsonResponse(body, status)
+    if (rotated) setCompanySessionCookies(response, rotated, request)
+    return clear ? clearCompanySessionCookies(response, request) : response
+  }
+  const method = request.method.toUpperCase()
+  if (!['POST', 'DELETE'].includes(method)) return respond({ error: 'Método não permitido.' }, 405)
+  if (request.nextUrl.search) return respond({ error: 'Parâmetro de consulta não permitido.' }, 400)
+  const origin = request.headers.get('origin')
+  const fetchSite = request.headers.get('sec-fetch-site')
+  if (!sameCompanyPublicOrigin(request, origin) || (fetchSite && !['same-origin', 'none'].includes(fetchSite)) || !validateCompanyCsrf(request)) {
+    return respond({ error: 'Validação CSRF inválida. Atualize a página e tente novamente.' }, 403)
+  }
+  let accessToken = request.cookies.get(COMPANY_ACCESS_COOKIE)?.value
+  if (!accessToken && !request.cookies.get(COMPANY_REFRESH_COOKIE)?.value) {
+    return respond({ error: 'Sessão expirada. Faça login novamente.' }, 401, true)
+  }
+  try {
+    if (!accessToken) {
+      rotated = await refreshCompanySession(request)
+      if (!rotated) return respond({ error: 'Sessão expirada. Faça login novamente.' }, 401, true)
+      accessToken = rotated.access_token
+    }
+    // Reject anonymous/non-company/read-only callers before parsing or uploading media.
+    let identityResponse = await callCompanyBackend(request, '/auth/me', { method: 'GET' }, accessToken)
+    if (identityResponse.status === 401 && !rotated) {
+      rotated = await refreshCompanySession(request)
+      if (!rotated) return respond({ error: 'Sessão expirada. Faça login novamente.' }, 401, true)
+      accessToken = rotated.access_token
+      identityResponse = await callCompanyBackend(request, '/auth/me', { method: 'GET' }, accessToken)
+    }
+    if (identityResponse.status === 401) return respond({ error: 'Sessão expirada. Faça login novamente.' }, 401, true)
+    if (!identityResponse.ok) return respond({ error: 'Não foi possível autorizar a alteração do logo.' }, identityResponse.status === 403 ? 403 : 503)
+    const identity = await parseBody(identityResponse)
+    if (identity.user_type !== 'company') return respond({ error: 'Conta empresarial obrigatória.' }, 403, true)
+    const permissions = identity.permissions as { manage_company?: boolean } | undefined
+    if (!['owner', 'admin'].includes(String(identity.role)) || permissions?.manage_company !== true) {
+      return respond({ error: 'Somente owners e administradores autorizados podem alterar o logo.' }, 403)
+    }
+
+    let body: FormData | undefined
+    if (method === 'POST') {
+      const contentType = request.headers.get('content-type') || ''
+      if (!/^multipart\/form-data(?:\s*;|$)/i.test(contentType) || !/;\s*boundary=/i.test(contentType)) {
+        return respond({ error: 'Envie o logo como multipart/form-data.' }, 415)
+      }
+      const declared = request.headers.get('content-length')
+      if (declared && (!/^\d+$/.test(declared) || Number(declared) > COMPANY_LOGO_BODY_MAX_BYTES)) {
+        return respond({ error: 'O corpo do upload excede o limite permitido.' }, /^\d+$/.test(declared) ? 413 : 400)
+      }
+      const bounded = await boundedCompanyLogoBody(request)
+      if (!bounded) return respond({ error: 'O corpo do upload excede o limite permitido.' }, 413)
+      let parsed: FormData
+      try { parsed = await new Response(bounded, { headers: { 'Content-Type': contentType } }).formData() }
+      catch { return respond({ error: 'Multipart inválido.' }, 400) }
+      const entries = [...parsed.entries()]
+      const file = parsed.get('logo')
+      if (entries.length !== 1 || entries[0][0] !== 'logo' || !file || typeof file === 'string') {
+        return respond({ error: 'Envie somente um arquivo no campo logo.' }, 400)
+      }
+      const validationError = companyLogoFileError(file)
+      if (validationError) return respond({ error: validationError }, file.size > COMPANY_LOGO_MAX_BYTES ? 413 : 400)
+      body = new FormData()
+      const extension = file.type === 'image/jpeg' ? 'jpg' : file.type === 'image/webp' ? 'webp' : 'png'
+      body.append('logo', file, `logo.${extension}`)
+    } else if (request.body || Number(request.headers.get('content-length') || 0)) {
+      return respond({ error: 'A remoção do logo não aceita corpo.' }, 400)
+    }
+
+    // No URL, query, Authorization, Host or multipart metadata from the browser is forwarded.
+    const execute = () => callCompanyBackend(request, '/companies/logo', { method, body, redirect: 'error' }, accessToken)
+    let backend = await execute()
+    if (backend.status === 401 && !rotated) {
+      rotated = await refreshCompanySession(request)
+      if (!rotated) return respond({ error: 'Sessão expirada. Faça login novamente.' }, 401, true)
+      accessToken = rotated.access_token
+      backend = await execute()
+    }
+    if (!backend.ok) {
+      const status = backend.status
+      const error = status === 401 ? 'Sessão expirada. Faça login novamente.'
+        : status === 403 ? 'Não foi possível autorizar a alteração do logo.'
+        : status === 413 ? 'O logo deve ter até 2 MB.'
+        : status === 400 || status === 415 ? 'Não foi possível validar o logo. Use PNG, JPEG ou WebP de até 2 MB.'
+        : 'Não foi possível alterar o logo. Tente novamente.'
+      return respond({ error }, status, status === 401)
+    }
+    const payload = await parseBody(backend)
+    return respond({ logo_url: payload.logo_url ?? null, company: payload.company, message: method === 'POST' ? 'Logo atualizado com sucesso.' : 'Logo removido com sucesso.' }, backend.status)
+  } catch { return respond({ error: 'Serviço regional indisponível.' }, 503) }
 }
 
 export async function authenticatedCompanyProxy(

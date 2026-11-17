@@ -27,6 +27,94 @@ describe('company SSR exact descriptive canonical without redirects', () => {
     expect(mocks.getCompanyBySlug).toHaveBeenCalledWith('megasoft', expect.objectContaining({ country: 'br', cache: 'no-store', context: { site, locale: site.locale } }))
     expect(mocks.permanentRedirect).not.toHaveBeenCalled()
   })
+
+  it('adds exactly one discreet mention immediately below the company h1, never on its internal vacancies', async () => {
+    const memberCompany = { ...company, is_member: true, jobs: company.jobs.map(job => ({ ...job, company_is_member: true })) }
+    mocks.getCompanyBySlug.mockResolvedValue(memberCompany)
+    const html = renderToStaticMarkup(await CompanyDetailPage({ params: params() }))
+    expect(html.match(/Membro Ecossistema Portal ERP/g)).toHaveLength(1)
+    expect(html).toMatch(/<h1[^>]*>MegaSoft Renamed<\/h1><span data-member-badge="inline"[^>]*>Membro Ecossistema Portal ERP<\/span>/)
+    const hero = html.match(/<section\b[^>]*>[\s\S]*?<\/section>/)?.[0]
+    expect(hero).toContain('bg-portal-dark text-white py-8')
+    expect(hero).toContain('data-member-badge="inline"')
+    const content = html.slice(html.indexOf('</section>') + '</section>'.length)
+    expect(content).not.toContain('Membro Ecossistema Portal ERP')
+    expect(content).not.toContain('data-member-badge')
+    for (const text of ['Sobre a Empresa', 'Synthetic public profile', 'Vagas Abertas (1)', 'ERP Consultant', 'Informações', 'Quer trabalhar aqui?', 'Cadastrar Currículo']) expect(content).toContain(text)
+    for (const text of ['data-member-badge="card"', 'role="tab"', 'border-portal-dark/30', 'Empresa membro', 'Não membro']) expect(html).not.toContain(text)
+    mocks.getCompanyBySlug.mockResolvedValue({ ...memberCompany, is_member: false })
+    const nonmemberHtml = renderToStaticMarkup(await CompanyDetailPage({ params: params() }))
+    expect(html.replace(/<span data-member-badge="inline"[^>]*>Membro Ecossistema Portal ERP<\/span>/, '')).toBe(nonmemberHtml)
+  })
+
+  it.each([false, undefined, null, 'true', 'false', 1, {}, []])('does not render a membership mention for a false/missing/nonboolean flag: %j', is_member => {
+    mocks.getCompanyBySlug.mockResolvedValue({ ...company, is_member })
+    return CompanyDetailPage({ params: params() }).then(page => {
+      const html = renderToStaticMarkup(page)
+      expect(html).toContain('MegaSoft Renamed')
+      expect(html).not.toContain('Membro Ecossistema Portal ERP')
+      expect(html).not.toContain('data-member-badge')
+      expect(html).not.toContain('Não membro')
+    })
+  })
+
+  it('renders the safe registered logo in the existing 64px tile and permits full company titles to wrap', async () => {
+    const companyName = 'EmpresaComNomeExtensoSemEspacosParaValidarQuebraMobile Empresa de Tecnologia ERP'
+    mocks.getCompanyBySlug.mockResolvedValue({ ...company, company_name: companyName, logo_url: 'https://cdn.example.invalid/company.png', is_member: true })
+    const html = renderToStaticMarkup(await CompanyDetailPage({ params: params() }))
+    expect(html).toContain('w-16 h-16 shrink-0 bg-white/10 rounded-xl flex items-center justify-center')
+    expect(html).toContain('h-16 w-16 rounded-xl text-xl')
+    expect(html).toContain('data-employer-logo="image"')
+    expect(html).toContain('src="https://cdn.example.invalid/company.png"')
+    expect(html).toContain(`aria-label="${companyName}"`)
+    expect(html).toContain(`<h1 class="break-words text-3xl font-bold">${companyName}</h1>`)
+    expect(html).toContain('min-w-0')
+    expect(html).not.toContain('truncate')
+    expect(html).not.toContain('line-clamp')
+    expect(html).not.toContain('h-20 w-20')
+    const metadata = await generateMetadata({ params: params() })
+    expect(metadata.openGraph).toMatchObject({ images: [{ url: 'https://cdn.example.invalid/company.png' }] })
+    expect(html).toContain('"logo":"https://cdn.example.invalid/company.png"')
+  })
+
+  it.each(['javascript:alert(1)', 'data:image/svg+xml,<svg/>', '//evil.invalid/a.png', 'http://example.invalid/logo.png', '/admin/users', 'https://user:pass@evil.invalid/logo.png'])('uses the reserved 64px EmployerLogo fallback for an invalid registered image URL: %s', async logo_url => {
+    mocks.getCompanyBySlug.mockResolvedValue({ ...company, logo_url })
+    const html = renderToStaticMarkup(await CompanyDetailPage({ params: params() }))
+    const hero = html.match(/<section\b[^>]*>[\s\S]*?<\/section>/)?.[0]
+    expect(hero).toContain('data-employer-logo="initials"')
+    expect(hero).toContain('h-16 w-16 rounded-xl text-xl')
+    expect(hero).not.toContain('<img')
+    expect(hero).not.toContain(logo_url)
+  })
+
+  it('preserves the original Building2 tile when no registered logo is present', async () => {
+    const html = renderToStaticMarkup(await CompanyDetailPage({ params: params() }))
+    const hero = html.match(/<section\b[^>]*>[\s\S]*?<\/section>/)?.[0]
+    expect(hero).toContain('lucide-building-2')
+    expect(hero).toContain('w-16 h-16 shrink-0 bg-white/10 rounded-xl flex items-center justify-center')
+    expect(hero).not.toContain('data-employer-logo')
+  })
+
+  it('does not alter metadata, canonical or Organization when membership changes', async () => {
+    const ordinaryMetadata = await generateMetadata({ params: params() })
+    const ordinaryHtml = renderToStaticMarkup(await CompanyDetailPage({ params: params() }))
+    mocks.getCompanyBySlug.mockResolvedValue({ ...company, is_member: true })
+    expect(await generateMetadata({ params: params() })).toEqual(ordinaryMetadata)
+    const memberHtml = renderToStaticMarkup(await CompanyDetailPage({ params: params() }))
+    expect(memberHtml.match(/<script type="application\/ld\+json">[\s\S]*?<\/script>/)?.[0]).toBe(ordinaryHtml.match(/<script type="application\/ld\+json">[\s\S]*?<\/script>/)?.[0])
+  })
+
+  it.each([{ site_id: 2 }, { site_code: 'MX' }, { public_profile_slug: 'bad/slug' }, { status: 'pending' }])('cannot expose a member header for a malformed or cross-region public company: %j', async changes => {
+    mocks.getCompanyBySlug.mockResolvedValue({ ...company, is_member: true, ...changes })
+    await expect(CompanyDetailPage({ params: params() })).rejects.toThrow('NEXT_HTTP_ERROR_FALLBACK;404')
+  })
+
+  it.each([{ url_prefix: '/' }, { is_active: false }, { country_code: 'MX' }, { locale: 'invalid' }])('cannot render a member header in an invalid region: %j', async changes => {
+    mocks.getCompanyBySlug.mockResolvedValue({ ...company, is_member: true })
+    mocks.getSiteContext.mockResolvedValue({ site: { ...site, ...changes }, locale: site.locale })
+    await expect(CompanyDetailPage({ params: params() })).rejects.toThrow('NEXT_HTTP_ERROR_FALLBACK;404')
+  })
+
   it.each([{ companySlug: 'wrong' }, { companySlug: 'MegaSoft' }, { companySlug: 'megasoft/' }, { companySlug: 'search' }, { companySlug: 'by-slug' }, { companySlug: 'empresa-confidencial' }, { companySlug: '123-456' }, { companySlug: 'mega%73oft' }, { companySlug: 'bad--slug' }, { companySlug: 'a'.repeat(141) }, { companySlug: '04' }, { companySlug: '0' }, { companySlug: '9007199254740992' }, { collection: 'companies' }, { country: 'mx' }])('fails route mismatch %j with noindex and no redirect', async changes => {
     const metadata = await generateMetadata({ params: params(changes) })
     expect(metadata).toEqual({ title: 'Empresa não encontrada', robots: { index: false, follow: false } })
