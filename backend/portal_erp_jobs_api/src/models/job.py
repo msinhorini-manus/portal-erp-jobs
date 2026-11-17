@@ -155,10 +155,19 @@ class Job(db.Model):
         elif self.area:
             area_name = self.area
 
+        public_identity = self.public_identity_dict()
         data = {
             'id': self.id,
             'company_id': self.company_id,
-            **self.public_identity_dict(),
+            **public_identity,
+            # Reuse the resolved identity and loaded regional membership.
+            # Match the public company DTO without an extra eligibility query.
+            'company_logo_url': (
+                next((
+                    membership.logo_url if membership.logo_url is not None else self.company.logo_url
+                    for membership in self.company.site_memberships if membership.site_id == self.site_id
+                ), None) if public_identity['company_profile_slug'] else None
+            ),
             'title': self.title,
             'area': area_name,
             'area_id': self.area_id,

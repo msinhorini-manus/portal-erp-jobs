@@ -4,8 +4,12 @@ import { Metadata } from 'next'
 import Link from '@/components/RegionalLink'
 import { notFound } from 'next/navigation'
 import { getJobById } from '@/lib/api'
-import { MapPin, Building2, Clock, DollarSign, Briefcase, Globe, Users, ArrowLeft } from 'lucide-react'
+import { MapPin, Building2, Briefcase, Users, ArrowLeft, ArrowRight, FileText, ListChecks, Gift, Send, Code2, ChartNoAxesColumnIncreasing, type LucideIcon } from 'lucide-react'
 import { ApplyButton } from '@/components/ApplyButton'
+import { EmployerLogo } from '@/components/EmployerLogo'
+import { JobText } from '@/components/JobText'
+import { hasJobText, jobCandidateLinks, jobDisplayDescription, jobEmployer, sanitizeJobCompany } from '@/lib/job-presentation'
+import { regionalizePath } from '@/lib/regional-routes'
 import { getSiteContext } from '@/lib/site-resolver.server'
 import { openGraphLocale } from '@/lib/site'
 import { assertPublicRegionalJob, canonicalJobId, jobCollection, publicJobCanonical, publicJobPath } from '@/lib/public-job-url'
@@ -23,8 +27,8 @@ async function loadPublicJob(params: Props['params']) {
   assertPublicRegionalJob(raw, context.site, jobId)
   const requestedPath = `${context.site.url_prefix}/${collection}/${companySlug}/${titleSlug}/${id}`
   if (requestedPath !== publicJobPath(raw, context.site)) notFound()
-  // Do not serialize the real organization to metadata/UI/client props when hidden.
-  const job = raw.is_company_hidden ? { ...raw, company_name: 'Empresa Confidencial', company: null, company_description: null } : raw
+  // This boundary is authoritative even if the backend returns an unsanitized DTO.
+  const job = { ...sanitizeJobCompany(raw), description: jobDisplayDescription(raw.description) }
   return { job, site: context.site }
 }
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -43,6 +47,18 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     }
   } catch { return { title: 'Vaga não encontrada', robots: { index: false, follow: false } } }
 }
+
+function SectionHeading({ title, icon: Icon, id }: { title: string; icon: LucideIcon; id?: string }) {
+  return (
+    <div className="mb-4 flex items-center gap-4">
+      <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-teal-50 text-teal-700">
+        <Icon className="h-5 w-5" aria-hidden="true" />
+      </span>
+      <h2 id={id} className="font-display text-lg font-bold leading-snug text-portal-dark sm:text-xl">{title}</h2>
+    </div>
+  )
+}
+
 export default async function JobDetailPage({ params }: Props) {
   let data: Awaited<ReturnType<typeof loadPublicJob>>
   try { data = await loadPublicJob(params) } catch { notFound() }
@@ -51,36 +67,37 @@ export default async function JobDetailPage({ params }: Props) {
   const jobPath = publicJobPath(job, site)
   const companyPath = publicJobCompanyPath(job, site)
   const companyCanonical = companyPath ? `${requireCanonicalOrigin(site)}${companyPath}` : null
+  const employer = jobEmployer(job)
+  const candidateLinks = jobCandidateLinks(site.url_prefix, jobPath)
+  const jobsPath = `${site.url_prefix}/${jobCollection(site.locale)}`
   const modalityLabel: Record<string, string> = {
-    remote: 'Remoto',
-    hybrid: 'Híbrido',
-    onsite: 'Presencial',
+    remote: 'Remoto', hybrid: 'Híbrido', onsite: 'Presencial',
   }
-
   const levelLabel: Record<string, string> = {
-    junior: 'Júnior',
-    pleno: 'Pleno',
-    senior: 'Sênior',
-    tech_lead: 'Tech Lead',
-    manager: 'Gerente',
+    junior: 'Júnior', pleno: 'Pleno', senior: 'Sênior', tech_lead: 'Tech Lead', manager: 'Gerente',
   }
-
+  const contractLabel: Record<string, string> = {
+    clt: 'CLT', pj: 'PJ', contractor: 'Contrato', internship: 'Estágio', estágio: 'Estágio', part_time: 'Meio período', temporary: 'Temporário',
+  }
   const formatSalary = (value?: number) => {
-    if (!value) return null
-    return `R$ ${value.toLocaleString('pt-BR')}`
+    if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return null
+    const currency = job.salary_currency || 'BRL'
+    try { return new Intl.NumberFormat(site.locale, { style: 'currency', currency, maximumFractionDigits: 0 }).format(value) }
+    catch { return `${currency} ${value.toLocaleString(site.locale)}` }
   }
-
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return ''
     const date = new Date(dateStr)
+    if (Number.isNaN(date.getTime())) return ''
     return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
   }
-
   const employmentType: Record<string, string> = {
     clt: 'FULL_TIME', pj: 'CONTRACTOR', contractor: 'CONTRACTOR', internship: 'INTERN', estágio: 'INTERN', part_time: 'PART_TIME', temporary: 'TEMPORARY',
   }
   const minSalary = job.min_salary ?? job.salary_min
   const maxSalary = job.max_salary ?? job.salary_max
+  const salary = [formatSalary(minSalary), formatSalary(maxSalary)].filter(Boolean).join(' – ')
+  const published = formatDate(job.created_at)
   const organization = job.company || {}
   const jobPosting: Record<string, unknown> = {
     '@context': 'https://schema.org',
@@ -94,9 +111,9 @@ export default async function JobDetailPage({ params }: Props) {
     hiringOrganization: {
       '@type': 'Organization',
       ...(companyCanonical ? { '@id': `${companyCanonical}#organization`, url: companyCanonical } : {}),
-      name: job.company_name || organization.company_name,
+      name: employer.name,
       ...(organization.website ? { sameAs: organization.website } : {}),
-      ...(organization.logo_url ? { logo: organization.logo_url } : {}),
+      ...(employer.logo ? { logo: employer.logo } : {}),
     },
     directApply: true,
     url: canonical,
@@ -124,149 +141,121 @@ export default async function JobDetailPage({ params }: Props) {
     ...(job.skills?.length ? { skills: job.skills.join(', ') } : {}),
     ...(job.area ? { industry: job.area } : {}),
   }
+  const cardClass = 'min-w-0 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6'
+  const information = [
+    ['Contrato', job.contract_type && (contractLabel[String(job.contract_type).toLowerCase()] || job.contract_type)],
+    ['Área', job.area],
+    ['Modalidade', job.work_modality && (modalityLabel[job.work_modality] || job.work_modality)],
+    ['Nível', job.seniority_level && (levelLabel[job.seniority_level] || job.seniority_level)],
+    ['Localização', job.location],
+  ].filter(([, value]) => Boolean(value))
 
   return (
-    <div className="bg-gray-50 min-h-screen">
+    <div className="min-h-screen bg-slate-50 pb-10">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jobPosting).replace(/</g, '\\u003c') }} />
-      {/* Header */}
-      <section className="bg-portal-dark text-white py-8">
-        <div className="container mx-auto px-6">
-          <Link href="/vagas" className="inline-flex items-center gap-2 text-white/70 hover:text-white mb-4 text-sm">
-            <ArrowLeft className="w-4 h-4" />
-            Voltar para vagas
-          </Link>
-          <h1 className="text-3xl font-bold mb-2">{job.title}</h1>
-          <div className="flex flex-wrap items-center gap-4 text-white/80">
-            {job.company_name && (
-              <span className="flex items-center gap-1.5">
-                <Building2 className="w-4 h-4" />
-                {companyPath ? <Link href={companyPath}>{job.company_name}</Link> : job.company_name}
-              </span>
-            )}
-            {job.location && (
-              <span className="flex items-center gap-1.5">
-                <MapPin className="w-4 h-4" />
-                {job.location}
-              </span>
-            )}
-            {job.work_modality && (
-              <span className="bg-white/20 px-3 py-1 rounded-full text-sm">
-                {modalityLabel[job.work_modality] || job.work_modality}
-              </span>
-            )}
-            {job.seniority_level && (
-              <span className="bg-white/20 px-3 py-1 rounded-full text-sm">
-                {levelLabel[job.seniority_level] || job.seniority_level}
-              </span>
-            )}
-          </div>
-        </div>
-      </section>
+      <div className="mx-auto max-w-7xl px-5 pt-5 sm:px-6">
+        <nav aria-label="Navegação estrutural" className="mb-5 flex flex-wrap items-center gap-3 text-sm text-slate-500">
+          <Link href={regionalizePath(site.url_prefix, '/')} className="hover:text-portal-dark">Início</Link>
+          <span aria-hidden="true">/</span>
+          <Link href={jobsPath} className="hover:text-portal-dark">Vagas</Link>
+          {job.area && <><span aria-hidden="true">/</span><span className="break-words">{job.area}</span></>}
+        </nav>
+        <Link href={jobsPath} className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-portal-dark">
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+          Voltar para vagas
+        </Link>
 
-      {/* Content */}
-      <div className="container mx-auto px-6 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Main Content */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Description */}
-            <div className="bg-white rounded-xl p-6 shadow-sm">
-              <h2 className="text-xl font-bold text-portal-dark mb-4">Descrição da Vaga</h2>
-              <div className="prose prose-gray max-w-none">
-                <p className="text-gray-700 whitespace-pre-wrap">{job.description || 'Descrição não disponível.'}</p>
-              </div>
-            </div>
-
-            {/* Requirements */}
-            {job.requirements && (
-              <div className="bg-white rounded-xl p-6 shadow-sm">
-                <h2 className="text-xl font-bold text-portal-dark mb-4">Requisitos</h2>
-                <p className="text-gray-700 whitespace-pre-wrap">{job.requirements}</p>
-              </div>
-            )}
-
-            {/* Technologies */}
-            {job.technologies && (Array.isArray(job.technologies) ? job.technologies : []).length > 0 && (
-              <div className="bg-white rounded-xl p-6 shadow-sm">
-                <h2 className="text-xl font-bold text-portal-dark mb-4">Tecnologias</h2>
-                <div className="flex flex-wrap gap-2">
-                  {(Array.isArray(job.technologies) ? job.technologies : []).map((tech: string, i: number) => (
-                    <span key={i} className="bg-portal-orange/10 text-portal-orange px-3 py-1.5 rounded-lg text-sm font-medium">
-                      {tech}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Benefits */}
-            {job.benefits && (
-              <div className="bg-white rounded-xl p-6 shadow-sm">
-                <h2 className="text-xl font-bold text-portal-dark mb-4">Benefícios</h2>
-                <p className="text-gray-700 whitespace-pre-wrap">{job.benefits}</p>
-              </div>
-            )}
-          </div>
-
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Apply Card */}
-            <div className="bg-white rounded-xl p-6 shadow-sm border-2 border-portal-orange/20">
-              {(minSalary || maxSalary) && (
-                <div className="mb-4">
-                  <p className="text-sm text-gray-500 mb-1">Faixa Salarial</p>
-                  <p className="text-2xl font-bold text-portal-orange">
-                    {[formatSalary(minSalary), formatSalary(maxSalary)].filter(Boolean).join(' – ')}
-                  </p>
-                </div>
+        <section aria-labelledby="job-title" className="relative overflow-hidden rounded-2xl bg-portal-dark px-5 py-7 text-white sm:px-8 sm:py-9">
+          <div aria-hidden="true" className="pointer-events-none absolute -right-24 -top-36 h-96 w-96 rounded-full border-[48px] border-white/[0.03]" />
+          <div aria-hidden="true" className="pointer-events-none absolute -bottom-48 -right-20 h-80 w-80 rounded-full bg-teal-500/[0.06]" />
+          <div className="relative flex min-w-0 flex-col items-start gap-5 sm:flex-row sm:items-center sm:gap-7">
+            <EmployerLogo name={employer.name} src={employer.logo} hidden={employer.hidden} size="hero" />
+            <div className="min-w-0 flex-1">
+              {employer.name && (
+                <p className="mb-2 break-words font-semibold text-white/90">
+                  {companyPath ? <Link href={companyPath} className="underline decoration-white/40 underline-offset-4 hover:decoration-white">{employer.name}</Link> : employer.name}
+                </p>
               )}
-              <ApplyButton jobId={job.id} jobPath={jobPath} />
-              <p className="text-xs text-gray-400 mt-3 text-center">
-                Publicada em {formatDate(job.created_at)}
-              </p>
-            </div>
-
-            {/* Job Info */}
-            <div className="bg-white rounded-xl p-6 shadow-sm">
-              <h3 className="font-bold text-portal-dark mb-4">Informações da Vaga</h3>
-              <div className="space-y-3 text-sm">
-                {job.contract_type && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-500">Contrato</span>
-                    <span className="font-medium">{job.contract_type}</span>
-                  </div>
-                )}
-                {job.area && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-500">Área</span>
-                    <span className="font-medium">{job.area}</span>
-                  </div>
-                )}
-                {job.work_modality && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-500">Modalidade</span>
-                    <span className="font-medium">{modalityLabel[job.work_modality] || job.work_modality}</span>
-                  </div>
-                )}
-                {job.seniority_level && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-500">Nível</span>
-                    <span className="font-medium">{levelLabel[job.seniority_level] || job.seniority_level}</span>
-                  </div>
-                )}
+              <h1 id="job-title" className="break-words font-display text-3xl font-bold leading-tight sm:text-4xl lg:text-[2.5rem]">{job.title}</h1>
+              <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-3 text-sm text-white/85">
+                {job.location && <span className="flex min-w-0 items-center gap-2"><MapPin className="h-4 w-4 shrink-0" aria-hidden="true" /><span className="break-words">{job.location}</span></span>}
+                {job.work_modality && <span className="rounded-full bg-white/10 px-4 py-1">{modalityLabel[job.work_modality] || job.work_modality}</span>}
+                {job.contract_type && <span className="flex items-center gap-2"><Briefcase className="h-4 w-4 shrink-0" aria-hidden="true" />{contractLabel[String(job.contract_type).toLowerCase()] || job.contract_type}</span>}
+                {job.seniority_level && <span className="flex items-center gap-2"><ChartNoAxesColumnIncreasing className="h-4 w-4 shrink-0" aria-hidden="true" />{levelLabel[job.seniority_level] || job.seniority_level}</span>}
               </div>
+              {published && <p className="mt-4 text-xs text-white/65">Publicada em {published}</p>}
             </div>
+          </div>
+        </section>
 
-            {/* Company Info */}
-            {!job.is_company_hidden && job.company_name && (
-              <div className="bg-white rounded-xl p-6 shadow-sm">
-                <h3 className="font-bold text-portal-dark mb-4">Sobre a Empresa</h3>
-                <p className="font-medium text-lg mb-2">{companyPath ? <Link href={companyPath} className="hover:text-portal-orange">{job.company_name}</Link> : job.company_name}</p>
-                {job.company_description && (
-                  <p className="text-gray-600 text-sm">{job.company_description}</p>
-                )}
-              </div>
+        <div className="mt-6 grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:gap-6">
+          <div className="min-w-0 space-y-5">
+            <section className={cardClass} aria-labelledby="job-about">
+              <SectionHeading id="job-about" title="Sobre a oportunidade" icon={FileText} />
+              <div className="sm:pl-[60px]"><JobText text={job.description || 'Descrição não disponível.'} variant="text" /></div>
+            </section>
+            {hasJobText(job.responsibilities) && (
+              <section className={cardClass} aria-labelledby="job-responsibilities">
+                <SectionHeading id="job-responsibilities" title="O que você vai fazer" icon={ListChecks} />
+                <div className="sm:pl-[60px]"><JobText text={job.responsibilities} /></div>
+              </section>
+            )}
+            {hasJobText(job.requirements) && (
+              <section className={cardClass} aria-labelledby="job-requirements">
+                <SectionHeading id="job-requirements" title="O que buscamos" icon={Users} />
+                <div className="sm:pl-[60px]"><JobText text={job.requirements} /></div>
+              </section>
+            )}
+            {hasJobText(job.benefits) && (
+              <section className={cardClass} aria-labelledby="job-benefits">
+                <SectionHeading id="job-benefits" title="Benefícios" icon={Gift} />
+                <div className="sm:pl-[60px]"><JobText text={job.benefits} variant="chips" /></div>
+              </section>
+            )}
+            {Array.isArray(job.technologies) && job.technologies.length > 0 && (
+              <section className={cardClass} aria-labelledby="job-technologies">
+                <SectionHeading id="job-technologies" title="Tecnologias" icon={Code2} />
+                <ul className="flex flex-wrap gap-2 sm:pl-[60px]">
+                  {job.technologies.map((tech: string, index: number) => <li key={index} className="max-w-full whitespace-pre-wrap break-words rounded-lg bg-teal-50 px-3 py-1.5 text-sm font-medium text-teal-800">{tech}</li>)}
+                </ul>
+              </section>
             )}
           </div>
+
+          <aside className="min-w-0 space-y-5" aria-label="Candidatura e informações da vaga">
+            <section className={cardClass} aria-labelledby="job-apply">
+              <SectionHeading id="job-apply" title="Sua próxima oportunidade" icon={Send} />
+              {salary && <div className="mb-5"><p className="mb-1 text-sm text-slate-500">Faixa salarial</p><p className="break-words text-xl font-bold text-portal-orange">{salary}</p></div>}
+              <ApplyButton jobId={job.id} jobPath={jobPath} />
+              <p className="mt-3 text-center text-sm leading-6 text-slate-600">Entre ou crie sua conta para se candidatar.</p>
+              <div className="mt-2 flex flex-wrap items-center justify-center gap-4 text-sm font-semibold text-teal-700">
+                <Link href={candidateLinks.login} className="hover:underline">Entrar</Link>
+                <span aria-hidden="true" className="font-normal text-slate-300">|</span>
+                <Link href={candidateLinks.register} className="hover:underline">Criar conta</Link>
+              </div>
+            </section>
+            {information.length > 0 && (
+              <section className={cardClass} aria-labelledby="job-information">
+                <SectionHeading id="job-information" title="Informações da vaga" icon={FileText} />
+                <dl className="divide-y divide-slate-100 text-sm">
+                  {information.map(([label, value]) => <div key={label} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)] gap-4 py-2.5"><dt className="text-slate-500">{label}</dt><dd className="break-words font-medium text-slate-700">{value}</dd></div>)}
+                </dl>
+              </section>
+            )}
+            {!employer.hidden && employer.name && (
+              <section className={cardClass} aria-labelledby="job-company">
+                <SectionHeading id="job-company" title="Sobre a empresa" icon={Building2} />
+                <div className="flex items-start gap-4">
+                  <EmployerLogo name={employer.name} src={employer.logo} hidden={employer.hidden} size="sidebar" />
+                  <div className="min-w-0 flex-1">
+                    <p className="break-words font-bold text-portal-dark">{companyPath ? <Link href={companyPath} className="hover:text-teal-700">{employer.name}</Link> : employer.name}</p>
+                    <JobText text={employer.description} variant="text" className="mt-2 text-sm" />
+                    {companyPath && <Link href={companyPath} className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-teal-700 hover:underline">Ver perfil da empresa<ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" /></Link>}
+                  </div>
+                </div>
+              </section>
+            )}
+          </aside>
         </div>
       </div>
     </div>

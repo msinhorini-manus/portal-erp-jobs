@@ -1,12 +1,9 @@
-import { publicJobCompanyPath, type PublicJobCompanyData } from '@/lib/public-company-url'
-import { publicJobPath, type PublicJobUrlData } from '@/lib/public-job-url'
 import { pageMetadata } from '@/lib/regional-seo.server'
 import type { Metadata } from 'next'
 import Link from '@/components/RegionalLink'
 import {
   ArrowRight,
   Brain,
-  BriefcaseBusiness,
   CheckCircle,
   Cloud,
   Code2,
@@ -15,7 +12,6 @@ import {
   FileText,
   GraduationCap,
   Headphones,
-  MapPin,
   Megaphone,
   Palette,
   Settings,
@@ -28,7 +24,9 @@ import {
 } from 'lucide-react'
 
 import { HeroSearch } from '@/components/HeroSearch'
-import { getAreas, getDashboardStats, getJobs } from '@/lib/api'
+import { RecentJobs } from '@/components/RecentJobs'
+import { getAreas, getJobs } from '@/lib/api'
+import type { RecentJob } from '@/lib/recent-jobs'
 import { requireRegionalBaseUrl } from '@/lib/site'
 import { getSiteContext } from '@/lib/site-resolver.server'
 
@@ -72,88 +70,45 @@ const colorMap: Record<string, string> = {
   gray: 'bg-slate-600',
 }
 
-type Job = PublicJobUrlData & PublicJobCompanyData & {
-  id: number
-  title?: string
-  company_name?: string
-  location?: string
-  city?: string
-  state?: string
-  work_modality?: string
-}
-
 export default async function HomePage() {
   let areas: Array<{ id: number; name: string; description?: string; icon?: string; color?: string; job_count?: number }> = []
-  let jobs: Job[] = []
-  let stats: { active_jobs?: number; total_companies?: number; total_candidates?: number } = {}
+  let jobs: RecentJob[] = []
+  const { site } = await getSiteContext()
+  const origin = requireRegionalBaseUrl(site)
 
   try { areas = await getAreas() } catch (error) { console.error('Failed to fetch areas:', error) }
   try {
-    const jobsData = await getJobs()
-    jobs = Array.isArray(jobsData) ? jobsData : jobsData?.jobs || []
+    const jobsData = await getJobs({ per_page: '20' })
+    jobs = Array.isArray(jobsData) ? jobsData : Array.isArray(jobsData?.jobs) ? jobsData.jobs : []
   } catch (error) { console.error('Failed to fetch jobs:', error) }
-  try { stats = await getDashboardStats() } catch (error) { console.error('Failed to fetch dashboard stats:', error) }
 
-  const featuredJobs = jobs.slice(0, 2)
-  const { site } = await getSiteContext()
-  const origin = requireRegionalBaseUrl(site)
   const structuredData = {
     '@context': 'https://schema.org',
     '@graph': [
       { '@type': 'Organization', '@id': `${origin}/#organization`, name: 'Portal ERP Group', url: 'https://portalerp.com', logo: `${site.canonical_origin}/icon.png` },
-      { '@type': 'WebSite', '@id': `${origin}/#website`, name: 'Jobs by Portal ERP', url: origin, publisher: { '@id': `${origin}/#organization` }, inLanguage: site.locale, potentialAction: { '@type': 'SearchAction', target: `${origin}/vagas?q={search_term_string}`, 'query-input': 'required name=search_term_string' } },
+      { '@type': 'WebSite', '@id': `${origin}/#website`, name: 'Portal ERP Jobs', url: origin, publisher: { '@id': `${origin}/#organization` }, inLanguage: site.locale, potentialAction: { '@type': 'SearchAction', target: `${origin}/vagas?q={search_term_string}`, 'query-input': 'required name=search_term_string' } },
     ],
   }
 
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, '\\u003c') }} />
-      <section className="overflow-hidden bg-[linear-gradient(135deg,#eff5f6_0%,#ffffff_52%,#fff7ec_100%)] py-16 sm:py-20 lg:py-24">
-        <div className="container mx-auto grid items-center gap-12 px-6 lg:grid-cols-[1.08fr_0.92fr]">
-          <div>
-            <p className="mb-5 text-xs font-extrabold uppercase tracking-[0.18em] text-orange-700 sm:text-sm">
-              Carreiras e talentos do ecossistema Portal ERP
-            </p>
-            <h1 className="max-w-3xl font-display text-4xl font-extrabold leading-[1.05] tracking-[-0.045em] text-portal-dark sm:text-5xl lg:text-6xl">
-              O mercado de software trabalha aqui.
-            </h1>
-            <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-600 sm:text-xl">
-              Encontre oportunidades, talentos especializados e contexto para avançar no mercado de software de gestão.
-            </p>
-            <div className="mt-8 max-w-3xl"><HeroSearch /></div>
-
-            <div className="mt-7 grid grid-cols-3 gap-3 sm:max-w-2xl sm:gap-6">
-              <div><strong className="block font-display text-2xl text-portal-dark">{stats.active_jobs ?? jobs.length}+</strong><span className="text-xs text-slate-600 sm:text-sm">Vagas ativas</span></div>
-              <div><strong className="block font-display text-2xl text-portal-dark">{stats.total_companies ?? 0}+</strong><span className="text-xs text-slate-600 sm:text-sm">Empresas</span></div>
-              <div><strong className="block font-display text-2xl text-portal-dark">{stats.total_candidates ?? 0}+</strong><span className="text-xs text-slate-600 sm:text-sm">Profissionais</span></div>
-            </div>
-          </div>
-
-          <aside className="rounded-[2rem] bg-portal-dark p-6 text-white shadow-[0_24px_60px_rgba(15,37,48,0.22)] sm:p-8" aria-label="Vagas em destaque">
-            <div className="flex items-center justify-between gap-4">
-              <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-orange-300">Vagas em destaque</p>
-              <BriefcaseBusiness className="h-6 w-6 text-portal-orange" />
-            </div>
-            <div className="mt-6 space-y-4">
-              {featuredJobs.length > 0 ? featuredJobs.map((job) => {
-                const location = job.location || [job.city, job.state].filter(Boolean).join(', ') || 'Local a definir'
-                return (
-                  <div key={job.id} className="block rounded-2xl border border-white/5 bg-white/[0.06] p-5 transition hover:border-portal-orange/50 hover:bg-white/10">
-                    <h2 className="font-display text-xl font-bold text-white"><Link href={publicJobPath(job, site)}>{job.title || 'Oportunidade no mercado de software'}</Link></h2>
-                    <p className="mt-2 text-sm text-white/65">{job.is_company_hidden ? 'Empresa Confidencial' : publicJobCompanyPath(job, site) ? <Link href={publicJobCompanyPath(job, site)!}>{job.company_name || 'Empresa do ecossistema'}</Link> : job.company_name || 'Empresa do ecossistema'}</p>
-                    <p className="mt-3 flex items-center gap-2 text-sm font-semibold text-teal-300"><MapPin className="h-4 w-4" />{location}</p>
-                  </div>
-                )
-              }) : (
-                <div className="rounded-2xl border border-white/5 bg-white/[0.06] p-6 text-white/70">Novas oportunidades serão publicadas aqui.</div>
-              )}
-            </div>
-            <Link href="/vagas" className="mt-6 inline-flex items-center gap-2 font-bold text-orange-300 hover:text-white">
-              Ver todas as vagas <ArrowRight className="h-4 w-4" />
-            </Link>
-          </aside>
+      <section className="overflow-hidden bg-[linear-gradient(135deg,#eff5f6_0%,#ffffff_52%,#fff7ec_100%)] py-8 sm:py-10">
+        <div className="container mx-auto px-6 text-center">
+          <p className="mb-3 text-xs font-extrabold uppercase tracking-[0.18em] text-orange-700">
+            Carreiras e talentos do ecossistema Portal ERP
+          </p>
+          <h1 className="mx-auto max-w-6xl font-display text-3xl font-extrabold leading-[1.1] tracking-[-0.045em] text-portal-dark sm:text-4xl lg:text-5xl">
+            O mercado de software trabalha aqui.
+          </h1>
+          <p className="mx-auto mt-3 max-w-4xl text-base leading-7 text-slate-600 sm:text-lg">
+            Encontre oportunidades, talentos especializados e contexto para avançar no mercado de software de gestão.
+          </p>
+          <div className="mx-auto mt-5 max-w-4xl text-left"><HeroSearch /></div>
         </div>
       </section>
+
+      <RecentJobs jobs={jobs} site={site} />
 
       <section className="bg-slate-50 py-16">
         <div className="container mx-auto px-6">
