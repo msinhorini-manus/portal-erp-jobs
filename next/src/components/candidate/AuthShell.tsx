@@ -24,7 +24,7 @@ export function AuthShell({
         </Link>
         <div className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-[0_22px_55px_rgba(15,37,48,0.13)] sm:p-8">
           <div className="mb-7 text-center">
-            <p className="mb-3 text-xs font-extrabold uppercase tracking-[0.18em] text-orange-700">O mercado de software trabalha aqui</p>
+            <p className="mb-3 text-xs font-extrabold uppercase tracking-[0.18em] text-orange-700">O mercado de tecnologia trabalha aqui</p>
             <h1 className="font-display text-3xl font-extrabold tracking-tight text-portal-dark">{title}</h1>
             <p className="mt-3 text-sm leading-6 text-slate-600">{description}</p>
           </div>
