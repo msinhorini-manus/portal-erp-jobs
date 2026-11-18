@@ -14,7 +14,7 @@ type Props = {
 
 const sizeClasses = {
   card: 'h-8 w-8 rounded-lg text-[11px]',
-  mosaic: 'h-10 w-10 rounded-lg text-xs',
+  mosaic: 'h-12 w-12 rounded-lg text-xs',
   hero: 'h-20 w-20 rounded-2xl text-2xl sm:h-24 sm:w-24',
   sidebar: 'h-12 w-12 rounded-xl text-sm',
   profile: 'h-16 w-16 rounded-xl text-xl',

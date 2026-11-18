@@ -21,13 +21,13 @@ describe('recent jobs HTML', () => {
   ] as const)('keeps the original logo size outside the mosaic: %s', (size, classes) => {
     const html = renderToStaticMarkup(<EmployerLogo name="Empresa" src="https://example.invalid/logo.png" size={size} />)
     expect(html).toContain(classes)
-    expect(html).not.toContain('h-10 w-10')
+    if (size !== 'sidebar') expect(html).not.toContain('h-12 w-12')
   })
 
 
-  it('renders the real company logo with reserved 40px dimensions, full title, location, modality, contract and site-local publication', () => {
+  it('renders the real company logo with reserved 48px dimensions, full title, location, modality, contract and site-local publication', () => {
     const html = render([job()])
-    for (const text of ['Vagas mais recentes', 'Empresa pública de teste', 'https://example.invalid/logo.png', 'h-10 w-10', 'Consultoria ERP com título completo e sem corte para uma oportunidade especializada', 'São Paulo, SP', '>Híbrido</span>', '>CLT</span>', '16/11/2026', 'dateTime="2026-11-17T01:00:00.000Z"', 'Publicada em 16/11/2026']) expect(html).toContain(text)
+    for (const text of ['Vagas mais recentes', 'Empresa pública de teste', 'https://example.invalid/logo.png', 'h-12 w-12', 'Consultoria ERP com título completo e sem corte para uma oportunidade especializada', 'São Paulo, SP', '>Híbrido</span>', '>CLT</span>', '16/11/2026', 'dateTime="2026-11-17T01:00:00.000Z"', 'Publicada em 16/11/2026']) expect(html).toContain(text)
     expect(html).toContain('href="/br/empresas/perfil-publico"')
     expect(html.match(/href="\/br\/vagas\/marca-da-vaga\/consultoria-erp\/1"/g)).toHaveLength(2)
     expect(html).not.toContain('line-clamp')
@@ -37,13 +37,13 @@ describe('recent jobs HTML', () => {
     expect(html).toContain('pt-1 text-sm font-semibold leading-5 text-slate-600')
   })
 
-  it('adds one full navy tab and thin navy-gray frame only to an eligible member, retaining its 40px logo', () => {
+  it('adds one full navy tab and thin navy-gray frame only to an eligible member, retaining its 48px logo', () => {
     const html = render([job({ company_is_member: true })])
     expect(html.match(/Membro Ecossistema Portal ERP/g)).toHaveLength(1)
     expect(html).toContain('data-member-badge="card"')
     expect(html).toContain('bg-portal-dark')
     expect(html).toContain('border-portal-dark/30')
-    expect(html).toContain('h-10 w-10')
+    expect(html).toContain('h-12 w-12')
     expect(html).toContain('href="/br/empresas/perfil-publico"')
     expect(html).not.toContain('bg-talent-teal')
     expect(html).not.toContain('line-clamp')
@@ -80,7 +80,7 @@ describe('recent jobs HTML', () => {
     const html = render([job({ company_is_member: true, is_company_hidden: true, company_name: 'CONFIDENTIAL_NAME', company_logo_url: 'https://example.invalid/SECRET_LOGO.png', company_profile_slug: 'secret-profile', public_company_slug: 'secret-brand', company: { name: 'SECRET_NESTED_NAME' } })])
     expect(html).toContain('Empresa confidencial')
     expect(html).toContain('data-employer-logo="confidential"')
-    expect(html).toContain('h-10 w-10')
+    expect(html).toContain('h-12 w-12')
     expect(html).toContain('/br/vagas/empresa-confidencial/consultoria-erp/1')
     for (const text of ['CONFIDENTIAL_NAME', 'SECRET_LOGO', 'secret-profile', 'secret-brand', 'SECRET_NESTED_NAME', '/br/empresas/', 'Membro Ecossistema Portal ERP', 'data-member-badge', 'border-portal-dark/30']) expect(html).not.toContain(text)
   })
@@ -133,7 +133,7 @@ describe('recent jobs HTML', () => {
     const html = render([job({ location: undefined, city: 'Curitiba', state: 'PR', created_at: 'invalid', work_modality: undefined, contract_type: undefined, company_logo_url: null })])
     expect(html).toContain('Curitiba, PR')
     expect(html).toContain('data-employer-logo="initials"')
-    expect(html).toContain('h-10 w-10')
+    expect(html).toContain('h-12 w-12')
     expect(html).not.toContain('<time')
     expect(html).not.toContain('CLT')
     expect(html).not.toContain('Híbrido')
