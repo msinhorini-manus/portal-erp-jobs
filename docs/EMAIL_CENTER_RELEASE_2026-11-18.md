@@ -67,3 +67,7 @@ Revisão independente estática executada e achados confirmados corrigidos. Os t
 4. Autorizar separadamente release/deploy e eventual atribuição de capacidades. Manter disparos, teste real, países adicionais e backlog desligados.
 
 Evento/outbox/processador, escolha efetiva do responsável, preferências empresariais, histórico de envio, homologação do transporte e comprovação de recebimento pertencem a fases futuras. Nenhum desses pontos foi ativado ou homologado por esta entrega.
+
+## Registro de entrega
+
+Código enviado à branch `feat-admin-email-center-20261118`; commit de implementação **`b0db1d3`**. **[PR #32 — Central de E-mails](https://github.com/msinhorini-manus/portal-erp-jobs/pull/32)** aberto contra `wave-transactional-mail-api-20261118`. Main e os PRs anteriores não foram mesclados. O commit documental posterior fecha este registro/checklist, sem mudanças no código testado. A entrega via GitHub não é publicação no servidor.

@@ -6,6 +6,6 @@
 - [x] Preservar texto local em falhas/conflitos e avisar de mudanças não salvas ao sair/trocar idioma, mostrar erro por campo, confirmação com foco e bloqueio de repetição; não indicar salvo antes da API confirmar. Não expor currículo, contatos de candidato, credenciais ou destinatário livre.
 - [x] Exibir regra application.created → responsável elegível da empresa/região → Brasil/pt-BR → template publicado, com gates e estado não implementado; ativação e envio de teste indisponíveis, com motivo acessível. Histórico de envio sem dados fictícios ou claims de entrega; auditoria editorial separada.
 - [x] Manter fluxos por teclado e responsivos: sidebar recolhível, filtros empilhados, tabela rolável, editor/prévia alternáveis no mobile e confirmações com foco controlado. Backend valida autenticação/capacidades/escopo em todos os endpoints.
-- [ ] Entregar código testado em branch/PR isolado, sem deploy, alteração de dados vivos, disparos, worker, ativação de países ou merge da cadeia anterior. Registrar resultados reais e pendências de migração/homologação.
+- [x] Entregar código testado em branch/PR isolado, sem deploy, alteração de dados vivos, disparos, worker, ativação de países ou merge da cadeia anterior. Registrar resultados reais e pendências de migração/homologação.
 
 Conclusão acima corresponde à implementação e aos checks locais/revisão estática, não à homologação de navegador/staging ou release em produção. Resultados e limites: `docs/EMAIL_CENTER_RELEASE_2026-11-18.md`.
