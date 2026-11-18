@@ -2,7 +2,7 @@
 
 ## Estado em 18/11/2026
 
-**Implementada e homologada localmente; não publicada nem ativada em produção.** A alteração utiliza o backend Flask existente, sem criar outra plataforma, instalar serviços ou modificar o banco.
+**Publicada na API da DigitalOcean; envio real de convites ainda bloqueado por segurança.** Commit de aplicação servido: `942eb49ed6b50e4105a09d3b2bfb2bfcbc2ab444`, PR #31. A alteração utiliza o backend Flask existente, sem criar outra plataforma, instalar serviços ou modificar o banco. Esta atualização documental não altera o commit da aplicação implantada.
 
 O usuário forneceu o contrato v1 em `api.md` e um exemplo de chamada. O contrato menciona `www.perpbr.com`; o exemplo usa **https://links.portalerp.com**. Foi realizado apenas `GET https://links.portalerp.com/api/v1/ping`, com o token do exemplo, sem seguir redirects: HTTP 200, token válido, conta padrão ativa e remetente identificado. Nenhum e-mail foi enviado. O token real não foi copiado para o repositório, exemplos, relatórios ou logs de aplicação.
 
@@ -40,7 +40,7 @@ O contrato informa configurações de rastreamento gerais e uma conta padrão co
 
 Quando o transporte sensível está bloqueado, recuperação responde igualmente para contas existentes e inexistentes, sem gerar token. Convites mantêm o fallback manual autorizado já existente. Os links continuam sendo construídos pelas rotas com contexto regional confiável; nenhuma URL de país foi alterada. O texto do convite passou a informar **72 horas**, em acordo com a validade real já definida em `INVITATION_TTL`; antes o e-mail dizia sete dias.
 
-## Configuração futura — somente no servidor
+## Configuração implantada — somente no servidor
 
 ```dotenv
 EMAIL_PROVIDER=portal_erp_api
@@ -52,16 +52,24 @@ MAIL_API_SENSITIVE_LINKS_APPROVED=false
 
 O placeholder de token acima não é uma credencial válida. Utilizar token exclusivo de **somente envio**, guardado no ambiente privado/cofre do backend, sem prefixos `NEXT_PUBLIC_` ou `VITE_`. `EMAIL_FROM` continua necessário para SMTP/Resend, mas não escolhe o remetente da nova API. A aprovação de links deve mudar para true somente após a verificação externa.
 
+Foi criado somente `backend/portal_erp_jobs_api/.env`, root:root 0600, com essas cinco chaves. O Flask usa a descoberta existente de python-dotenv sem override. `/etc/portal-erp-jobs/api.env`, comando/ambiente persistido do PM2 e dump permanecem integrais; não houve `--update-env`, `pm2 save` ou alteração de Next/SPA. O restart normal foi limitado à API 59; Next 61 manteve sua identidade. Uma prova isolada do pacote exato PM2 6.0.14 confirmou os seis metadados variáveis de restart, sem relaxar variáveis de configuração ou trocar o daemon de produção.
+
+Rollback arquivado restaura exclusivamente quatro arquivos de API e seu marcador, retira somente o `.env` criado por essa transação após validar inode/hash/metadados e reinicia somente a API. Não restaura nem migra banco. Quatro pequenas provas privadas de configuração/cache foram mantidas para não quebrar os pins do rollback; tokens temporários e ambos os stagings foram removidos, preservando backups e configuração ativa. A chave temporária foi retirada e sua autenticação nova foi comprovadamente recusada; chave privada/socket locais removidos.
+
 ## Testes e escopo
 
 **109 testes locais aprovados**, em quatro suítes isoladas: 53 do transporte API, 32 de segurança/autenticação, dois de equipe empresarial e 22 do contexto global/regional. Os testes do transporte bloqueiam sockets e usam respostas simuladas. Nenhum POST real foi enviado à API externa; os testes de rotas utilizam banco temporário, não produção.
 
 Cobertura: configuração fechada, payload/Unicode/limites, timeout, 4xx/429/5xx, redirects, respostas malformadas ou excessivas, ausência de retries/fallback, logs sem dados sensíveis, bloqueio explícito de links, recuperação sem enumeração, aceite antes do commit e preservação de SMTP/Resend e rotas regionais.
 
+As mesmas **109 regressões passaram no staging remoto**, com sockets reais bloqueados. O wrapper de configuração/rollback passou 53 testes locais, além de prova dotenv real em temporário e dois restarts do PM2 isolado. Pós-deploy: 18 smokes públicos aprovados, paridade dos quatro arquivos/marcador e dos componentes não alterados, configuração exata, schema `20261111_12`, integridade/FK e sete invariantes empresariais aprovados. A auditoria finita de seis logs revisou 592 linhas: zero 5xx de manutenção, zero erros/5xx saudáveis e nenhum hostname excepcional.
+
 Não foram alterados Next/SPA, DNS, Nginx, banco, cadastros, aprovação de empresas, candidaturas, membros ou países. O código base foi preservado em archive local antes da alteração. Os PRs anteriores continuam abertos e não foram mesclados.
 
 ## Próximas etapas
 
-Para ativação: revisão do PR, token exclusivo e configuração do remetente/links na plataforma externa, novo backup da produção, staging no DigitalOcean, deploy manual isolado com rollback e teste de envio para um destinatário autorizado. A conexão validada por ping não substitui esse teste de aceite e entrega.
+Backup integral da produção, cópia privada independente fora da origem, staging, deploy e validações pós-deploy foram concluídos. Remetente padrão ativo confirmado: Portal ERP <contato@portalerp.com>. O acesso autorizado à Central e GET `api/ajustes/envio` não expuseram flags de rastreamento; NÃO foi possível comprovar `rastreio_clique=false` ou `rastreio_abertura=false`. Não foi alterada configuração global da Central e a API v1 não documenta opt-out por mensagem. Portanto, `MAIL_API_SENSITIVE_LINKS_APPROVED=false` permanece e os convites usam o fallback manual existente.
+
+Para teste real: o responsável precisa comprovar o tratamento seguro dos links ou disponibilizar canal transacional isolado, autorizar a ativação correspondente e informar empresa, destinatário e papel — ou realizar o convite no próprio painel após a liberação. Não foram criadas empresas, contas, convites ou mensagens reais para simular sucesso. Ping/configuração/contratos de teste não comprovam aceite de mensagem ou chegada à caixa de entrada. PR #31 e PRs encadeados permanecem abertos, sem tag ou merge automático.
 
 Cadastros de candidatos/empresas, aprovação/reprovação empresarial e avisos de candidatura **não passaram a enviar e-mails automaticamente nesta etapa**. Esses eventos exigem templates, regras de destinatário, semântica de consentimento quando aplicável e política de duplicidade próprias. Campanhas, newsletter e marketing não fazem parte desta camada transacional.
