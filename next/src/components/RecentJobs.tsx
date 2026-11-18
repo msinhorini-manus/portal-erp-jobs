@@ -41,8 +41,8 @@ export function RecentJobs({ jobs, site }: { jobs: readonly RecentJob[]; site: R
                 <article key={job.id} className={`flex min-w-0 flex-col rounded-xl border bg-white p-4 shadow-sm transition-colors ${isMember ? 'border-portal-dark/30 hover:border-portal-dark/50' : 'border-slate-200 hover:border-portal-orange/40'}`}>
                   {isMember && <div className="-mx-4 -mt-4 mb-3"><MemberBadge isMember={isMember} variant="card" /></div>}
                   <div className="flex items-start gap-2">
-                    <EmployerLogo name={hidden ? null : companyName} src={hidden ? null : job.company_logo_url} hidden={hidden} size="card" />
-                    <div className="min-w-0 flex-1 break-words pt-1 text-xs leading-5 text-slate-600">
+                    <EmployerLogo name={hidden ? null : companyName} src={hidden ? null : job.company_logo_url} hidden={hidden} size="mosaic" />
+                    <div className="min-w-0 flex-1 break-words pt-1 text-sm font-semibold leading-5 text-slate-600">
                       {companyPath ? <Link href={companyPath} className="hover:text-orange-700 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-portal-orange">{companyName}</Link> : <span>{companyName}</span>}
                     </div>
                     {publication && <time dateTime={publication.dateTime} title={`Publicada em ${publication.label}`} aria-label={`Publicada em ${publication.label}`} className="shrink-0 pt-1 text-[11px] leading-5 text-slate-500">{publication.label}</time>}
