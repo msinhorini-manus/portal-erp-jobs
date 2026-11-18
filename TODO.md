@@ -1,0 +1,11 @@
+# Central de E-mails — Admin
+
+- [x] Integrar Configurações → Central de E-mails à SPA Admin vigente, com abas Templates, Regras de disparo e Histórico, contexto regional e aviso persistente de que os disparos não estão implementados; não criar painel paralelo.
+- [x] Gerenciar o catálogo autorizado application.created.company nas abas Português / English / Español, mantendo UI portuguesa, Brasil/pt-BR como único escopo inicial e traduções sem ativação de países. Listar nome, evento, público, país/idioma, estado editorial, versão, rascunho, autor/data; filtros preservados.
+- [x] Implementar editor controlado de assunto, HTML e texto, variáveis allowlist inseridas no campo focado, validação de campos/HTML/URLs no servidor, prévia desktop/mobile fictícia isolada e ações explícitas salvar/publicar/inativar/restaurar. Persistir no backend com revisão otimista, versões imutáveis e auditoria; salvar/publicar não envia e-mail nem ativa regras.
+- [x] Preservar texto local em falhas/conflitos e avisar de mudanças não salvas ao sair/trocar idioma, mostrar erro por campo, confirmação com foco e bloqueio de repetição; não indicar salvo antes da API confirmar. Não expor currículo, contatos de candidato, credenciais ou destinatário livre.
+- [x] Exibir regra application.created → responsável elegível da empresa/região → Brasil/pt-BR → template publicado, com gates e estado não implementado; ativação e envio de teste indisponíveis, com motivo acessível. Histórico de envio sem dados fictícios ou claims de entrega; auditoria editorial separada.
+- [x] Manter fluxos por teclado e responsivos: sidebar recolhível, filtros empilhados, tabela rolável, editor/prévia alternáveis no mobile e confirmações com foco controlado. Backend valida autenticação/capacidades/escopo em todos os endpoints.
+- [ ] Entregar código testado em branch/PR isolado, sem deploy, alteração de dados vivos, disparos, worker, ativação de países ou merge da cadeia anterior. Registrar resultados reais e pendências de migração/homologação.
+
+Conclusão acima corresponde à implementação e aos checks locais/revisão estática, não à homologação de navegador/staging ou release em produção. Resultados e limites: `docs/EMAIL_CENTER_RELEASE_2026-11-18.md`.

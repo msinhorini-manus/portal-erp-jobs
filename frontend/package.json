@@ -3,11 +3,13 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "packageManager": "pnpm@11.25.0",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
     "test:regional": "node --test tests/regional-runtime.test.mjs tests/company-urls.test.mjs",
+    "test:emails": "node --test tests/email-center-helpers.test.mjs tests/email-navigation.test.mjs",
     "preview": "vite preview",
     "start": "node server.js"
   },

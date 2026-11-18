@@ -1,7 +1,8 @@
 import { Outlet, Link, useNavigate } from 'react-router-dom'
+import { useState } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import AdminSidebar from './AdminSidebar'
-import { LogOut } from 'lucide-react'
+import { LogOut, Menu } from 'lucide-react'
 
 /**
  * AdminLayout - Layout específico para o painel administrativo
@@ -10,6 +11,8 @@ import { LogOut } from 'lucide-react'
 export default function AdminLayout() {
   const { logout, user } = useAuth()
   const navigate = useNavigate()
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   const handleLogout = async () => {
     try {
@@ -41,6 +44,7 @@ export default function AdminLayout() {
 
             {/* User Info */}
             <div className="flex items-center gap-4">
+              <button type="button" className="rounded-md p-2 text-white hover:bg-white/10 lg:hidden" aria-label="Abrir menu administrativo" aria-expanded={sidebarOpen} onClick={() => setSidebarOpen(true)}><Menu className="h-5 w-5" /></button>
               <div className="text-right hidden sm:block">
                 <div className="text-sm font-medium">Administrador</div>
                 <div className="text-xs text-gray-300">{user?.email || 'admin@portalerpjobs.com'}</div>
@@ -58,12 +62,13 @@ export default function AdminLayout() {
       </header>
 
       {/* Main Content with Sidebar */}
-      <div className="flex">
+      <div className="relative flex min-w-0">
         {/* Sidebar */}
-        <AdminSidebar />
+        {sidebarOpen && <button type="button" className="fixed inset-0 top-16 z-30 bg-black/30 lg:hidden" aria-label="Fechar menu administrativo" onClick={() => setSidebarOpen(false)} />}
+        <AdminSidebar mobileOpen={sidebarOpen} collapsed={sidebarCollapsed} onClose={() => setSidebarOpen(false)} onToggleCollapsed={() => setSidebarCollapsed(value => !value)} />
 
         {/* Page Content */}
-        <main className="flex-1 p-8">
+        <main className="min-w-0 w-full flex-1 p-4 sm:p-6 lg:p-8">
           <Outlet />
         </main>
       </div>

@@ -29,6 +29,8 @@ class CompanyCountrySlugMigrationTests(unittest.TestCase):
     def previous_snapshot(self):
         data = self.snapshot()
         data.pop("company_slug_reservations", None)
+        data.pop("email_templates", None)
+        data.pop("email_template_versions", None)
         return data
 
     def extra_company(self, number, *, name="Mégasoft", slug="megasoft", site="BR", status="pending", sector=None, city=None):
@@ -54,10 +56,12 @@ class CompanyCountrySlugMigrationTests(unittest.TestCase):
         before = self.previous_snapshot()
         old_constraints = self.constraints()
         self.alembic("upgrade", "head")
-        self.assertEqual(self.sql("SELECT version_num FROM alembic_version"), [("20261111_12",)])
+        self.assertEqual(self.sql("SELECT version_num FROM alembic_version"), [("20261118_13",)])
         self.assertEqual(self.previous_snapshot(), before)
         constraints = self.constraints()
         constraints.pop("company_slug_reservations")
+        constraints.pop("email_templates")
+        constraints.pop("email_template_versions")
         self.assertEqual(constraints, old_constraints)
         self.assertEqual([self.profile(i) for i in range(510, 519)], [
             "megasoft", "megasoft-sao-paulo", "megasoft-software-sao-paulo",

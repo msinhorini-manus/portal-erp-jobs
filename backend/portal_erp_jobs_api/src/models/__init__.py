@@ -25,6 +25,7 @@ from .site import Site, SiteDomain, SiteLocale
 from .session_family import SessionFamily
 from .company_team import CompanyInvitation, CompanyInvitationStatus, CompanyAuditEvent
 from .legal_acceptance import LegalAcceptance
+from .email_template import EmailTemplate, EmailTemplateVersion
 
 __all__ = [
     'User',
@@ -64,4 +65,6 @@ __all__ = [
     'CompanyInvitationStatus',
     'CompanyAuditEvent',
     'LegalAcceptance',
+    'EmailTemplate',
+    'EmailTemplateVersion',
 ]

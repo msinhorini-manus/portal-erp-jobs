@@ -32,6 +32,15 @@ class AdminPermission:
     VIEW_REPORTS = 'view_reports'
     EXPORT_DATA = 'export_data'
 
+    # Editorial email center. These are deliberately absent from every role
+    # default below; a grant must be explicit in the persisted permissions
+    # JSON (super_admin remains subject to has_permission()).
+    EMAIL_VIEW = 'email.view'
+    EMAIL_EDIT = 'email.edit'
+    EMAIL_PUBLISH = 'email.publish'
+    EMAIL_RULES = 'email.rules'
+    EMAIL_HISTORY = 'email.history'
+
 # Default permissions by role
 DEFAULT_PERMISSIONS = {
     AdminRole.SUPER_ADMIN: {

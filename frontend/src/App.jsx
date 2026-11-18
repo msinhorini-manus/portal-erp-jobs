@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { resolveRegionalContext } from './lib/regional-context.js'
 import { setRegionalRuntime } from './lib/regional-runtime.js'
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { createBrowserRouter, createRoutesFromElements, Route, RouterProvider } from 'react-router-dom'
 import './App.css'
 import { AuthProvider } from './contexts/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -52,6 +52,7 @@ import AdminCandidatesContent from './pages/admin/AdminCandidatesContent'
 import AdminCompaniesContent from './pages/admin/AdminCompaniesContent'
 import AdminJobsContent from './pages/admin/AdminJobsContent'
 import AdminAccessContent from './pages/admin/AdminAccessContent'
+import AdminEmailCenterContent from './pages/admin/AdminEmailCenterContent'
 
 // Auth Pages
 import LoginPage from './pages/auth/LoginPage'
@@ -80,8 +81,16 @@ function App() {
   if (!regional) return <div role="status" className="p-8 text-gray-600">Validando região...</div>
   return (
     <AuthProvider>
-      <Router basename={regional.basename || '/'}>
-        <Routes>
+      <AppRoutes regional={regional} />
+    </AuthProvider>
+  )
+}
+
+function AppRoutes({ regional }) {
+  // The same route tree and basename, with a data router so useBlocker also
+  // protects browser Back/Forward. No data loaders or auth policy are changed.
+  const router = useMemo(() => createBrowserRouter(createRoutesFromElements(
+        <>
           {/* Auth Routes - Sem layout */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/cadastro/candidato" element={<RegisterCandidatePage />} />
@@ -114,6 +123,7 @@ function App() {
             <Route path="/admin/candidatos" element={<AdminCandidatesContent />} />
             <Route path="/admin/vagas" element={<AdminJobsContent />} />
             <Route path="/admin/usuarios" element={<AdminAccessContent />} />
+            <Route path="/admin/emails" element={<AdminEmailCenterContent />} />
           </Route>
 
           {/* Rotas com Layout Principal (Navbar + Footer) */}
@@ -231,10 +241,9 @@ function App() {
               }
             />
           </Route>
-        </Routes>
-      </Router>
-    </AuthProvider>
-  )
+        </>
+  ), { basename: regional.basename || '/' }), [regional.basename])
+  return <RouterProvider router={router} />
 }
 
 export default App
