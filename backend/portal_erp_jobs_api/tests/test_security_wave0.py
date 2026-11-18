@@ -419,6 +419,53 @@ class WaveZeroSecurityTests(unittest.TestCase):
             user = User.query.filter_by(email="security-test@example.com").one()
             self.assertIsNone(user.reset_token)
 
+    def test_unapproved_mail_api_recovery_does_not_enumerate_users(self):
+        app.config.update(
+            EMAIL_PROVIDER="portal_erp_api", MAIL_API_BASE_URL="https://links.portalerp.com",
+            MAIL_API_TOKEN="mail_" + "a" * 48, MAIL_API_TIMEOUT_SECONDS=10,
+            MAIL_API_SENSITIVE_LINKS_APPROVED=False,
+        )
+        with patch("src.services.email._open_mail_api_request") as transport:
+            existing = self.client.post(
+                "/api/auth/forgot-password", json={"email": "security-test@example.com"},
+                headers={"Host": "jobs.portalerp.com.br"},
+            )
+            missing = self.client.post(
+                "/api/auth/forgot-password", json={"email": "missing@example.invalid"},
+                headers={"Host": "jobs.portalerp.com.br"},
+            )
+            transport.assert_not_called()
+        self.assertEqual(existing.status_code, 503)
+        self.assertEqual(missing.status_code, 503)
+        self.assertEqual(existing.get_json(), missing.get_json())
+        with app.app_context():
+            self.assertIsNone(User.query.filter_by(email="security-test@example.com").one().reset_token)
+
+    def test_approved_mail_api_recovery_submits_once_and_keeps_generic_response(self):
+        app.config.update(
+            EMAIL_PROVIDER="portal_erp_api", MAIL_API_BASE_URL="https://links.portalerp.com",
+            MAIL_API_TOKEN="mail_" + "a" * 48, MAIL_API_TIMEOUT_SECONDS=10,
+            MAIL_API_SENSITIVE_LINKS_APPROVED=True,
+        )
+        with patch("src.services.email._open_mail_api_request") as transport:
+            response = transport.return_value.__enter__.return_value
+            response.status = 201
+            response.read.return_value = b'{"success":true,"id":123,"status":"PENDENTE"}'
+            existing = self.client.post(
+                "/api/auth/forgot-password", json={"email": "security-test@example.com"},
+                headers={"Host": "jobs.portalerp.com.br"},
+            )
+            missing = self.client.post(
+                "/api/auth/forgot-password", json={"email": "missing@example.invalid"},
+                headers={"Host": "jobs.portalerp.com.br"},
+            )
+            transport.assert_called_once()
+        self.assertEqual(existing.status_code, 200)
+        self.assertEqual(missing.status_code, 200)
+        self.assertEqual(existing.get_json(), missing.get_json())
+        with app.app_context():
+            self.assertIsNotNone(User.query.filter_by(email="security-test@example.com").one().reset_token)
+
     def test_candidate_registration_rejects_weak_password(self):
         response = self.client.post(
             "/api/auth/register/candidate",

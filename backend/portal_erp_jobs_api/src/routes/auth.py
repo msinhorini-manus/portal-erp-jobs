@@ -22,6 +22,7 @@ from src.services.regional_urls import trusted_regional_base_url
 from src.services.email import (
     EmailDeliveryUnavailable,
     configured_email_provider,
+    email_transport_allows_sensitive_links,
     send_password_reset_email,
 )
 
@@ -876,7 +877,7 @@ def forgot_password():
         if not email:
             return jsonify({'error': 'Email é obrigatório'}), 400
 
-        if configured_email_provider() is None:
+        if configured_email_provider() is None or not email_transport_allows_sensitive_links():
             return jsonify(RECOVERY_UNAVAILABLE), 503
 
         user = User.query.filter_by(email=email).first()

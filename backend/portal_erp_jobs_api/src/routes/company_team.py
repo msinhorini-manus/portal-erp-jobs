@@ -17,7 +17,10 @@ from src.models.user import User
 from src.regional_access import get_company_access
 from src.regional_context import get_current_site
 from src.rate_limit import auth_rate_limiter
-from src.services.email import EmailDeliveryUnavailable, configured_email_provider, send_company_invitation_email
+from src.services.email import (
+    EmailDeliveryUnavailable, configured_email_provider,
+    email_transport_allows_sensitive_links, send_company_invitation_email,
+)
 from src.services.regional_urls import trusted_regional_base_url
 
 
@@ -89,7 +92,7 @@ def _active_owner_count(company_id: int) -> int:
 
 def _send_invitation(invitation: CompanyInvitation, raw_token: str, company_name: str, site) -> tuple[str, str]:
     invitation_url = f"{trusted_regional_base_url(site)}/empresa/convite/{quote(raw_token)}"
-    if configured_email_provider() is None:
+    if configured_email_provider() is None or not email_transport_allows_sensitive_links():
         return "manual", invitation_url
     try:
         send_company_invitation_email(

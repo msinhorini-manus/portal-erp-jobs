@@ -57,6 +57,12 @@ class Config:
     SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() == "true"
     SMTP_USE_SSL = os.getenv("SMTP_USE_SSL", "false").lower() == "true"
     RESEND_API_KEY = os.getenv("RESEND_API_KEY", "").strip()
+    MAIL_API_BASE_URL = os.getenv("MAIL_API_BASE_URL", "").strip()
+    MAIL_API_TOKEN = os.getenv("MAIL_API_TOKEN", "")
+    MAIL_API_TIMEOUT_SECONDS = os.getenv("MAIL_API_TIMEOUT_SECONDS", "10").strip()
+    MAIL_API_SENSITIVE_LINKS_APPROVED = os.getenv(
+        "MAIL_API_SENSITIVE_LINKS_APPROVED", "false"
+    ).lower() == "true"
 
     AUTH_LOGIN_RATE_LIMIT = int(os.getenv("AUTH_LOGIN_RATE_LIMIT", "10"))
     AUTH_LOGIN_RATE_WINDOW = int(os.getenv("AUTH_LOGIN_RATE_WINDOW", "900"))
