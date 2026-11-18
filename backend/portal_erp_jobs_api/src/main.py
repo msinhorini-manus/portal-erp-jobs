@@ -35,6 +35,7 @@ from src.models.company_user import CompanyUser
 from src.models.company_team import CompanyInvitation, CompanyAuditEvent
 from src.models.legal_acceptance import LegalAcceptance
 from src.models.admin_scope import AdminSite, AdminAuditEvent
+from src.models.email_template import EmailTemplate, EmailTemplateVersion
 
 # Import routes
 from src.routes.auth import auth_bp
@@ -49,6 +50,7 @@ from src.routes.stats import stats_bp
 from src.routes.config import config_bp
 from src.routes.sites import sites_bp
 from src.routes.company_team import company_team_bp
+from src.routes.admin_email import admin_email_bp
 from src.regional_context import init_regional_context
 
 # Initialize Flask app
@@ -136,6 +138,7 @@ app.register_blueprint(stats_bp)
 app.register_blueprint(config_bp)
 app.register_blueprint(sites_bp)
 app.register_blueprint(company_team_bp)
+app.register_blueprint(admin_email_bp)
 
 # API root endpoint
 @app.route('/api')

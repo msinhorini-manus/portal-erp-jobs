@@ -11,10 +11,14 @@ import {
   GraduationCap,
   MapPin,
   ShieldCheck,
-  Database
+  Database,
+  Mail,
+  PanelLeftClose,
+  PanelLeftOpen,
+  X
 } from 'lucide-react'
 
-export default function AdminSidebar() {
+export default function AdminSidebar({ mobileOpen = false, collapsed = false, onClose, onToggleCollapsed }) {
   const location = useLocation()
   const [platformAdmin, setPlatformAdmin] = useState(false)
 
@@ -66,19 +70,27 @@ export default function AdminSidebar() {
         { path: '/admin/technologies', icon: Code, label: 'Tecnologias' },
         { path: '/admin/areas', icon: Briefcase, label: 'Áreas de Atuação' },
         { path: '/admin/tags', icon: Tags, label: 'Tags/Keywords' },
-        { path: '/admin/softwares', icon: Database, label: 'Softwares/ERPs' }
+        { path: '/admin/softwares', icon: Database, label: 'Softwares/ERPs' },
+        { path: '/admin/emails', icon: Mail, label: 'Central de E-mails' }
       ]
     }
   ]
 
   return (
-    <aside className="w-64 bg-white shadow-lg min-h-[calc(100vh-72px)]">
-      <nav className="p-4">
+    <aside className={`fixed inset-y-0 left-0 top-16 z-40 min-h-[calc(100vh-4rem)] bg-white shadow-lg transition-transform lg:static lg:top-auto lg:min-h-[calc(100vh-72px)] lg:translate-x-0 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} ${collapsed ? 'lg:w-20' : 'w-64 lg:w-64'}`}>
+      <nav className="p-3 lg:p-4">
+        <div className="mb-2 flex items-center justify-between border-b pb-3 lg:border-0 lg:pb-0">
+          {!collapsed && <span className="px-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Navegação</span>}
+          <div className="ml-auto flex items-center gap-1">
+            <button type="button" className="rounded-md p-2 text-gray-600 hover:bg-gray-100 lg:hidden" aria-label="Fechar menu administrativo" onClick={onClose}><X className="h-5 w-5" /></button>
+            <button type="button" className="hidden rounded-md p-2 text-gray-600 hover:bg-gray-100 lg:inline-flex" aria-label={collapsed ? 'Expandir menu administrativo' : 'Recolher menu administrativo'} aria-expanded={!collapsed} onClick={onToggleCollapsed}>{collapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}</button>
+          </div>
+        </div>
         <div className="space-y-1">
           {menuItems.map((group, groupIndex) => (
             <div key={groupIndex}>
               {group.section && (
-                <div className="pt-4 pb-2 px-4 text-xs font-semibold text-gray-500 uppercase">
+                <div className={`pt-4 pb-2 px-4 text-xs font-semibold text-gray-500 uppercase ${collapsed ? 'lg:sr-only' : ''}`}>
                   {group.section}
                 </div>
               )}
@@ -88,10 +100,12 @@ export default function AdminSidebar() {
                   <Link
                     key={item.path}
                     to={item.path}
-                    className={linkClass(item.path)}
+                    className={`${linkClass(item.path)} ${collapsed ? 'lg:justify-center lg:px-2' : ''}`}
+                    title={collapsed ? item.label : undefined}
+                    onClick={onClose}
                   >
                     <Icon className="w-5 h-5" />
-                    {item.label}
+                    <span className={collapsed ? 'lg:sr-only' : ''}>{item.label}</span>
                   </Link>
                 )
               })}

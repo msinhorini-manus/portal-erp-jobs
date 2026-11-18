@@ -169,7 +169,9 @@ test('explicit Admin login can recover from old/inactive claims', async () => {
 test('integration sources preserve approval, recovery, BFF bridge and explicit expiry message', async () => {
   const read = path => readFile(new URL(`../src/${path}`, import.meta.url), 'utf8')
   const app = await read('App.jsx')
-  assert.match(app, /basename=\{regional.basename/)
+  assert.match(app, /createBrowserRouter\(createRoutesFromElements/)
+  assert.match(app, /basename: regional\.basename \|\| '\/'/)
+  assert.match(app, /<RouterProvider router=\{router\}/)
   const approval = await read('pages/admin/AdminCompaniesContent.jsx')
   assert.match(approval, /can_approve_companies/)
   assert.match(approval, /Aprovação administrativa obrigatória/)
