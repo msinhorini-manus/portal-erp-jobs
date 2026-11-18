@@ -1,5 +1,5 @@
 import { appFetch } from '@/lib/regional-runtime.js'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Building2, Crown, Edit2, KeyRound, Save, ShieldCheck, X } from 'lucide-react'
 import toast, { Toaster } from 'react-hot-toast'
@@ -32,6 +32,7 @@ export default function AdminCompaniesContent() {
   const [decision, setDecision] = useState(null)
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
+  const saving = useRef(false)
 
   const load = useCallback(async (signal) => {
     setLoading(true)
@@ -64,6 +65,8 @@ export default function AdminCompaniesContent() {
 
   async function save(event) {
     event.preventDefault()
+    if (!editMode || !selected?.id || busy || saving.current) return
+    saving.current = true
     setBusy(true)
     try {
       await request(`/companies/${selected.id}`, { method: 'PUT', body: JSON.stringify(editData) })
@@ -71,7 +74,7 @@ export default function AdminCompaniesContent() {
       setSelected(null)
       await load()
     } catch (error) { toast.error(error.message) }
-    finally { setBusy(false) }
+    finally { saving.current = false; setBusy(false) }
   }
 
   async function decide(event) {
@@ -123,7 +126,14 @@ export default function AdminCompaniesContent() {
       {selected && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"><form onSubmit={save} role="dialog" aria-modal="true" aria-labelledby="company-details-title" className="max-h-[90vh] w-full max-w-2xl space-y-5 overflow-y-auto rounded-xl bg-white p-6">
         <div className="flex items-center justify-between"><h2 id="company-details-title" className="text-xl font-semibold">{editMode ? 'Editar Empresa' : 'Detalhes da Empresa'}</h2><button type="button" aria-label="Fechar detalhes" disabled={busy} onClick={() => setSelected(null)}><X /></button></div>
         {editMode ? <div className="grid gap-4 sm:grid-cols-2">{[['name', 'Nome da empresa'], ['phone', 'Telefone'], ['city', 'Cidade'], ['state', 'Estado']].map(([field, label]) => <label key={field} className="text-sm font-medium">{label}<input className={inputClass} value={editData[field]} onChange={e => setEditData({ ...editData, [field]: e.target.value })} /></label>)}<label className="text-sm font-medium">Limite de vagas<input className={inputClass} type="number" min={0} max={100} required value={editData.max_active_jobs} onChange={e => setEditData({ ...editData, max_active_jobs: Number(e.target.value) })} /></label><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={editData.is_member} onChange={e => setEditData({ ...editData, is_member: e.target.checked })} />Membro Portal ERP (não altera aprovação)</label></div> : <div className="grid gap-4 sm:grid-cols-2">{[['Nome', selected.name], ['E-mail do responsável', selected.email], ['Identificação fiscal', selected.cnpj], ['Telefone', selected.phone], ['Localização', [selected.city, selected.state].filter(Boolean).join(' / ')], ['Aprovação', labels[selected.site_status]], ['Conta global do responsável', selected.global_active ? 'Ativa' : 'Desativada'], ['Vagas no histórico', selected.stats.total_jobs || 0], ['Limite de vagas', selected.max_active_jobs ?? 3], ['Membro Portal ERP', selected.is_member ? 'Sim' : 'Não']].map(([label, value]) => <div key={label}><p className="text-sm text-gray-500">{label}</p><p>{value ?? '—'}</p></div>)}</div>}
-        <div className="flex justify-end gap-3 border-t pt-4"><button type="button" className={buttonClass} disabled={busy} onClick={() => { if (editMode) setEditMode(false); else setSelected(null) }}>{editMode ? 'Cancelar' : 'Fechar'}</button>{editMode ? <button className="flex items-center gap-2 rounded-lg bg-green-700 px-4 py-2 text-white" disabled={busy}><Save size={16} />Salvar</button> : <button type="button" className={buttonClass} onClick={() => setEditMode(true)}>Editar</button>}</div>
+        <div className="flex justify-end gap-3 border-t pt-4">
+          <button type="button" className={buttonClass} disabled={busy} onClick={() => { if (editMode) setEditMode(false); else setSelected(null) }}>{editMode ? 'Cancelar' : 'Fechar'}</button>
+          {editMode ? (
+            <button key="save-company" type="submit" className="flex items-center gap-2 rounded-lg bg-green-700 px-4 py-2 text-white" disabled={busy}><Save size={16} />Salvar</button>
+          ) : (
+            <button key="edit-company" type="button" className={buttonClass} disabled={busy} onClick={event => { event.preventDefault(); if (!busy) setEditMode(true) }}>Editar</button>
+          )}
+        </div>
       </form></div>}
     </section>
   )
