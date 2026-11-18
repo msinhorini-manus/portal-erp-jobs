@@ -26,7 +26,7 @@ describe('home recent jobs integration', () => {
     const html = renderToStaticMarkup(await HomePage())
     expect(mocks.getJobs).toHaveBeenCalledExactlyOnceWith({ per_page: '20' })
     expect(mocks.getAreas).toHaveBeenCalledTimes(1)
-    for (const text of ['O mercado de software trabalha aqui.', 'Carreiras e talentos do ecossistema Portal ERP', 'Encontre oportunidades, talentos especializados e contexto para avançar no mercado de software de gestão.', 'aria-label="Buscar vagas"', 'Explore por área de atuação', 'Consultoria ERP', 'Programa de Membros', 'Conhecer o Portal ERP Pro', '/br/candidato/cadastro', '/br/empresa/cadastro']) expect(html).toContain(text)
+    for (const text of ['O mercado de tecnologia trabalha aqui.', 'Carreiras e talentos do ecossistema Portal ERP', 'Encontre oportunidades, talentos especializados e contexto para avançar no mercado de software de gestão.', 'aria-label="Buscar vagas"', 'Explore por área de atuação', 'Consultoria ERP', 'Programa de Membros', 'Conhecer o Portal ERP Pro', '/br/candidato/cadastro', '/br/empresa/cadastro']) expect(html).toContain(text)
     expect(html).not.toContain('Vagas em destaque')
     expect(html).not.toContain('<aside')
     expect(html).not.toContain('Vagas ativas')

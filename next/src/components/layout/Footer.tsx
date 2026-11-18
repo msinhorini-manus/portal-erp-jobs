@@ -14,7 +14,7 @@ export function Footer() {
             <p className="mt-4 max-w-md text-sm leading-6 text-white/65">
               Carreiras, talentos e empresas conectados pela autoridade do Portal ERP.
             </p>
-            <p className="mt-3 font-display text-xl font-extrabold text-white">O mercado de software trabalha aqui.</p>
+            <p className="mt-3 font-display text-xl font-extrabold text-white">O mercado de tecnologia trabalha aqui.</p>
           </div>
 
           <div>

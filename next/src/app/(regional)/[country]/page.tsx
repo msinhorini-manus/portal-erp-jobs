@@ -99,7 +99,7 @@ export default async function HomePage() {
             Carreiras e talentos do ecossistema Portal ERP
           </p>
           <h1 className="mx-auto max-w-6xl font-display text-3xl font-extrabold leading-[1.1] tracking-[-0.045em] text-portal-dark sm:text-4xl lg:text-5xl">
-            O mercado de software trabalha aqui.
+            O mercado de tecnologia trabalha aqui.
           </h1>
           <p className="mx-auto mt-3 max-w-4xl text-base leading-7 text-slate-600 sm:text-lg">
             Encontre oportunidades, talentos especializados e contexto para avançar no mercado de software de gestão.

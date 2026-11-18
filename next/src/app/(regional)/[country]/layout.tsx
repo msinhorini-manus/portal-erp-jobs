@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic'
 const COPY: Record<string, { title: string; description: string; keywords: string[] }> = {
   'pt-BR': {
     title: 'Jobs by Portal ERP - Vagas de Software e ERP',
-    description: 'O mercado de software trabalha aqui. Vagas, talentos e empresas conectados pela autoridade do Portal ERP.',
+    description: 'O mercado de tecnologia trabalha aqui. Vagas, talentos e empresas conectados pela autoridade do Portal ERP.',
     keywords: ['vagas software', 'empregos ERP', 'vagas SAP', 'vagas Protheus', 'vagas Oracle', 'desenvolvedor', 'consultor ERP', 'Portal ERP'],
   },
 }
