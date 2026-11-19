@@ -1,4 +1,5 @@
 import { internalApiOrigin } from './regional-transport'
+import { contextReadObservation, regionalAttempt, regionalDiagnostic, type RegionalObservation } from './regional-diagnostic.server'
 
 export type InternalReadInit = RequestInit & { next?: { revalidate?: number; tags?: string[] } }
 
@@ -23,9 +24,10 @@ function isPreResponseSocketClose(error: unknown): boolean {
 
 /**
  * Anonymous trusted internal GET only. No browser headers, fallback, cache changes,
- * logging or response-body consumption. Callers retain their existing HTTP/JSON handling.
+ * or response-body consumption. Optional diagnostics cover no-store context only.
+ * Callers retain their existing HTTP/JSON handling; other callers remain unobserved.
  */
-export async function internalReadFetch(url: string, init: InternalReadInit = {}): Promise<Response> {
+export async function internalReadFetch(url: string, init: InternalReadInit = {}, observation?: RegionalObservation): Promise<Response> {
   let target: URL
   try {
     target = new URL(url)
@@ -38,13 +40,30 @@ export async function internalReadFetch(url: string, init: InternalReadInit = {}
   const headers = new Headers(init.headers)
   if (['authorization', 'proxy-authorization', 'cookie', 'cookie2'].some(name => headers.has(name))) throw new Error('Internal read requires anonymous headers')
 
+  let diagnostic: RegionalObservation | undefined
+  if (observation) {
+    try { diagnostic = contextReadObservation(observation, target.pathname, target.search, init.cache) } catch { /* Observation cannot reject a read. */ }
+  }
+  regionalAttempt(diagnostic, 1)
   try {
     return await fetch(url, init)
   } catch (error) {
+    regionalDiagnostic(diagnostic, 'internal-read-fetch', 'fetch', 'failure', undefined, error)
     if (init.signal?.aborted || !isPreResponseSocketClose(error)) throw error
   }
   // Disable connection reuse on the retry only. Clone headers; preserve every other
   // option (including no-store, regional headers, tags, signal and redirect: error).
   headers.set('Connection', 'close')
-  return fetch(url, { ...init, headers })
+  if (!diagnostic) return fetch(url, { ...init, headers })
+  regionalAttempt(diagnostic, 2)
+  try {
+    const response = await fetch(url, { ...init, headers })
+    if (diagnostic) {
+      try { regionalDiagnostic(diagnostic, 'internal-read-fetch', 'fetch', 'recovered', response.status) } catch { /* Even a status getter cannot interfere. */ }
+    }
+    return response
+  } catch (error) {
+    regionalDiagnostic(diagnostic, 'internal-read-fetch', 'fetch', 'failure', undefined, error)
+    throw error
+  }
 }
