@@ -13,6 +13,7 @@ from src.models.job import Job
 from src.models.application import Application
 from src.regional_access import get_company_access
 from src.regional_context import get_current_site
+from src.services.public_job_counts import public_jobs_query, public_companies_query
 
 stats_bp = Blueprint('stats', __name__, url_prefix='/api/stats')
 
@@ -25,35 +26,19 @@ def get_dashboard_stats():
     """
     try:
         site = get_current_site()
-        # Contar vagas ativas
-        active_jobs = (
-            Job.query
-            .join(
-                CompanySite,
-                and_(
-                    CompanySite.company_id == Job.company_id,
-                    CompanySite.site_id == Job.site_id,
-                ),
-            )
-            .filter(
-                Job.site_id == site.id,
-                Job.is_active.is_(True),
-                CompanySite.status == CompanyStatus.APPROVED,
-            )
-            .count()
-        )
-
-        # Contar empresas cadastradas
-        total_companies = CompanySite.query.filter_by(
-            site_id=site.id,
-            status=CompanyStatus.APPROVED,
-        ).count()
-
-        # Contar candidatos cadastrados
-        total_candidates = CandidateSite.query.filter_by(
-            site_id=site.id,
-            is_active=True,
-        ).count()
+        active_jobs = int(public_jobs_query(site).with_entities(
+            func.count(func.distinct(Job.id)),
+        ).scalar())
+        total_companies = int(public_companies_query(site).with_entities(
+            func.count(func.distinct(Company.id)),
+        ).scalar())
+        # Aggregate enrollment, not discoverability: opted-out candidates count.
+        total_candidates = int(db.session.query(func.count(func.distinct(Candidate.id)))
+            .join(CandidateSite, CandidateSite.candidate_id == Candidate.id)
+            .join(User, User.id == Candidate.user_id)
+            .filter(CandidateSite.site_id == site.id,
+                    CandidateSite.is_active.is_(True), User.is_active.is_(True))
+            .scalar())
 
         return jsonify({
             'active_jobs': active_jobs,
@@ -61,8 +46,7 @@ def get_dashboard_stats():
             'total_candidates': total_candidates
         }), 200
 
-    except Exception as e:
-        print(f"Erro ao buscar estatísticas do dashboard: {str(e)}")
+    except Exception:
         return jsonify({'error': 'Erro ao buscar estatísticas'}), 500
 
 
