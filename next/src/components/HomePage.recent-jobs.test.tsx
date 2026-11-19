@@ -4,10 +4,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RegionalSite } from '@/lib/site'
 import { regionalizePath } from '@/lib/regional-routes'
 
-const mocks = vi.hoisted(() => ({ getSiteContext: vi.fn(), getJobs: vi.fn(), getAreas: vi.fn() }))
+const mocks = vi.hoisted(() => ({ getSiteContext: vi.fn(), getJobs: vi.fn(), getAreas: vi.fn(), getDashboardStats: vi.fn() }))
 vi.stubGlobal('React', React)
 vi.mock('@/lib/site-resolver.server', () => ({ getSiteContext: mocks.getSiteContext }))
-vi.mock('@/lib/api', () => ({ getJobs: mocks.getJobs, getAreas: mocks.getAreas }))
+vi.mock('@/lib/api', () => ({ getJobs: mocks.getJobs, getAreas: mocks.getAreas, getDashboardStats: mocks.getDashboardStats }))
 vi.mock('@/components/HeroSearch', () => ({ HeroSearch: () => React.createElement('form', { 'aria-label': 'Buscar vagas' }) }))
 vi.mock('@/components/RegionalLink', () => ({ default: ({ children, href, ...props }: React.ComponentProps<'a'>) => React.createElement('a', { ...props, href: regionalizePath('/br', String(href)) }, children) }))
 import HomePage, { generateMetadata } from '@/app/(regional)/[country]/page'
@@ -18,18 +18,22 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.getSiteContext.mockResolvedValue({ site, locale: site.locale })
   mocks.getJobs.mockResolvedValue({ jobs })
-  mocks.getAreas.mockResolvedValue([{ id: 1, name: 'Consultoria ERP', description: 'Atuação especializada' }])
+  mocks.getAreas.mockResolvedValue([{ id: 1, name: 'Consultoria ERP', description: 'Atuação especializada', job_count: 0 }])
+  mocks.getDashboardStats.mockResolvedValue({ active_jobs: 4, total_companies: 2, total_candidates: 3 })
 })
 
 describe('home recent jobs integration', () => {
-  it('requests exactly 20 jobs with no company/stats fetch and inserts sorted mosaic before preserved sections', async () => {
+  it('requests exactly 20 jobs, adds aggregate counts and inserts sorted mosaic before preserved sections', async () => {
     const html = renderToStaticMarkup(await HomePage())
     expect(mocks.getJobs).toHaveBeenCalledExactlyOnceWith({ per_page: '20' })
-    expect(mocks.getAreas).toHaveBeenCalledTimes(1)
+    expect(mocks.getAreas).toHaveBeenCalledExactlyOnceWith({ includeCounts: true })
+    expect(mocks.getDashboardStats).toHaveBeenCalledExactlyOnceWith({ cache: 'no-store' })
     for (const text of ['O mercado de tecnologia trabalha aqui.', 'Carreiras e talentos do ecossistema Portal ERP', 'Encontre oportunidades, talentos especializados e contexto para avançar no mercado de software de gestão.', 'aria-label="Buscar vagas"', 'Explore por área de atuação', 'Consultoria ERP', 'Programa de Membros', 'Conhecer o Portal ERP Pro', '/br/candidato/cadastro', '/br/empresa/cadastro']) expect(html).toContain(text)
     expect(html).not.toContain('Vagas em destaque')
     expect(html).not.toContain('<aside')
-    expect(html).not.toContain('Vagas ativas')
+    expect(html).toContain('Vagas ativas')
+    expect(html).toContain('0 vagas ativas')
+    expect(html.indexOf('platform-stats-heading')).toBeLessThan(html.indexOf('Vagas mais recentes'))
     expect(html.indexOf('Vagas mais recentes')).toBeLessThan(html.indexOf('Explore por área de atuação'))
     expect(html.indexOf('Vaga recente')).toBeLessThan(html.indexOf('Vaga antiga'))
     expect(html).toContain('/br/vagas/marca/titulo/1')
@@ -59,5 +63,6 @@ describe('home recent jobs integration', () => {
     await expect(HomePage()).rejects.toThrow('not publicly routable')
     expect(mocks.getJobs).not.toHaveBeenCalled()
     expect(mocks.getAreas).not.toHaveBeenCalled()
+    expect(mocks.getDashboardStats).not.toHaveBeenCalled()
   })
 })

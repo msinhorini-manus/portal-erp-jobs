@@ -2,6 +2,8 @@ import { pageMetadata } from '@/lib/regional-seo.server'
 import { Metadata } from 'next'
 import Link from '@/components/RegionalLink'
 import { getSkills } from '@/lib/api'
+import { getSiteContext } from '@/lib/site-resolver.server'
+import { jobCountLabel } from '@/lib/public-counts'
 
 const baseMetadata: Metadata = {
   title: 'Tecnologias',
@@ -11,10 +13,13 @@ const baseMetadata: Metadata = {
 
 export default async function TechnologiesPage() {
   let technologies: any[] = []
+  let unavailable = false
+  const { site } = await getSiteContext()
 
   try {
-    technologies = await getSkills()
+    technologies = await getSkills({ includeCounts: true })
   } catch (e) {
+    unavailable = true
     console.error('Failed to fetch technologies:', e)
   }
 
@@ -29,14 +34,14 @@ export default async function TechnologiesPage() {
           </p>
           <div className="flex items-center gap-2 text-lg">
             <div className="w-2 h-2 bg-portal-orange rounded-full"></div>
-            <span>{technologies.length} tecnologias cadastradas</span>
+            <span>{unavailable ? 'Tecnologias temporariamente indisponíveis' : `${technologies.length} tecnologias cadastradas`}</span>
           </div>
         </div>
       </section>
 
       {/* Grid */}
       <section className="container mx-auto px-6 py-12">
-        {technologies.length === 0 ? (
+        {unavailable ? <p role="status" className="py-12 text-center text-gray-500">Não foi possível carregar as tecnologias agora.</p> : technologies.length === 0 ? (
           <p className="text-center text-gray-500 py-12">Nenhuma tecnologia cadastrada ainda.</p>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -52,6 +57,7 @@ export default async function TechnologiesPage() {
                 {tech.category && (
                   <p className="text-gray-500 text-xs mt-1">{tech.category}</p>
                 )}
+                <p data-category-job-count={tech.id} className="mt-3 text-sm font-semibold text-portal-orange">{jobCountLabel(tech.job_count, site.locale)}</p>
               </Link>
             ))}
           </div>
