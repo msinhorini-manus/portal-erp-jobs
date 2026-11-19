@@ -52,6 +52,7 @@ import AdminCandidatesContent from './pages/admin/AdminCandidatesContent'
 import AdminCompaniesContent from './pages/admin/AdminCompaniesContent'
 import AdminJobsContent from './pages/admin/AdminJobsContent'
 import AdminAccessContent from './pages/admin/AdminAccessContent'
+import AdminImportsContent from './pages/admin/AdminImportsContent'
 
 // Auth Pages
 import LoginPage from './pages/auth/LoginPage'
@@ -114,6 +115,7 @@ function App() {
             <Route path="/admin/candidatos" element={<AdminCandidatesContent />} />
             <Route path="/admin/vagas" element={<AdminJobsContent />} />
             <Route path="/admin/usuarios" element={<AdminAccessContent />} />
+            <Route path="/admin/importacoes" element={<AdminImportsContent />} />
           </Route>
 
           {/* Rotas com Layout Principal (Navbar + Footer) */}

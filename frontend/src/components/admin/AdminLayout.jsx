@@ -1,4 +1,5 @@
-import { Outlet, Link, useNavigate } from 'react-router-dom'
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
+import { useState } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import AdminSidebar from './AdminSidebar'
 import { LogOut } from 'lucide-react'
@@ -10,6 +11,9 @@ import { LogOut } from 'lucide-react'
 export default function AdminLayout() {
   const { logout, user } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+  const importsRoute = /^\/admin\/importacoes\/?$/.test(location.pathname)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   const handleLogout = async () => {
     try {
@@ -58,12 +62,17 @@ export default function AdminLayout() {
       </header>
 
       {/* Main Content with Sidebar */}
-      <div className="flex">
+      <div className={importsRoute ? 'flex min-w-0 flex-col md:flex-row' : 'flex'}>
         {/* Sidebar */}
-        <AdminSidebar />
+        {importsRoute ? <>
+          <button type="button" className="m-3 rounded-lg border bg-white px-4 py-3 text-left text-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-700 md:hidden" aria-expanded={mobileMenuOpen} aria-controls="imports-admin-navigation" onClick={() => setMobileMenuOpen(value => !value)}>{mobileMenuOpen ? 'Fechar menu administrativo' : 'Abrir menu administrativo'}</button>
+          <div id="imports-admin-navigation" className={`${mobileMenuOpen ? 'block' : 'hidden'} shrink-0 md:block`} onKeyDown={event => { if (event.key === 'Escape') { setMobileMenuOpen(false); document.querySelector('[aria-controls="imports-admin-navigation"]')?.focus() } }}>
+            <AdminSidebar responsive />
+          </div>
+        </> : <AdminSidebar />}
 
         {/* Page Content */}
-        <main className="flex-1 p-8">
+        <main className={importsRoute ? 'min-w-0 flex-1 p-3 sm:p-6 lg:p-8' : 'flex-1 p-8'}>
           <Outlet />
         </main>
       </div>
