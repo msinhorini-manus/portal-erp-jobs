@@ -4,6 +4,7 @@ import { internalApiOrigin, normalizeRequestHost, trustedRegionalHeaders } from 
 import { canonicalJobProxy } from './lib/job-proxy'
 import { canonicalCompanyProxy } from './lib/company-proxy'
 import { internalReadFetch } from './lib/internal-read-fetch'
+import { regionalDiagnostic, regionalObservationFor } from './lib/regional-diagnostic.server'
 
 export async function proxy(request: NextRequest) {
   const h = new Headers(request.headers)
@@ -21,12 +22,30 @@ export async function proxy(request: NextRequest) {
     }
     // Resolution is always live: inactive/unknown countries fail before pages,
     // APIs and BFFs. Backend validates the active mapping, not a BR allowlist.
+    const observation = regionalObservationFor(request)
+    let phase: 'fetch' | 'http' | 'json' | 'validation' | undefined = 'fetch'
+    let contextStatus: number | undefined
     try {
-      const response = await internalReadFetch(`${internalApiOrigin()}/api/context`, { headers: trustedRegionalHeaders(host, prefix), cache: 'no-store' })
-      if ([400, 404].includes(response.status)) return new NextResponse('Not found', { status: 404, headers: { 'X-Robots-Tag': 'noindex' } })
-      if (!response.ok) return new NextResponse('Regional service unavailable', { status: 503 })
+      const response = await internalReadFetch(`${internalApiOrigin()}/api/context`, { headers: trustedRegionalHeaders(host, prefix), cache: 'no-store' }, observation)
+      phase = 'http'
+      contextStatus = response.status
+      if ([400, 404].includes(contextStatus)) {
+        // A plain upstream 404 is normal for the MX/CO inactive controls.
+        if (contextStatus !== 404 || (country !== 'mx' && country !== 'co')) regionalDiagnostic(observation, 'regional-proxy', phase, 'failure', contextStatus)
+        return new NextResponse('Not found', { status: 404, headers: { 'X-Robots-Tag': 'noindex' } })
+      }
+      if (!response.ok) {
+        regionalDiagnostic(observation, 'regional-proxy', phase, 'failure', contextStatus)
+        return new NextResponse('Regional service unavailable', { status: 503 })
+      }
+      phase = 'json'
       const context = await response.json()
-      if (!context?.site?.is_active || context.site.url_prefix !== prefix || context.site.country_code?.toLowerCase() !== country || context.locale !== context.site.locale) return new NextResponse('Not found', { status: 404 })
+      phase = 'validation'
+      if (!context?.site?.is_active || context.site.url_prefix !== prefix || context.site.country_code?.toLowerCase() !== country || context.locale !== context.site.locale) {
+        regionalDiagnostic(observation, 'regional-proxy', phase, 'failure', contextStatus)
+        return new NextResponse('Not found', { status: 404 })
+      }
+      phase = undefined // Downstream jobs/company failures are not context failures.
       const jobResponse = await canonicalJobProxy(request.nextUrl.pathname, request.nextUrl.search, request.method, host, context)
       if (jobResponse) return jobResponse
       const companyResponse = await canonicalCompanyProxy(request.nextUrl.pathname, request.method, host, context)
@@ -39,7 +58,10 @@ export async function proxy(request: NextRequest) {
         h.set('X-Regional-Host', host)
         h.set('X-Regional-Prefix', prefix)
       }
-    } catch { return new NextResponse('Regional service unavailable', { status: 503 }) }
+    } catch (error) {
+      if (phase) regionalDiagnostic(observation, 'regional-proxy', phase, 'failure', contextStatus, error)
+      return new NextResponse('Regional service unavailable', { status: 503 })
+    }
   }
   // Global entry never infers a country from cookies/headers/geolocation.
   if (request.nextUrl.pathname === '/') {
