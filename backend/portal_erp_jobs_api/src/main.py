@@ -45,6 +45,7 @@ from src.routes.applications import applications_bp
 from src.routes.resume import resume_bp
 from src.routes.admin import admin_bp
 from src.routes.admin_access import admin_access_bp
+from src.routes.admin_imports import admin_imports_bp, init_import_preview_guards
 from src.routes.stats import stats_bp
 from src.routes.config import config_bp
 from src.routes.sites import sites_bp
@@ -117,6 +118,9 @@ def is_token_revoked(_jwt_header, jwt_payload):
 def revoked_token_response(_jwt_header, _jwt_payload):
     return jsonify({"error": "Sessão inválida ou revogada. Faça login novamente."}), 401
 
+# Bound importer envelopes before regional context inspects JSON bodies.
+init_import_preview_guards(app)
+
 # Resolve the authoritative regional site before locale and route handlers.
 init_regional_context(app)
 
@@ -132,6 +136,7 @@ app.register_blueprint(applications_bp)
 app.register_blueprint(resume_bp)
 app.register_blueprint(admin_bp)
 app.register_blueprint(admin_access_bp)
+app.register_blueprint(admin_imports_bp)
 app.register_blueprint(stats_bp)
 app.register_blueprint(config_bp)
 app.register_blueprint(sites_bp)

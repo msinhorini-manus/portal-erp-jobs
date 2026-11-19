@@ -70,6 +70,10 @@ class Config:
     AUTH_FORGOT_RATE_WINDOW = int(os.getenv("AUTH_FORGOT_RATE_WINDOW", "3600"))
     AUTH_RESET_RATE_LIMIT = int(os.getenv("AUTH_RESET_RATE_LIMIT", "10"))
     AUTH_RESET_RATE_WINDOW = int(os.getenv("AUTH_RESET_RATE_WINDOW", "3600"))
+    # Preview only: empty or invalid digest disables the agent.
+    IMPORT_PREVIEW_AGENT_TOKEN_SHA256 = os.getenv("IMPORT_PREVIEW_AGENT_TOKEN_SHA256", "").strip()
+    IMPORT_PREVIEW_REQUEST_RATE_LIMIT = 60
+    IMPORT_PREVIEW_UPLOAD_RATE_LIMIT = 6
 
     CORS_ORIGINS = _csv_env(
         "CORS_ORIGINS",
