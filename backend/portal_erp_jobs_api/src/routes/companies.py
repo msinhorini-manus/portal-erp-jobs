@@ -4,15 +4,18 @@ from flask_jwt_extended import jwt_required
 from werkzeug.exceptions import RequestEntityTooLarge
 
 from src.config import db
-from src.models.company import Company, CompanySite, CompanyStatus
+from src.models.company import Company, CompanySite
 from src.models.job import Job
-from src.models.user import User
 from src.company_slug_policy_v12 import valid_slug
 from src.regional_access import get_company_access
 from src.regional_context import get_current_site
 from src.services.jobs import pagination_args, text_contains
 from src.company_logo_storage import (
     LogoValidationError, logo_url, open_logo, read_logo_upload, store_logo,
+)
+from src.services.public_job_counts import (
+    public_companies_query, public_company_jobs_query, company_job_counts,
+    directory_loading_options, VerifiedPublicMembership,
 )
 
 companies_bp = Blueprint("companies", __name__, url_prefix="/api/companies")
@@ -26,17 +29,7 @@ def _public_response(payload, status=200):
 
 
 def _approved_company_query(site):
-    return (
-        db.session.query(Company, CompanySite)
-        .join(CompanySite, CompanySite.company_id == Company.id)
-        .join(User, User.id == Company.user_id)
-        .filter(
-            CompanySite.site_id == site.id,
-            CompanySite.status == CompanyStatus.APPROVED,
-            User.is_active.is_(True),
-            CompanySite.public_profile_slug.is_not(None),
-        )
-    )
+    return public_companies_query(site)
 
 
 @companies_bp.route("/", methods=["GET"])
@@ -240,18 +233,15 @@ def search_companies():
         if state:
             query = query.filter(text_contains(CompanySite.state, state))
 
-        pagination = query.order_by(
+        pagination = query.options(*directory_loading_options()).order_by(
             db.func.coalesce(CompanySite.display_name, Company.company_name)
         ).paginate(page=page, per_page=per_page, error_out=False)
 
+        counts = company_job_counts(site, [company.id for company, _ in pagination.items])
         companies = []
         for company, membership in pagination.items:
-            item = company.to_public_dict(membership)
-            item["active_jobs_count"] = Job.query.filter_by(
-                company_id=company.id,
-                site_id=site.id,
-                is_active=True,
-            ).count()
+            item = company.to_public_dict(VerifiedPublicMembership(membership))
+            item["active_jobs_count"] = counts[company.id]
             companies.append(item)
 
         return _public_response({
@@ -261,17 +251,15 @@ def search_companies():
             "current_page": page,
             "per_page": per_page,
         })
-    except Exception as exc:
-        return jsonify({"error": str(exc)}), 500
+    except Exception:
+        return _public_response({"error": "Não foi possível carregar as empresas"}, 500)
 
 
 def _public_company_payload(company, membership, site):
-    jobs = Job.query.filter_by(company_id=company.id, site_id=site.id, is_active=True).filter(
-        db.or_(Job.is_company_hidden.is_(False), Job.is_company_hidden.is_(None)),
-    ).order_by(Job.created_at.desc()).all()
-    payload = company.to_public_dict(membership)
+    jobs = public_company_jobs_query(site, [company.id]).order_by(Job.created_at.desc()).all()
+    payload = company.to_public_dict(VerifiedPublicMembership(membership))
     payload["jobs"] = [job.to_dict() for job in jobs]
-    payload["active_jobs_count"] = len(jobs)
+    payload["active_jobs_count"] = company_job_counts(site, [company.id])[company.id]
     return payload
 
 
@@ -281,14 +269,15 @@ def get_public_company_by_slug(slug):
     not_found = ({"error": "Empresa não encontrada"}, 404)
     if not valid_slug(slug):
         return _public_response(*not_found)
-    site = get_current_site()
-    result = _approved_company_query(site).filter(CompanySite.public_profile_slug == slug).first()
-    if not result:
-        return _public_response(*not_found)
-    company, membership = result
-    if membership.resolved_public_profile_slug != slug:
-        return _public_response(*not_found)
-    return _public_response(_public_company_payload(company, membership, site))
+    try:
+        site = get_current_site()
+        result = _approved_company_query(site).filter(CompanySite.public_profile_slug == slug).first()
+        if not result:
+            return _public_response(*not_found)
+        company, membership = result
+        return _public_response(_public_company_payload(company, membership, site))
+    except Exception:
+        return _public_response({"error": "Não foi possível carregar a empresa"}, 500)
 
 
 @companies_bp.route("/<int:company_id>", methods=["GET"])
@@ -301,5 +290,5 @@ def get_public_company(company_id):
             return _public_response({"error": "Empresa não encontrada"}, 404)
         company, membership = result
         return _public_response(_public_company_payload(company, membership, site))
-    except Exception as exc:
-        return jsonify({"error": str(exc)}), 500
+    except Exception:
+        return _public_response({"error": "Não foi possível carregar a empresa"}, 500)

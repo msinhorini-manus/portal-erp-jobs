@@ -1,15 +1,14 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 from src.models.job import Job, JobSkill, Skill
-from src.models.company import Company, CompanySite, CompanyStatus
+from src.models.company import Company
 from src.models.application import Application, ApplicationStatus
-from src.models.job_area import JobArea
 from src.config import db
 from sqlalchemy import or_, and_
 from src.regional_context import get_current_site
 from src.regional_access import get_company_access
+from src.services.public_job_counts import public_jobs_query, area_filter, technology_filter
 from src.services.jobs import (
-    ACTIVE_JOB_STATUSES,
     apply_job_fields,
     archive_job,
     desired_active,
@@ -69,23 +68,7 @@ def get_all_jobs():
             return jsonify({'error': 'Faixa salarial exata inválida'}), 400
 
         # Apenas vagas ativas de empresas aprovadas no site atual.
-        jobs_query = (
-            Job.query
-            .join(
-                CompanySite,
-                and_(
-                    CompanySite.company_id == Job.company_id,
-                    CompanySite.site_id == Job.site_id,
-                ),
-            )
-            .filter(
-                Job.site_id == site.id,
-                Job.is_active.is_(True),
-                Job.status.in_(ACTIVE_JOB_STATUSES),
-                CompanySite.status == CompanyStatus.APPROVED,
-                or_(Job.expires_at.is_(None), Job.expires_at > db.func.current_timestamp()),
-            )
-        )
+        jobs_query = public_jobs_query(site)
 
         # Busca livre por vaga, empresa ou skill canônica.
         if query:
@@ -101,29 +84,11 @@ def get_all_jobs():
 
         # Filtro por tecnologia específica, priorizando o catálogo canônico.
         if technology:
-            jobs_query = jobs_query.filter(
-                or_(
-                    Job.skills.any(JobSkill.skill.has(text_contains(Skill.name, technology))),
-                    text_contains(Job.title, technology),
-                    text_contains(Job.description, technology),
-                    text_contains(Job.requirements, technology)
-                )
-            )
+            jobs_query = jobs_query.filter(technology_filter(technology))
 
         # Filtro por área de atuação (suporta area_id ou texto)
         if area:
-            # Tentar converter para int (area_id)
-            try:
-                area_id = int(area)
-                jobs_query = jobs_query.filter(Job.area_id == area_id)
-            except ValueError:
-                # Se não for int, buscar por texto (compatibilidade)
-                jobs_query = jobs_query.filter(
-                    or_(
-                        text_contains(Job.area, area),
-                        Job.job_area.has(text_contains(JobArea.name, area))
-                    )
-                )
+            jobs_query = jobs_query.filter(area_filter(area))
 
         # Filtro por nível de experiência
         if level:
@@ -224,8 +189,8 @@ def get_all_jobs():
             }
         }), 200
 
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    except Exception:
+        return jsonify({'error': 'Não foi possível carregar as vagas'}), 500
 
 
 @jobs_bp.route('/<int:job_id>', methods=['GET'])
@@ -235,33 +200,15 @@ def get_job_by_id(job_id):
     """
     try:
         site = get_current_site()
-        job = (
-            Job.query
-            .join(
-                CompanySite,
-                and_(
-                    CompanySite.company_id == Job.company_id,
-                    CompanySite.site_id == Job.site_id,
-                ),
-            )
-            .filter(
-                Job.id == job_id,
-                Job.site_id == site.id,
-                Job.is_active.is_(True),
-                Job.status.in_(ACTIVE_JOB_STATUSES),
-                CompanySite.status == CompanyStatus.APPROVED,
-                or_(Job.expires_at.is_(None), Job.expires_at > db.func.current_timestamp()),
-            )
-            .first()
-        )
+        job = public_jobs_query(site).filter(Job.id == job_id).first()
 
         if not job:
             return jsonify({'error': 'Vaga não encontrada'}), 404
 
         return jsonify(job.to_dict(include_details=True)), 200
 
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    except Exception:
+        return jsonify({'error': 'Não foi possível carregar a vaga'}), 500
 
 
 @jobs_bp.route('/', methods=['POST'])

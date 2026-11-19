@@ -23,9 +23,10 @@ export async function fetchAPI(endpoint: string, options: SiteFetchOptions = {})
   if (!response.ok) throw new ApiError(response.status)
   return response.json()
 }
-export async function getAreas() { return fetchAPI('/config/areas') }
-export async function getTechnologies() { return fetchAPI('/config/technologies') }
-export async function getSkills() { return fetchAPI('/config/skills') }
+type CatalogOptions = { includeCounts?: boolean }
+export async function getAreas(options: CatalogOptions = {}) { return fetchAPI(`/config/areas${options.includeCounts ? '?include_counts=true' : ''}`, options.includeCounts ? { cache: 'no-store' } : {}) }
+export async function getTechnologies(options: CatalogOptions = {}) { return fetchAPI(`/config/technologies${options.includeCounts ? '?include_counts=true' : ''}`, options.includeCounts ? { cache: 'no-store' } : {}) }
+export async function getSkills(options: CatalogOptions = {}) { return fetchAPI(`/config/skills${options.includeCounts ? '?include_counts=true' : ''}`, options.includeCounts ? { cache: 'no-store' } : {}) }
 export async function getJobs(params?: Record<string, string>, options?: SiteFetchOptions) { return fetchAPI(`/jobs/${params ? `?${new URLSearchParams(params)}` : ''}`, options) }
 export async function getJobById(id: string, options: SiteFetchOptions = {}) {
   const job = await fetchAPI(`/jobs/${encodeURIComponent(id)}`, { ...options, cache: 'no-store' })
@@ -43,4 +44,4 @@ export async function getCompanyBySlug(slug: string, options: SiteFetchOptions =
 }
 export async function getLevels() { return fetchAPI('/config/levels') }
 export async function getModalities() { return fetchAPI('/config/modalities') }
-export async function getDashboardStats() { return fetchAPI('/stats/dashboard') }
+export async function getDashboardStats(options: SiteFetchOptions = {}) { return fetchAPI('/stats/dashboard', options) }

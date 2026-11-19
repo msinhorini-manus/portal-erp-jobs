@@ -2,6 +2,8 @@ import { pageMetadata } from '@/lib/regional-seo.server'
 import { Metadata } from 'next'
 import Link from '@/components/RegionalLink'
 import { getAreas } from '@/lib/api'
+import { getSiteContext } from '@/lib/site-resolver.server'
+import { jobCountLabel } from '@/lib/public-counts'
 import { Code2, Settings, Headphones, Cloud, Database, Shield, Users, Smartphone, CheckCircle, Brain, Cpu, TrendingUp, FileText, Palette, Target, UserPlus, Megaphone, GraduationCap } from 'lucide-react'
 
 const baseMetadata: Metadata = {
@@ -32,10 +34,13 @@ const colorMap: Record<string, string> = {
 
 export default async function AreasPage() {
   let areas: any[] = []
+  let unavailable = false
+  const { site } = await getSiteContext()
 
   try {
-    areas = await getAreas()
+    areas = await getAreas({ includeCounts: true })
   } catch (e) {
+    unavailable = true
     console.error('Failed to fetch areas:', e)
   }
 
@@ -50,13 +55,14 @@ export default async function AreasPage() {
           </p>
           <div className="flex items-center gap-2 text-lg">
             <div className="w-2 h-2 bg-portal-orange rounded-full"></div>
-            <span>{areas.length} áreas disponíveis</span>
+            <span>{unavailable ? 'Áreas temporariamente indisponíveis' : `${areas.length} áreas disponíveis`}</span>
           </div>
         </div>
       </section>
 
       {/* Grid */}
       <section className="container mx-auto px-6 py-12">
+        {unavailable && <p role="status" className="py-12 text-center text-gray-500">Não foi possível carregar as áreas agora.</p>}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {areas.map((area: any) => {
             const Icon = iconMap[area.icon] || Code2
@@ -78,8 +84,8 @@ export default async function AreasPage() {
                     </div>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-portal-orange font-semibold">
-                      {area.job_count ? `${area.job_count} vagas` : 'Ver vagas'}
+                    <span data-category-job-count={area.id} className="text-portal-orange font-semibold">
+                      {jobCountLabel(area.job_count, site.locale)}
                     </span>
                     <span className="text-gray-500 text-sm hover:text-portal-orange">Ver Vagas →</span>
                   </div>
