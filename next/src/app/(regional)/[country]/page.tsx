@@ -25,7 +25,9 @@ import {
 
 import { HeroSearch } from '@/components/HeroSearch'
 import { RecentJobs } from '@/components/RecentJobs'
-import { getAreas, getJobs } from '@/lib/api'
+import { PublicPlatformStats } from '@/components/PublicPlatformStats'
+import { getAreas, getJobs, getDashboardStats } from '@/lib/api'
+import { jobCountLabel } from '@/lib/public-counts'
 import type { RecentJob } from '@/lib/recent-jobs'
 import { requireRegionalBaseUrl } from '@/lib/site'
 import { getSiteContext } from '@/lib/site-resolver.server'
@@ -73,10 +75,13 @@ const colorMap: Record<string, string> = {
 export default async function HomePage() {
   let areas: Array<{ id: number; name: string; description?: string; icon?: string; color?: string; job_count?: number }> = []
   let jobs: RecentJob[] = []
+  let stats: unknown = null
+  let areasUnavailable = false
   const { site } = await getSiteContext()
   const origin = requireRegionalBaseUrl(site)
 
-  try { areas = await getAreas() } catch (error) { console.error('Failed to fetch areas:', error) }
+  try { areas = await getAreas({ includeCounts: true }) } catch (error) { areasUnavailable = true; console.error('Failed to fetch areas:', error) }
+  try { stats = await getDashboardStats({ cache: 'no-store' }) } catch { console.error('Failed to fetch public platform counts') }
   try {
     const jobsData = await getJobs({ per_page: '20' })
     jobs = Array.isArray(jobsData) ? jobsData : Array.isArray(jobsData?.jobs) ? jobsData.jobs : []
@@ -108,6 +113,8 @@ export default async function HomePage() {
         </div>
       </section>
 
+      <PublicPlatformStats stats={stats} locale={site.locale} siteName={site.name} />
+
       <RecentJobs jobs={jobs} site={site} />
 
       <section className="bg-slate-50 py-16">
@@ -117,6 +124,8 @@ export default async function HomePage() {
             <h2 className="mt-3 font-display text-3xl font-extrabold tracking-tight text-portal-dark sm:text-4xl">Explore por área de atuação</h2>
             <p className="mt-4 text-slate-600">Oportunidades organizadas para quem trabalha com tecnologia, gestão e transformação empresarial.</p>
           </div>
+
+          {areasUnavailable && <p role="status" className="mt-8 text-center text-sm text-slate-500">Não foi possível carregar as áreas agora.</p>}
 
           <div className="mt-10 grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
             {areas.slice(0, 9).map((area) => {
@@ -133,7 +142,7 @@ export default async function HomePage() {
                     <div className="min-w-0 flex-1">
                       <h3 className="font-display text-lg font-bold text-portal-dark transition group-hover:text-orange-700">{area.name}</h3>
                       <p className="mt-1 line-clamp-2 text-sm leading-6 text-slate-500">{area.description}</p>
-                      <p className="mt-3 text-sm font-bold text-portal-orange">{area.job_count ? `${area.job_count} vagas` : 'Ver vagas'} →</p>
+                      <p data-category-job-count={area.id} className="mt-3 text-sm font-bold text-portal-orange">{jobCountLabel(area.job_count, site.locale)} →</p>
                     </div>
                   </div>
                 </Link>

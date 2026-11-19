@@ -13,24 +13,40 @@ from src.models.technology import Technology
 from src.models.job import Skill
 from src.models.tag import Tag
 from src.routes.admin import _audit_admin, platform_admin_required
+from src.regional_context import get_current_site
+from src.services.public_job_counts import catalog_job_counts
 
 config_bp = Blueprint('config', __name__, url_prefix='/api/config')
+
+def _catalog_response(query, *, kind):
+    """Keep the old array DTO; counts are additive only when explicitly enabled."""
+    try:
+        entries = query.all()
+        include_counts = request.args.get('include_counts', '').lower() == 'true'
+        counts = catalog_job_counts(get_current_site(), entries, kind=kind) if include_counts else None
+        result = []
+        for entry in entries:
+            item = entry.to_dict()
+            if counts is not None:
+                item['job_count'] = counts[entry.id]
+            result.append(item)
+        return jsonify(result)
+    except Exception:
+        return jsonify({'error': 'Não foi possível carregar o catálogo'}), 500
 
 # ==================== SKILLS DAS VAGAS ====================
 
 @config_bp.route('/skills', methods=['GET'])
 def get_skills():
     """Listar o catálogo canônico usado em job_skills e candidate_skills."""
-    skills = Skill.query.order_by(Skill.category, Skill.name).all()
-    return jsonify([skill.to_dict() for skill in skills])
+    return _catalog_response(Skill.query.order_by(Skill.category, Skill.name), kind='technology')
 
 # ==================== ÁREAS DE ATUAÇÃO ====================
 
 @config_bp.route('/areas', methods=['GET'])
 def get_areas():
     """Listar todas as áreas de atuação"""
-    areas = JobArea.query.filter_by(is_active=True).order_by(JobArea.name).all()
-    return jsonify([area.to_dict() for area in areas])
+    return _catalog_response(JobArea.query.filter_by(is_active=True).order_by(JobArea.name), kind='area')
 
 @config_bp.route('/areas/<int:area_id>', methods=['GET'])
 def get_area(area_id):
@@ -324,8 +340,7 @@ def delete_software(software_id):
 @config_bp.route('/technologies', methods=['GET'])
 def get_technologies():
     """Listar todas as tecnologias"""
-    technologies = Technology.query.filter_by(is_active=True).order_by(Technology.name).all()
-    return jsonify([tech.to_dict() for tech in technologies])
+    return _catalog_response(Technology.query.filter_by(is_active=True).order_by(Technology.name), kind='technology')
 
 @config_bp.route('/technologies/<int:tech_id>', methods=['GET'])
 def get_technology(tech_id):
