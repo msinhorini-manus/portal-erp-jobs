@@ -2,7 +2,7 @@
 
 ## Estado
 
-Implementação local concluída; publicação em produção ainda pendente dos gates de homologação e do corte autorizado. O backup novo da produção e sua cópia privada fora da DigitalOcean já foram verificados. Este documento não certifica produção nem indexação do Google.
+**Implementação concluída e testada; publicação não consolidada.** Em 18/11/2026 foi realizado o corte autorizado de API e Next após READY e preparação de recuperação aprovados. A auditoria pública final encontrou um GET 503 fora da manutenção no pré-carregamento RSC de `/br/vagas`; por isso, ambos os códigos foram recuperados para a versão anterior. A causa desse 503 ainda não foi comprovada. A versão anterior foi verificada novamente com fontes, configuração, ambiente, schema12, integridade e logs de smoke aprovados. Não foi restaurado o banco nem alterado o conteúdo de uploads/logos. O novo dashboard, as contagens e a moldura desta release **não permanecem em produção**. Este documento não certifica indexação do Google.
 
 ## Escopo autorizado
 
@@ -45,3 +45,15 @@ Homologação visual integrada em Chromium desktop/tablet/celular: 503 verifica�
 ## Condições de fechamento produtivo
 
 Exigir fonte/commit imutáveis, staging isolado com logs reais, backup restaurável e prova privada off-server, paridade de runtime/configuração/PM2, preservação de banco/slug/ownership/membresia/uploads, smokes de origem, equivalência HTTP das contagens, browser responsivo público e logs finitos estritos. Remover a chave temporária e os artefatos de teste após o fechamento, preservando backups e recuperação independente. PRs encadeados anteriores não devem ser mesclados automaticamente.
+
+## Evidência remota da tentativa e bloqueio final
+
+Alvo de aplicação imutável: `93d319c31a18651f69437783004c6666aa727840`, PR #33. O staging remoto aprovou 63 testes API em cinco suítes, 814 testes Next em 36 arquivos, TypeScript e o build padrão Turbopack. Os testes API/Next e TypeScript ficaram sem rede externa; o build teve acesso público para obter as fontes Google reais, sem API ou dotenv produtivo. Foram validados independentemente 13 WOFF2 nativos: sete Inter e seis Manrope. Não foi usado mock de fonte, Webpack, instalação de dependências ou mudança do package manager da aplicação para o corte. Tentativas ambientais malsucedidas foram preservadas, não promovidas a aprovação.
+
+O backup portátil novo foi restaurado em isolamento, verificado com schema12/integridade/FK e copiado de forma privada para fora do servidor. READY, fonte completa, configuração de PM2, ambiente, recuperação de ambos os códigos e banco vivo passaram antes da parada. Durante instalação e rollback, snapshots completos de todas as tabelas, logos e uploads tiveram igualdade exata com os serviços parados. As configurações e permissões existentes foram preservadas; exceções operacionais foram restritas a hashes, caminhos e condições comprovadas, com regressões locais. Helpers originais de cache/log permaneceram intactos.
+
+As leituras públicas comprovaram contagens de todas as áreas/tecnologias iguais aos totais filtrados, dashboard igual às APIs, diretório/membresia, canonical/sitemap/noindex e rotas removidas. O browser concluiu **1.260 verificações em desktop, tablet e celular**, incluindo moldura/aba somente em membros reais, logo do mosaico 48 px e preservação do diretório. A primeira tentativa bloqueou POSTs do JavaScript passivo do Cloudflare; o harness foi corrigido somente no browser isolado para impedir o carregamento desse script. Os testes originais foram repetidos integralmente com fonte pinada e zero métodos de escrita encaminhados. Nada foi modificado no Cloudflare, na aplicação ou em autenticação para acomodar esse diagnóstico.
+
+Mesmo com os gates funcionais aprovados, o GET 503 RSC permaneceu registrado na janela pública final e bloqueou o fechamento. O gate não foi flexibilizado e a janela falha não foi apagada. Foi executado rollback de API **e** Next somente de código; as duas gerações de assets permanecem disponíveis, assim como backup e recuperação. A verificação pós-rollback aprovou os códigos anteriores, SPA intacta, PM2/configuração/ambiente, integridade/FK/invariantes e logs de smokes sem erros/5xx. Não houve teste com criação de conta, vaga, candidatura, convite ou envio de e-mail em produção.
+
+A chave temporária e as evidências privadas foram mantidas deliberadamente para continuidade; o cleanup de release publicada não foi executado. PR #33 permanece aberto sobre sua base encadeada, sem merge automático de outras releases. Próximo gate: identificar e reproduzir a causa do 503 de resolução/pré-carregamento regional em isolamento, aplicar somente uma correção comprovada e repetir o processo com backup fresco e nova janela pública estrita. O importador em lote solicitado depois desta tentativa é um escopo separado e não foi iniciado nesta release.
